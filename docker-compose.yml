@@ -1,0 +1,51 @@
+services:
+  evolution-api:
+    container_name: evolution-api
+    platform: linux/arm64
+    image: atendai/evolution-api:latest
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # Server
+      - SERVER_URL=http://localhost:8080
+      - SERVER_PORT=8080
+      # Auth
+      - AUTHENTICATION_API_KEY=ConsultorioAlvarez2026
+      - AUTHENTICATION_EXPOSE_IN_FETCH_INSTANCES=true
+      # Database
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://evolution:evolution123@postgres:5432/evolution
+      # Store
+      - STORE_CLEANING_INTERVAL=7200
+      - STORE_MESSAGES=true
+      - STORE_MESSAGE_UP=true
+      - STORE_CONTACTS=true
+      - STORE_CHATS=true
+      # Log
+      - LOG_LEVEL=WARN
+    volumes:
+      - evolution_data:/evolution/store
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    container_name: evolution-postgres
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=evolution
+      - POSTGRES_PASSWORD=evolution123
+      - POSTGRES_DB=evolution
+    volumes:
+      - evolution_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U evolution"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  evolution_data:
+  evolution_pgdata:
