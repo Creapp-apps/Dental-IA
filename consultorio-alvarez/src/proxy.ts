@@ -4,7 +4,7 @@ import { createServerClient } from '@supabase/ssr'
 // Rutas que requieren sesión activa (admin)
 const ADMIN_PREFIXES = ['/dashboard', '/agenda', '/pacientes', '/cobros', '/configuracion']
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
 
     // Clasificación de rutas
