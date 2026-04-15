@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
-import { Stethoscope, AlertCircle, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
+import { AlertCircle, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
 import { loginAction } from '@/lib/actions/auth'
 
 const FloatingLines = dynamic(() => import('@/components/FloatingLines'), { ssr: false })
@@ -48,10 +48,12 @@ export default function LoginClient({ errorMsg }: { errorMsg: string | null }) {
                 {/* Logo & brand */}
                 <div className="flex flex-col items-center gap-4 mb-8">
                     <div className="relative group">
-                        <div className="absolute -inset-1 rounded-3xl bg-gradient-to-br from-blue-500/40 to-blue-700/40 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
-                        <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-700 shadow-2xl shadow-blue-900/50 border border-blue-400/20">
-                            <Stethoscope className="h-8 w-8 text-white" strokeWidth={1.6} />
-                        </div>
+                        <div className="absolute -inset-2 rounded-3xl bg-gradient-to-br from-blue-500/30 to-blue-700/30 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
+                        <img
+                            src="/LOGO-DENTAL.png"
+                            alt="Dental-IA"
+                            className="relative h-16 w-auto drop-shadow-[0_0_20px_rgba(59,130,246,0.35)]"
+                        />
                     </div>
                     <div className="text-center">
                         <h1 className="text-3xl font-bold tracking-tight text-white">
