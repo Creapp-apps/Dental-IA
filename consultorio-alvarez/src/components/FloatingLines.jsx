@@ -287,7 +287,8 @@ export default function FloatingLines({
     const camera = new OrthographicCamera(-1, 1, 1, -1, 0, 1);
     camera.position.z = 1;
 
-    const renderer = new WebGLRenderer({ antialias: true, alpha: false });
+    const renderer = new WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setClearColor(0x000000, 0); // transparent — prevents white flash on repaints
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
@@ -383,9 +384,9 @@ export default function FloatingLines({
     const ro =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
-            if (!active) return;
-            setSize();
-          })
+          if (!active) return;
+          setSize();
+        })
         : null;
 
     if (ro) ro.observe(container);
