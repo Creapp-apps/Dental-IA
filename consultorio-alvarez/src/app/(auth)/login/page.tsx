@@ -28,10 +28,10 @@ export default async function LoginPage({
                     </div>
                     <div className="text-center">
                         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                            Consultorio Álvarez
+                            Dental-IA
                         </h1>
                         <p className="text-sm text-muted-foreground mt-1">
-                            Sistema de gestión odontológica
+                            Plataforma de gestión odontológica
                         </p>
                     </div>
                 </div>

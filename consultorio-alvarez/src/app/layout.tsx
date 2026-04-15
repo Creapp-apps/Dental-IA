@@ -30,8 +30,8 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata: Metadata = {
-  title: 'Consultorio Álvarez — Sistema de Gestión',
-  description: 'Sistema de gestión integral para el consultorio odontológico',
+  title: 'Dental-IA — Plataforma de Gestión Odontológica',
+  description: 'Plataforma integral de gestión para consultorios odontológicos',
 }
 
 export default function RootLayout({
