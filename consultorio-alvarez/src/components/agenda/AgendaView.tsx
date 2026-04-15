@@ -206,7 +206,7 @@ export function AgendaView({
                                 key={dia.toISOString()}
                                 onClick={() => setDiaSeleccionado(dia)}
                                 className={cn(
-                                    'rounded-xl p-2.5 text-center transition-all cursor-pointer border shrink-0',
+                                    'relative rounded-xl p-2.5 text-center transition-all cursor-pointer border shrink-0',
                                     vistaActiva !== 'semana' && 'min-w-[4.5rem]',
                                     isSelected
                                         ? 'bg-primary border-primary text-primary-foreground shadow-glass-lg'
@@ -217,12 +217,32 @@ export function AgendaView({
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                             >
+                                {/* Dot indicator for days with turnos */}
+                                {totalDia > 0 && (
+                                    <span className={cn(
+                                        'absolute top-1.5 right-1.5 flex h-2 w-2',
+                                    )}>
+                                        <span className={cn(
+                                            'absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping',
+                                            isSelected ? 'bg-white/60' : 'bg-emerald-400'
+                                        )} />
+                                        <span className={cn(
+                                            'relative inline-flex rounded-full h-2 w-2',
+                                            isSelected ? 'bg-white' : 'bg-emerald-500'
+                                        )} />
+                                    </span>
+                                )}
                                 <p className={cn("text-xs uppercase tracking-wide", isSelected ? "opacity-90" : "opacity-70")}>
                                     {format(dia, 'EEE', { locale: es })}
                                 </p>
                                 <p className="text-xl font-bold leading-tight">{format(dia, 'd')}</p>
                                 {totalDia > 0 && (
-                                    <p className="text-xs mt-0.5 opacity-70">
+                                    <p className={cn(
+                                        "text-[10px] mt-1 font-semibold rounded-full px-1.5 py-0.5 mx-auto w-fit",
+                                        isSelected
+                                            ? 'bg-white/20 text-white'
+                                            : 'bg-primary/10 text-primary'
+                                    )}>
                                         {totalDia} turno{totalDia > 1 ? 's' : ''}
                                     </p>
                                 )}
