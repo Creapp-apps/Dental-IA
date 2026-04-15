@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useMemo } from 'react'
 import {
     format, startOfWeek, endOfWeek, addWeeks, subWeeks,
-    addDays, isSameDay, parseISO, isToday,
+    addDays, subDays, addMonths, subMonths, isSameDay, parseISO, isToday,
+    startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react'
@@ -35,6 +36,15 @@ const sectionVariants = {
     }),
 }
 
+type ViewMode = 'hoy' | 'semana' | '15dias' | 'mes'
+
+const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
+    { key: 'hoy', label: 'Hoy' },
+    { key: 'semana', label: 'Semana' },
+    { key: '15dias', label: '15 días' },
+    { key: 'mes', label: 'Mes' },
+]
+
 interface AgendaViewProps {
     profesionales: any[]
     tiposTratamiento: any[]
@@ -48,14 +58,66 @@ export function AgendaView({
     turnosIniciales,
     pacientes,
 }: AgendaViewProps) {
-    const [semanaBase, setSemanaBase] = useState(new Date())
+    const [vistaActiva, setVistaActiva] = useState<ViewMode>('semana')
+    const [baseDate, setBaseDate] = useState(new Date())
     const [diaSeleccionado, setDiaSeleccionado] = useState(new Date())
     const [modalOpen, setModalOpen] = useState(false)
     const [modalProfId, setModalProfId] = useState<string>('')
     const [isPending, startTransition] = useTransition()
 
-    const inicio = startOfWeek(semanaBase, { weekStartsOn: 1 })
-    const diasSemana = Array.from({ length: 7 }, (_, i) => addDays(inicio, i))
+    // ── Compute visible days based on view mode ────────────────
+    const diasVisibles = useMemo(() => {
+        switch (vistaActiva) {
+            case 'hoy':
+                return [baseDate]
+            case 'semana': {
+                const inicio = startOfWeek(baseDate, { weekStartsOn: 1 })
+                return Array.from({ length: 7 }, (_, i) => addDays(inicio, i))
+            }
+            case '15dias':
+                return Array.from({ length: 15 }, (_, i) => addDays(baseDate, i))
+            case 'mes': {
+                const inicio = startOfMonth(baseDate)
+                const fin = endOfMonth(baseDate)
+                const count = Math.round((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1
+                return Array.from({ length: count }, (_, i) => addDays(inicio, i))
+            }
+        }
+    }, [vistaActiva, baseDate])
+
+    // ── Navigation ─────────────────────────────────────────────
+    function navAnterior() {
+        switch (vistaActiva) {
+            case 'hoy': setBaseDate(p => subDays(p, 1)); break
+            case 'semana': setBaseDate(p => subWeeks(p, 1)); break
+            case '15dias': setBaseDate(p => subDays(p, 15)); break
+            case 'mes': setBaseDate(p => subMonths(p, 1)); break
+        }
+    }
+
+    function navSiguiente() {
+        switch (vistaActiva) {
+            case 'hoy': setBaseDate(p => addDays(p, 1)); break
+            case 'semana': setBaseDate(p => addWeeks(p, 1)); break
+            case '15dias': setBaseDate(p => addDays(p, 15)); break
+            case 'mes': setBaseDate(p => addMonths(p, 1)); break
+        }
+    }
+
+    function irAHoy() {
+        setBaseDate(new Date())
+        setDiaSeleccionado(new Date())
+    }
+
+    // ── Range label ────────────────────────────────────────────
+    function getRangeLabel() {
+        if (diasVisibles.length === 0) return ''
+        const first = diasVisibles[0]
+        const last = diasVisibles[diasVisibles.length - 1]
+        if (vistaActiva === 'hoy') return format(first, "EEEE d 'de' MMMM yyyy", { locale: es })
+        if (vistaActiva === 'mes') return format(first, "MMMM yyyy", { locale: es })
+        return `${format(first, 'd MMM', { locale: es })} — ${format(last, "d MMM yyyy", { locale: es })}`
+    }
 
     function getTurnosDia(dia: Date, profId: string) {
         return turnosIniciales
@@ -81,64 +143,94 @@ export function AgendaView({
 
     return (
         <div className="space-y-4">
-            {/* Controles de semana */}
-            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="flex items-center justify-between flex-wrap gap-2">
-                <div className="flex items-center gap-2">
-                    <GlassButton variant="glass" size="icon-sm" onClick={() => setSemanaBase(p => subWeeks(p, 1))}>
-                        <ChevronLeft className="h-4 w-4" />
-                    </GlassButton>
-                    <GlassButton variant="glass" size="sm" onClick={() => { setSemanaBase(new Date()); setDiaSeleccionado(new Date()) }}>
-                        Hoy
-                    </GlassButton>
-                    <GlassButton variant="glass" size="icon-sm" onClick={() => setSemanaBase(p => addWeeks(p, 1))}>
-                        <ChevronRight className="h-4 w-4" />
-                    </GlassButton>
-                    <span className="text-sm font-medium text-foreground ml-2">
-                        {format(inicio, "d MMM", { locale: es })} — {format(endOfWeek(semanaBase, { weekStartsOn: 1 }), "d MMM yyyy", { locale: es })}
+            {/* View mode selector + navigation */}
+            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="flex items-center justify-between flex-wrap gap-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                    {/* View mode pills */}
+                    <div className="flex items-center gap-0.5 glass rounded-xl p-0.5">
+                        {VIEW_OPTIONS.map(opt => (
+                            <button
+                                key={opt.key}
+                                onClick={() => { setVistaActiva(opt.key); if (opt.key === 'hoy') { setBaseDate(new Date()); setDiaSeleccionado(new Date()) } }}
+                                className={cn(
+                                    'px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200',
+                                    vistaActiva === opt.key
+                                        ? 'bg-primary text-primary-foreground shadow-sm'
+                                        : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
+                                )}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Navigation arrows */}
+                    <div className="flex items-center gap-1.5 ml-1">
+                        <GlassButton variant="glass" size="icon-sm" onClick={navAnterior}>
+                            <ChevronLeft className="h-4 w-4" />
+                        </GlassButton>
+                        <GlassButton variant="glass" size="sm" onClick={irAHoy}>
+                            Hoy
+                        </GlassButton>
+                        <GlassButton variant="glass" size="icon-sm" onClick={navSiguiente}>
+                            <ChevronRight className="h-4 w-4" />
+                        </GlassButton>
+                    </div>
+
+                    {/* Range label */}
+                    <span className="text-sm font-medium text-foreground ml-1 capitalize">
+                        {getRangeLabel()}
                     </span>
                 </div>
+
                 <GlassButton onClick={() => { setModalProfId(profesionales[0]?.id ?? ''); setModalOpen(true) }}>
                     <Plus className="h-4 w-4 mr-2" />
                     Nuevo turno
                 </GlassButton>
             </motion.div>
 
-            {/* Selector de día (week strip) */}
-            <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="grid grid-cols-7 gap-1.5">
-                {diasSemana.map((dia) => {
-                    const totalDia = turnosIniciales.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), dia)).length
-                    const esHoy = isToday(dia)
-                    const isSelected = isSameDay(dia, diaSeleccionado)
-                    return (
-                        <motion.button
-                            key={dia.toISOString()}
-                            onClick={() => setDiaSeleccionado(dia)}
-                            className={cn(
-                                'rounded-xl p-2.5 text-center transition-all cursor-pointer border',
-                                isSelected && esHoy
-                                    ? 'bg-primary border-primary text-primary-foreground shadow-glass-lg'
-                                    : isSelected
+            {/* Selector de día (strip) — hidden in 'hoy' mode */}
+            {vistaActiva !== 'hoy' && (
+                <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible"
+                    className={cn(
+                        'flex gap-1.5 overflow-x-auto scrollbar-hide pb-1',
+                        vistaActiva === 'semana' && 'grid grid-cols-7'
+                    )}
+                >
+                    {diasVisibles.map((dia) => {
+                        const totalDia = turnosIniciales.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), dia)).length
+                        const esHoy = isToday(dia)
+                        const isSelected = isSameDay(dia, diaSeleccionado)
+                        return (
+                            <motion.button
+                                key={dia.toISOString()}
+                                onClick={() => setDiaSeleccionado(dia)}
+                                className={cn(
+                                    'rounded-xl p-2.5 text-center transition-all cursor-pointer border shrink-0',
+                                    vistaActiva !== 'semana' && 'min-w-[4.5rem]',
+                                    isSelected
                                         ? 'bg-primary border-primary text-primary-foreground shadow-glass-lg'
                                         : esHoy
                                             ? 'glass border-primary/50 text-primary font-semibold'
                                             : 'glass-subtle border-transparent hover:border-white/20 text-muted-foreground hover:text-foreground'
-                            )}
-                            whileHover={{ scale: 1.02 }}
-                            whileTap={{ scale: 0.98 }}
-                        >
-                            <p className={cn("text-xs uppercase tracking-wide", isSelected ? "opacity-90" : "opacity-70")}>
-                                {format(dia, 'EEE', { locale: es })}
-                            </p>
-                            <p className="text-xl font-bold leading-tight">{format(dia, 'd')}</p>
-                            {totalDia > 0 && (
-                                <p className="text-xs mt-0.5 opacity-70">
-                                    {totalDia} turno{totalDia > 1 ? 's' : ''}
+                                )}
+                                whileHover={{ scale: 1.02 }}
+                                whileTap={{ scale: 0.98 }}
+                            >
+                                <p className={cn("text-xs uppercase tracking-wide", isSelected ? "opacity-90" : "opacity-70")}>
+                                    {format(dia, 'EEE', { locale: es })}
                                 </p>
-                            )}
-                        </motion.button>
-                    )
-                })}
-            </motion.div>
+                                <p className="text-xl font-bold leading-tight">{format(dia, 'd')}</p>
+                                {totalDia > 0 && (
+                                    <p className="text-xs mt-0.5 opacity-70">
+                                        {totalDia} turno{totalDia > 1 ? 's' : ''}
+                                    </p>
+                                )}
+                            </motion.button>
+                        )
+                    })}
+                </motion.div>
+            )}
 
             {/* Columnas por profesional */}
             <motion.div custom={2} variants={sectionVariants} initial="hidden" animate="visible" className="grid gap-5" style={{ gridTemplateColumns: `repeat(${profesionales.length}, 1fr)` }}>
