@@ -127,6 +127,7 @@ export interface Turno {
   prioridad_override: PrioridadTratamiento | null
   notas: string | null
   origen: OrigenTurno
+  es_sobreturno: boolean
   created_at: string
   updated_at?: string
   // Joins

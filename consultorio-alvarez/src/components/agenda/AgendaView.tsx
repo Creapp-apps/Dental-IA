@@ -336,26 +336,38 @@ function TurnoAgendaCard({
     isPending: boolean
 }) {
     const estado = turno.estado as EstadoTurno
+    const isST = turno.es_sobreturno === true
 
     return (
         <motion.div
-            className="glass rounded-xl p-3.5 shadow-glass hover:shadow-glass-lg transition-shadow"
-            style={{ borderLeft: `3px solid ${turno.tipo_tratamiento?.color ?? colorProf}` }}
+            className={cn(
+                'glass rounded-xl shadow-glass hover:shadow-glass-lg transition-shadow',
+                isST ? 'p-2.5' : 'p-3.5'
+            )}
+            style={{ borderLeft: `3px solid ${isST ? '#f59e0b' : (turno.tipo_tratamiento?.color ?? colorProf)}` }}
             initial={{ opacity: 0, x: -16, filter: 'blur(4px)' }}
             animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
             transition={{ delay: index * 0.05, type: 'spring', stiffness: 260, damping: 24 }}
         >
             <div className="flex items-start justify-between gap-2">
                 <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-foreground truncate">
-                        {turno.paciente?.apellido}, {turno.paciente?.nombre}
-                    </p>
+                    <div className="flex items-center gap-1.5">
+                        <p className="text-sm font-semibold text-foreground truncate">
+                            {turno.paciente?.apellido}, {turno.paciente?.nombre}
+                        </p>
+                        {isST && (
+                            <span className="shrink-0 inline-flex items-center gap-0.5 text-[10px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/25 rounded-md px-1.5 py-0.5">
+                                ⚡ ST
+                            </span>
+                        )}
+                    </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5">
                         {turno.tipo_tratamiento?.nombre}
                     </p>
                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
                         <Clock className="h-3 w-3" />
                         {format(parseISO(turno.fecha_inicio), 'HH:mm')} — {format(parseISO(turno.fecha_fin), 'HH:mm')}
+                        {isST && <span className="text-amber-500 font-medium ml-1">(15 min)</span>}
                     </p>
                 </div>
                 <StatusBadge status={estado} />

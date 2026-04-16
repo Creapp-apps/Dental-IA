@@ -248,6 +248,7 @@ function turno(
         id, paciente_id: pacId, profesional_id: profId, tipo_tratamiento_id: tratId,
         fecha_inicio: inicio.toISOString(), fecha_fin: fin.toISOString(),
         estado, prioridad_override: null, notas: notas ?? null, origen,
+        es_sobreturno: false,
         created_at: subDays(inicio, 3).toISOString(), updated_at: subDays(inicio, 3).toISOString(),
         paciente: pac, profesional: prof, tipo_tratamiento: trat,
     }

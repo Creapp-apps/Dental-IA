@@ -125,6 +125,7 @@ export function AgendaViewMock({
             prioridad_override: form.prioridad_override ? (form.prioridad_override as PrioridadTratamiento) : null,
             notas: form.notas || null,
             origen: 'SECRETARIA',
+            es_sobreturno: false,
             created_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),
             paciente: pacienteMock,

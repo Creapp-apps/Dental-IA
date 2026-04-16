@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect } from 'react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, CalendarIcon, Clock } from 'lucide-react'
+import { ChevronDown, CalendarIcon, Clock, Zap } from 'lucide-react'
 import {
     GlassDialog,
     GlassDialogContent,
@@ -163,6 +163,7 @@ export function NuevoTurnoModal({
     const [notas, setNotas] = useState('')
     const [prioridad, setPrioridad] = useState('')
     const [showResults, setShowResults] = useState(false)
+    const [esSobreturno, setEsSobreturno] = useState(false)
 
     useEffect(() => {
         if (open) {
@@ -174,8 +175,25 @@ export function NuevoTurnoModal({
             setHora('09:00')
             setNotas('')
             setPrioridad('')
+            setEsSobreturno(false)
         }
     }, [open, defaultProfesionalId, defaultFecha, profesionales])
+
+    // Auto-select 'Chequeo de rutina' treatment when sobreturno is toggled
+    function toggleSobreturno() {
+        const next = !esSobreturno
+        setEsSobreturno(next)
+        if (next) {
+            const chequeo = tiposTratamiento.find((t: any) =>
+                t.nombre.toLowerCase().includes('chequeo') || t.nombre.toLowerCase().includes('control')
+            )
+            if (chequeo) setTratId(chequeo.id)
+            setPrioridad('BAJA')
+        } else {
+            setTratId('')
+            setPrioridad('')
+        }
+    }
 
     const filteredPacientes = pacienteSearch.length >= 2
         ? pacientes.filter((p: any) =>
@@ -195,7 +213,8 @@ export function NuevoTurnoModal({
         if (!trat) return
 
         const fechaInicio = new Date(`${fecha}T${hora}:00`)
-        const fechaFin = new Date(fechaInicio.getTime() + trat.duracion_minutos * 60000)
+        const duracion = esSobreturno ? 15 : trat.duracion_minutos
+        const fechaFin = new Date(fechaInicio.getTime() + duracion * 60000)
 
         startTransition(async () => {
             const result = await crearTurno({
@@ -206,6 +225,7 @@ export function NuevoTurnoModal({
                 fecha_fin: fechaFin.toISOString(),
                 notas: notas || undefined,
                 prioridad_override: prioridad || undefined,
+                es_sobreturno: esSobreturno,
             })
 
             if (result.error) {
@@ -221,10 +241,29 @@ export function NuevoTurnoModal({
         <GlassDialog open={open} onOpenChange={onOpenChange}>
             <GlassDialogContent className="max-w-md">
                 <GlassDialogHeader>
-                    <GlassDialogTitle>Nuevo turno</GlassDialogTitle>
+                    <GlassDialogTitle>{esSobreturno ? '⚡ Sobreturno rápido' : 'Nuevo turno'}</GlassDialogTitle>
                 </GlassDialogHeader>
 
                 <div className="space-y-4 py-2">
+                    {/* Sobreturno Toggle */}
+                    <button
+                        type="button"
+                        onClick={toggleSobreturno}
+                        className={`flex items-center gap-3 w-full rounded-xl px-4 py-3 border transition-all duration-200 ${esSobreturno
+                                ? 'bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400'
+                                : 'glass-subtle border-transparent text-muted-foreground hover:text-foreground hover:border-border'
+                            }`}
+                    >
+                        <Zap className={`h-4 w-4 ${esSobreturno ? 'text-amber-500' : ''}`} />
+                        <div className="flex-1 text-left">
+                            <p className="text-sm font-medium">Sobreturno</p>
+                            <p className="text-xs opacity-70">Chequeo rápido de 15 min, se superpone con la agenda</p>
+                        </div>
+                        <div className={`relative w-10 h-5 rounded-full transition-colors duration-200 ${esSobreturno ? 'bg-amber-500' : 'bg-muted'}`}>
+                            <div className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${esSobreturno ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                        </div>
+                    </button>
+
                     <div className="space-y-1.5 relative">
                         <Label>Paciente *</Label>
                         <Input
@@ -283,12 +322,19 @@ export function NuevoTurnoModal({
                         </div>
                         <div className="space-y-1.5">
                             <Label>Tratamiento *</Label>
-                            <GlassSelect
-                                value={tratId}
-                                onChange={setTratId}
-                                placeholder="Seleccionar..."
-                                options={tiposTratamiento.map(t => ({ value: t.id, label: `${t.nombre} (${t.duracion_minutos}m)` }))}
-                            />
+                            {esSobreturno ? (
+                                <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 px-3 py-2 text-sm bg-amber-500/5">
+                                    <Zap className="h-3.5 w-3.5 text-amber-500" />
+                                    <span className="text-foreground">Chequeo de rutina (15 min)</span>
+                                </div>
+                            ) : (
+                                <GlassSelect
+                                    value={tratId}
+                                    onChange={setTratId}
+                                    placeholder="Seleccionar..."
+                                    options={tiposTratamiento.map(t => ({ value: t.id, label: `${t.nombre} (${t.duracion_minutos}m)` }))}
+                                />
+                            )}
                         </div>
                     </div>
 

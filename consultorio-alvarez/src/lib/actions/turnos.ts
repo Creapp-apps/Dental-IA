@@ -26,6 +26,7 @@ export async function crearTurno(formData: {
     fecha_fin: string
     notas?: string
     prioridad_override?: string
+    es_sobreturno?: boolean
 }) {
     const supabase = await createClient()
     const tenantId = await getTenantId()
@@ -44,6 +45,7 @@ export async function crearTurno(formData: {
             prioridad_override: formData.prioridad_override || null,
             estado: 'PENDIENTE',
             origen: 'SECRETARIA',
+            es_sobreturno: formData.es_sobreturno ?? false,
         })
         .select()
         .single()
