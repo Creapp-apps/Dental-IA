@@ -10,7 +10,15 @@ interface Props {
     colorPrimario: string
 }
 
-function Initials({ prof, color }: { prof: Profesional; color: string }) {
+function Initials({ prof, color }: { prof: any; color: string }) {
+    if (prof.avatar_url) {
+        return (
+            <div className="h-24 w-24 rounded-2xl relative overflow-hidden flex items-center justify-center shadow-lg mx-auto mb-5">
+                <img src={prof.avatar_url} alt={prof.nombre} className="h-full w-full object-cover" />
+            </div>
+        )
+    }
+
     return (
         <div
             className="h-24 w-24 rounded-2xl flex items-center justify-center text-3xl font-black text-white shadow-lg mx-auto mb-5"
@@ -46,15 +54,18 @@ export function LandingProfesionales({ profesionales, colorPrimario }: Props) {
                             {profesionales.map((p, i) => (
                                 <div
                                     key={p.id}
-                                    className="h-9 w-9 rounded-full border-2 border-white flex items-center justify-center text-xs font-bold text-white shadow-sm"
+                                    className="h-9 w-9 relative overflow-hidden rounded-full border-2 border-white flex items-center justify-center text-xs font-bold text-white shadow-sm"
                                     style={{
                                         backgroundColor: p.color_agenda,
                                         marginLeft: i > 0 ? '-10px' : '0',
                                         zIndex: profesionales.length - i,
-                                        position: 'relative',
                                     }}
                                 >
-                                    {p.nombre[0]}{p.apellido[0]}
+                                    {p.avatar_url ? (
+                                        <img src={p.avatar_url} alt={p.nombre} className="h-full w-full object-cover" />
+                                    ) : (
+                                        <>{p.nombre[0]}{p.apellido[0]}</>
+                                    )}
                                 </div>
                             ))}
                             <span

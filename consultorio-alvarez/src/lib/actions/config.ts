@@ -41,7 +41,8 @@ export async function actualizarHorarios(horarios: any[]) {
 
 export async function crearProfesional(data: {
     nombre: string; apellido: string; especialidad?: string;
-    matricula?: string; email: string; color_agenda?: string
+    matricula?: string; email: string; color_agenda?: string;
+    avatar_url?: string;
 }) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()

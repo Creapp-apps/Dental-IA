@@ -66,6 +66,7 @@ export interface Profesional {
   especialidad?: string
   matricula?: string
   foto_url?: string | null
+  avatar_url?: string | null
   descripcion?: string | null
   color_agenda: string
   email: string

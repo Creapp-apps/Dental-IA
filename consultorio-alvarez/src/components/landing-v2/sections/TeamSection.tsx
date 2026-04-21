@@ -89,10 +89,14 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                                 className="team-card glass w-full md:w-[calc(33.333%-1rem)] max-w-sm rounded-3xl p-8 text-center hover:bg-white/10 transition-all duration-500"
                             >
                                 <div
-                                    className="mx-auto mb-5 h-20 w-20 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
+                                    className="mx-auto mb-5 h-20 w-20 relative overflow-hidden rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
                                     style={{ backgroundColor: prof.color_agenda || 'var(--landing-primary, #0d9488)' }}
                                 >
-                                    {initials}
+                                    {prof.avatar_url ? (
+                                        <img src={prof.avatar_url} alt={`Dr. ${prof.nombre}`} className="w-full h-full object-cover" />
+                                    ) : (
+                                        initials
+                                    )}
                                 </div>
                                 <h3 className="text-lg font-bold text-white drop-shadow-sm">
                                     Dr/a. {prof.nombre} {prof.apellido}

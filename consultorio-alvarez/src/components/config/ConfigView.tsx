@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks } from 'lucide-react'
+import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -18,6 +18,8 @@ import { glassAlert } from '@/components/ui/glass-alert'
 import { TabMiWeb } from '@/components/config/TabMiWeb'
 import { TabIntegraciones } from '@/components/config/TabIntegraciones'
 import type { LandingConfig } from '@/lib/types/landing'
+import { createClient } from '@/lib/supabase/client'
+import { AvatarCropperModal } from '@/components/ui/avatar-cropper'
 
 const TABS = [
     { id: 'consultorio', label: 'Consultorio', icon: Building2 },
@@ -64,7 +66,7 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
             <AnimatePresence mode="wait">
                 <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
                     {tab === 'consultorio' && <TabConsultorio tenant={tenant} tiposTratamiento={tiposTratamiento} />}
-                    {tab === 'profesionales' && <TabProfesionales profesionales={profesionales} router={router} />}
+                    {tab === 'profesionales' && <TabProfesionales tenantId={tenant.id} profesionales={profesionales} router={router} />}
                     {tab === 'obras_sociales' && <TabObrasSociales obrasSociales={obrasSociales} />}
                     {tab === 'horarios' && <TabHorarios horarios={tenant.horarios} />}
                     {tab === 'mi_web' && landingConfig && <TabMiWeb config={landingConfig} slug={slug} />}
@@ -185,14 +187,20 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
 }
 
 /* ──────────── Tab: Profesionales ──────────── */
-function TabProfesionales({ profesionales, router }: { profesionales: any[]; router: ReturnType<typeof useRouter> }) {
+function TabProfesionales({ tenantId, profesionales, router }: { tenantId: string; profesionales: any[]; router: ReturnType<typeof useRouter> }) {
     const [isPending, startTransition] = useTransition()
     const [showForm, setShowForm] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
-    const [form, setForm] = useState({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', color_agenda: '#2563eb' })
+    const [form, setForm] = useState({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', color_agenda: '#2563eb', avatar_url: '' })
+
+    // Avatar states
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
+    const [cropperOpen, setCropperOpen] = useState(false)
+    const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
     function abrirNuevo() {
-        setForm({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', color_agenda: '#2563eb' })
+        setForm({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', color_agenda: '#2563eb', avatar_url: '' })
+        setAvatarPreview(null)
         setEditingId(null)
         setShowForm(true)
     }
@@ -204,8 +212,10 @@ function TabProfesionales({ profesionales, router }: { profesionales: any[]; rou
             especialidad: p.especialidad || '',
             matricula: p.matricula || '',
             email: p.email || '',
-            color_agenda: p.color_agenda || '#2563eb'
+            color_agenda: p.color_agenda || '#2563eb',
+            avatar_url: p.avatar_url || ''
         })
+        setAvatarPreview(p.avatar_url || null)
         setEditingId(p.id)
         setShowForm(true)
     }
@@ -213,6 +223,41 @@ function TabProfesionales({ profesionales, router }: { profesionales: any[]; rou
     function cerrarForm() {
         setShowForm(false)
         setEditingId(null)
+    }
+
+    const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files && e.target.files.length > 0) {
+            const file = e.target.files[0]
+            const imageUrl = URL.createObjectURL(file)
+            setSelectedImage(imageUrl)
+            setCropperOpen(true)
+            e.target.value = ''
+        }
+    }
+
+    const handleCropComplete = async (blob: Blob, previewUrl: string) => {
+        // Previsualización instantánea
+        setAvatarPreview(previewUrl)
+
+        try {
+            const supabase = createClient()
+            const fileName = `profesionales/${Date.now()}.jpg`
+
+            // Bloqueamos hasta subirla pero el UI ya muesra la vista previa
+            const { data, error } = await supabase.storage
+                .from('tenant_assets')
+                .upload(`${tenantId}/${fileName}`, blob, { upsert: true, contentType: 'image/jpeg' })
+
+            if (error) throw error
+
+            const { data: publicUrlData } = supabase.storage
+                .from('tenant_assets')
+                .getPublicUrl(`${tenantId}/${fileName}`)
+
+            setForm(f => ({ ...f, avatar_url: publicUrlData.publicUrl }))
+        } catch (e: any) {
+            glassAlert.error({ title: 'Error subiendo avatar', description: e.message })
+        }
     }
 
     function guardar() {
@@ -244,6 +289,36 @@ function TabProfesionales({ profesionales, router }: { profesionales: any[]; rou
             </div>
             {showForm && (
                 <div className="glass-subtle rounded-xl p-4 space-y-3">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-2">
+                        <div className="relative group">
+                            <input
+                                type="file"
+                                id="avatar-upload"
+                                className="hidden"
+                                accept="image/jpeg, image/png, image/webp"
+                                onChange={handleFileSelect}
+                            />
+                            <label
+                                htmlFor="avatar-upload"
+                                className="flex items-center justify-center h-16 w-16 rounded-full overflow-hidden border-2 border-border/50 cursor-pointer bg-muted hover:border-primary transition-all relative"
+                            >
+                                {avatarPreview ? (
+                                    <img src={avatarPreview} alt="Avatar" className="h-full w-full object-cover" />
+                                ) : (
+                                    <span className="text-xl font-bold flex items-center justify-center text-white h-full w-full" style={{ backgroundColor: form.color_agenda }}>
+                                        {form.nombre?.charAt(0) || ''}{form.apellido?.charAt(0) || ''}
+                                    </span>
+                                )}
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Camera className="h-5 w-5 text-white" />
+                                </div>
+                            </label>
+                        </div>
+                        <div className="text-sm">
+                            <p className="font-medium text-foreground">Foto de perfil</p>
+                            <p className="text-xs text-muted-foreground">Recomendado encuadre 1:1 circular.</p>
+                        </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Nombre *"><Input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} /></Field>
                         <Field label="Apellido *"><Input value={form.apellido} onChange={e => setForm(f => ({ ...f, apellido: e.target.value }))} /></Field>
@@ -261,11 +336,15 @@ function TabProfesionales({ profesionales, router }: { profesionales: any[]; rou
                     </div>
                 </div>
             )}
-            <div className="space-y-2">
+            <div className="space-y-2 mt-4">
                 {profesionales.map((p: any) => (
                     <div key={p.id} className="flex items-center gap-3 glass-subtle rounded-xl p-3 group transition-colors hover:bg-muted/30">
-                        <div className={cn("h-10 w-10 rounded-full flex items-center justify-center text-white font-bold text-sm transition-opacity", !p.activo && "opacity-50")} style={{ backgroundColor: p.color_agenda }}>
-                            {p.nombre.charAt(0)}{p.apellido.charAt(0)}
+                        <div className={cn("h-10 w-10 relative overflow-hidden rounded-full flex items-center justify-center text-white font-bold text-sm transition-opacity", !p.activo && "opacity-50")} style={{ backgroundColor: p.color_agenda }}>
+                            {p.avatar_url ? (
+                                <img src={p.avatar_url} alt={p.nombre} className="h-full w-full object-cover" />
+                            ) : (
+                                <>{p.nombre.charAt(0)}{p.apellido.charAt(0)}</>
+                            )}
                         </div>
                         <div className={cn("flex-1 min-w-0 transition-opacity", !p.activo && "opacity-50")}>
                             <p className="text-sm font-semibold text-foreground">Dr. {p.nombre} {p.apellido}</p>
@@ -303,6 +382,12 @@ function TabProfesionales({ profesionales, router }: { profesionales: any[]; rou
                     </div>
                 ))}
             </div>
+            <AvatarCropperModal
+                open={cropperOpen}
+                onOpenChange={setCropperOpen}
+                imageSrc={selectedImage}
+                onCropCompleteAction={handleCropComplete}
+            />
         </div>
     )
 }

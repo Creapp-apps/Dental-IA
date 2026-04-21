@@ -20,7 +20,7 @@ export function HeroSection({ onBookingClick, config }: Props) {
     const ctaRef = useRef<HTMLDivElement>(null)
     const chipsRef = useRef<HTMLDivElement>(null)
     const badge1Ref = useRef<HTMLDivElement>(null)
-    const badge2Ref = useRef<HTMLButtonElement>(null)
+    const badge2Ref = useRef<HTMLDivElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -258,22 +258,26 @@ export function HeroSection({ onBookingClick, config }: Props) {
                     </div>
 
                     {/* Turnos badge — bottom left */}
-                    <button
+                    <div
                         ref={badge2Ref}
-                        onClick={onBookingClick}
-                        className="absolute bottom-4 left-0 lg:-left-4 z-10 glass-light rounded-2xl px-4 py-3 flex items-center gap-3 text-left cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5 transition-all outline-none"
+                        className="absolute bottom-4 left-0 lg:-left-4 z-10"
                         style={{ opacity: 0 }}
                     >
-                        <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-sm shrink-0"
-                            style={{ backgroundColor: config?.color_primary ?? '#0d9488' }}
+                        <button
+                            onClick={onBookingClick}
+                            className="bg-white/80 backdrop-blur-md border border-white/20 shadow-sm rounded-2xl px-4 py-3 flex items-center gap-3 text-left cursor-pointer hover:scale-[1.08] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 outline-none w-full"
                         >
-                            ✓
-                        </div>
-                        <div>
-                            <p className="text-xs font-bold text-gray-900 leading-none">Turnos online</p>
-                            <p className="text-[10px] text-gray-400 leading-none mt-0.5">disponibles 24h</p>
-                        </div>
-                    </button>
+                            <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-sm shrink-0 shadow-inner"
+                                style={{ backgroundColor: config?.color_primary ?? '#0d9488' }}
+                            >
+                                ✓
+                            </div>
+                            <div>
+                                <p className="text-xs font-bold text-gray-900 leading-none">Turnos online</p>
+                                <p className="text-[10px] text-gray-500 leading-none mt-0.5">disponibles 24h</p>
+                            </div>
+                        </button>
+                    </div>
 
                     {/* Sparkle dots */}
                     {[
