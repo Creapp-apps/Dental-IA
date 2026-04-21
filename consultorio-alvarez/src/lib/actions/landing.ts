@@ -68,7 +68,8 @@ export async function guardarLandingConfig(
 
     if (error) return { error: error.message }
 
-    revalidatePath('/c/[slug]', 'page')
+    revalidatePath('/')
+    revalidatePath('/reservar')
     revalidatePath('/configuracion')
     return { success: true }
 }

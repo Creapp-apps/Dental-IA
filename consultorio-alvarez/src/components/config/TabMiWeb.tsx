@@ -142,7 +142,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
         })
     }
 
-    const landingUrl = `http://localhost:3000/c/${slug}`
+    const landingUrl = `/`
 
     return (
         <div className="space-y-5 max-w-3xl">
