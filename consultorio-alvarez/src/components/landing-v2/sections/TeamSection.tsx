@@ -80,13 +80,13 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                     </p>
                 </div>
 
-                <div ref={cardsRef} className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div ref={cardsRef} className="flex flex-wrap justify-center gap-6">
                     {professionals.length > 0 ? professionals.map((prof) => {
                         const initials = `${prof.nombre?.[0] || ''}${prof.apellido?.[0] || ''}`
                         return (
                             <div
                                 key={prof.id}
-                                className="team-card glass rounded-3xl p-8 text-center hover:bg-white/10 transition-all duration-500"
+                                className="team-card glass w-full md:w-[calc(33.333%-1rem)] max-w-sm rounded-3xl p-8 text-center hover:bg-white/10 transition-all duration-500"
                             >
                                 <div
                                     className="mx-auto mb-5 h-20 w-20 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
