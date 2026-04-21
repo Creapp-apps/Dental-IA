@@ -75,7 +75,7 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                         Profesionales de
                         <span className="text-gradient-landing"> confianza</span>
                     </h2>
-                    <p className="mt-4 text-white/40 max-w-lg mx-auto text-base">
+                    <p className="mt-4 text-white/80 font-medium max-w-lg mx-auto text-base drop-shadow-sm">
                         Un equipo multidisciplinario con más de 15 años de experiencia.
                     </p>
                 </div>
@@ -102,7 +102,7 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                                     style={{ color: 'var(--landing-primary, #0d9488)' }}
                                 >{prof.especialidad || 'Odontología General'}</p>
                                 {prof.matricula && (
-                                    <p className="text-xs text-white/40 mt-3 tracking-wide">{prof.matricula}</p>
+                                    <p className="text-xs text-white/80 mt-3 font-medium tracking-wide drop-shadow-sm">{prof.matricula}</p>
                                 )}
                             </div>
                         )

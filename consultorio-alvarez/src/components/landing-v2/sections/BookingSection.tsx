@@ -66,10 +66,10 @@ export function BookingSection({ config }: { config?: Pick<LandingConfig, 'booki
                     >
                         Reservar turno
                     </span>
-                    <h2 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-tight">
+                    <h2 className="text-4xl sm:text-5xl font-extrabold text-white drop-shadow-sm leading-tight">
                         {config?.booking_titulo ?? 'Agenda tu visita'}
                     </h2>
-                    <p className="mt-4 text-gray-500 max-w-lg mx-auto text-base">
+                    <p className="mt-4 text-white/80 font-medium max-w-lg mx-auto text-base">
                         {config?.booking_subtitulo ?? 'Seleccioná día, horario y profesional. Te confirmaremos a la brevedad.'}
                     </p>
                 </div>
