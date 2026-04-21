@@ -450,8 +450,43 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                         <Input value={textos.footer_address} onChange={e => setTextos(t => ({ ...t, footer_address: e.target.value }))} placeholder="Ej: Av. Corrientes 1234, CABA" />
                     </Field>
                     <div className="grid grid-cols-2 gap-3">
-                        <Field label="Teléfono / WhatsApp">
-                            <Input value={textos.footer_phone} onChange={e => setTextos(t => ({ ...t, footer_phone: e.target.value }))} placeholder="+54 9 11 1234-5678" />
+                        <Field label="Teléfonos / WhatsApp">
+                            <div className="space-y-2">
+                                {(textos.footer_phone ? textos.footer_phone.split(/\||,/).map(s => s.trim()) : ['']).map((ph, i, arr) => (
+                                    <div key={i} className="flex gap-2">
+                                        <Input
+                                            value={ph}
+                                            onChange={e => {
+                                                const newArr = [...arr]
+                                                newArr[i] = e.target.value
+                                                setTextos(t => ({ ...t, footer_phone: newArr.filter(Boolean).join(' | ') }))
+                                            }}
+                                            placeholder="+54 9 11 1234-5678"
+                                        />
+                                        {arr.length > 1 && (
+                                            <button
+                                                onClick={() => {
+                                                    const newArr = arr.filter((_, idx) => idx !== i)
+                                                    setTextos(t => ({ ...t, footer_phone: newArr.filter(Boolean).join(' | ') }))
+                                                }}
+                                                className="p-2 text-destructive hover:bg-destructive/10 rounded-lg shrink-0 cursor-pointer transition-colors"
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <button
+                                    onClick={() => {
+                                        const current = textos.footer_phone ? textos.footer_phone.split(/\||,/).map(s => s.trim()) : [];
+                                        setTextos(t => ({ ...t, footer_phone: [...current, ''].join(' | ') }))
+                                    }}
+                                    className="flex items-center text-xs font-semibold text-primary hover:text-primary/80 transition-colors mt-1 cursor-pointer"
+                                >
+                                    <Plus className="h-3 w-3 mr-1" />
+                                    Añadir otra línea
+                                </button>
+                            </div>
                         </Field>
                         <Field label="Correo electrónico">
                             <Input value={textos.footer_email} onChange={e => setTextos(t => ({ ...t, footer_email: e.target.value }))} placeholder="turnos@clinica.com" />

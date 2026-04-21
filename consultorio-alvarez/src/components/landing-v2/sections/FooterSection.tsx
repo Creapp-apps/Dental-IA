@@ -31,10 +31,16 @@ export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
                     <div>
                         <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-gray-400 mb-4">Contacto</h4>
                         <div className="space-y-3">
-                            <a href={`tel:${phone}`} className="flex items-center gap-2 text-sm text-gray-600 transition-colors" style={{ '--tw-text-opacity': 1, ':hover': { color: 'var(--landing-primary, #0d9488)' } } as any}>
-                                <Phone className="h-3.5 w-3.5" />
-                                {phone}
-                            </a>
+                            {phone.split(/\||,/).map((p, idx) => {
+                                const trimmed = p.trim()
+                                if (!trimmed) return null
+                                return (
+                                    <a key={idx} href={`tel:${trimmed.replace(/\s+/g, '')}`} className="flex items-center gap-2 text-sm text-gray-600 transition-colors" style={{ '--tw-text-opacity': 1, ':hover': { color: 'var(--landing-primary, #0d9488)' } } as any}>
+                                        <Phone className="h-3.5 w-3.5" />
+                                        {trimmed}
+                                    </a>
+                                )
+                            })}
                             <a href={`mailto:${email}`} className="flex items-center gap-2 text-sm text-gray-600 transition-colors" style={{ '--tw-text-opacity': 1, ':hover': { color: 'var(--landing-primary, #0d9488)' } } as any}>
                                 <Mail className="h-3.5 w-3.5" />
                                 {email}
