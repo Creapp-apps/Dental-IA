@@ -1,11 +1,15 @@
 // Server Component — fetches landing config from DB and injects it as CSS variables
 import { getLandingConfigPublica } from '@/lib/actions/landing'
+import { getProfesionalesPublicos } from '@/lib/actions/reservas'
 import { DEFAULT_LANDING_CONFIG } from '@/lib/types/landing'
 import { LandingPageClient } from '@/components/landing-v2/LandingPageClient'
 
 export default async function LandingPage() {
     const slug = process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
-    const config = (await getLandingConfigPublica(slug)) ?? { id: '', tenant_id: '', ...DEFAULT_LANDING_CONFIG }
+    const [config, profesionales] = await Promise.all([
+        getLandingConfigPublica(slug).then(c => c ?? { id: '', tenant_id: '', ...DEFAULT_LANDING_CONFIG }),
+        getProfesionalesPublicos(slug)
+    ])
 
     return (
         <>
@@ -22,6 +26,7 @@ export default async function LandingPage() {
             <LandingPageClient
                 slug={slug}
                 config={config}
+                professionals={profesionales}
             />
         </>
     )

@@ -32,9 +32,10 @@ function getBackground(progress: number): string {
 interface LandingPageClientProps {
     slug: string
     config: LandingConfig & { id: string; tenant_id: string }
+    professionals: any[]
 }
 
-export function LandingPageClient({ slug, config }: LandingPageClientProps) {
+export function LandingPageClient({ slug, config, professionals }: LandingPageClientProps) {
     const [scrollProgress, setScrollProgress] = useState(0)
     const mainRef = useRef<HTMLDivElement>(null)
     const bgRef = useRef<HTMLDivElement>(null)
@@ -92,7 +93,7 @@ export function LandingPageClient({ slug, config }: LandingPageClientProps) {
             <main className="relative z-10">
                 <HeroSection onBookingClick={scrollToBooking} config={config} />
                 <ServicesSection config={config} />
-                <TeamSection config={config} />
+                <TeamSection config={config} professionals={professionals} />
                 <BookingSection config={config} />
                 <FooterSection config={config} />
             </main>

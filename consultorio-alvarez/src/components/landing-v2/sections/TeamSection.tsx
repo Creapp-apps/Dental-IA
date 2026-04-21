@@ -8,7 +8,7 @@ import type { LandingConfig } from '@/lib/types/landing'
 
 gsap.registerPlugin(ScrollTrigger)
 
-export function TeamSection({ config }: { config?: Pick<LandingConfig, 'equipo_titulo'> }) {
+export function TeamSection({ config, professionals = [] }: { config?: Pick<LandingConfig, 'equipo_titulo'>, professionals?: any[] }) {
     const sectionRef = useRef<HTMLDivElement>(null)
     const cardsRef = useRef<HTMLDivElement>(null)
     const titleRef = useRef<HTMLDivElement>(null)
@@ -81,30 +81,34 @@ export function TeamSection({ config }: { config?: Pick<LandingConfig, 'equipo_t
                 </div>
 
                 <div ref={cardsRef} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {PROFESSIONALS.map((prof) => {
-                        const initials = `${prof.name[0]}${prof.lastName[0]}`
+                    {professionals.length > 0 ? professionals.map((prof) => {
+                        const initials = `${prof.nombre?.[0] || ''}${prof.apellido?.[0] || ''}`
                         return (
                             <div
                                 key={prof.id}
                                 className="team-card glass rounded-3xl p-8 text-center hover:bg-white/10 transition-all duration-500"
                             >
                                 <div
-                                    className="mx-auto mb-5 h-20 w-20 rounded-full flex items-center justify-center text-2xl font-bold text-white"
-                                    style={{ backgroundColor: prof.color }}
+                                    className="mx-auto mb-5 h-20 w-20 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
+                                    style={{ backgroundColor: prof.color || 'var(--landing-primary, #0d9488)' }}
                                 >
                                     {initials}
                                 </div>
-                                <h3 className="text-lg font-bold text-white">
-                                    Dr/a. {prof.name} {prof.lastName}
+                                <h3 className="text-lg font-bold text-white drop-shadow-sm">
+                                    Dr/a. {prof.nombre} {prof.apellido}
                                 </h3>
                                 <p
-                                    className="text-sm mt-1"
+                                    className="text-sm mt-1 drop-shadow-sm font-medium"
                                     style={{ color: 'var(--landing-primary, #0d9488)' }}
-                                >{prof.specialty}</p>
-                                <p className="text-xs text-white/30 mt-2">{prof.license}</p>
+                                >{prof.especialidad || 'Odontología General'}</p>
+                                {prof.matricula && (
+                                    <p className="text-xs text-white/40 mt-3 tracking-wide">{prof.matricula}</p>
+                                )}
                             </div>
                         )
-                    })}
+                    }) : (
+                        <p className="text-white/50 w-full col-span-full text-center py-10">Agregue profesionales desde el panel administrativo.</p>
+                    )}
                 </div>
             </div>
         </section>
