@@ -179,13 +179,15 @@ export function HeroSection({ onBookingClick, config }: Props) {
                             <MapPin className="h-3 w-3" />
                             {config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`}
                         </div>
-                        {(config?.footer_phone ?? CLINIC.phone).split(/\||,/).map((phone, idx) => {
-                            const trimmed = phone.trim()
-                            if (!trimmed) return null
+                        {(config?.footer_phone ?? CLINIC.phone).split(/\|/).map((phoneStr, idx) => {
+                            const [num, lbl] = phoneStr.split('::')
+                            const trimmedNum = num?.trim()
+                            const trimmedLbl = lbl?.trim()
+                            if (!trimmedNum && !trimmedLbl) return null
                             return (
                                 <div key={idx} className="flex items-center gap-1.5 rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs text-gray-500">
                                     <Phone className="h-3 w-3" />
-                                    {trimmed}
+                                    {trimmedNum} {trimmedLbl && <span className="text-gray-400 font-medium">({trimmedLbl})</span>}
                                 </div>
                             )
                         })}

@@ -452,22 +452,39 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Teléfonos / WhatsApp">
                             <div className="space-y-2">
-                                {(textos.footer_phone ? textos.footer_phone.split(/\||,/).map(s => s.trim()) : ['']).map((ph, i, arr) => (
+                                {(textos.footer_phone ? textos.footer_phone.split(/\|/).map(s => {
+                                    const [num, lbl] = s.split('::')
+                                    return { num: num?.trim() || '', lbl: (lbl?.trim() || '') }
+                                }) : [{ num: '', lbl: '' }]).map((item, i, arr) => (
                                     <div key={i} className="flex gap-2">
                                         <Input
-                                            value={ph}
+                                            value={item.num}
                                             onChange={e => {
                                                 const newArr = [...arr]
-                                                newArr[i] = e.target.value
-                                                setTextos(t => ({ ...t, footer_phone: newArr.filter(Boolean).join(' | ') }))
+                                                newArr[i].num = e.target.value
+                                                const joined = newArr.filter(x => x.num || x.lbl).map(x => `${x.num}::${x.lbl}`).join(' | ')
+                                                setTextos(t => ({ ...t, footer_phone: joined }))
                                             }}
                                             placeholder="+54 9 11 1234-5678"
+                                            className="w-1/2"
+                                        />
+                                        <Input
+                                            value={item.lbl}
+                                            onChange={e => {
+                                                const newArr = [...arr]
+                                                newArr[i].lbl = e.target.value
+                                                const joined = newArr.filter(x => x.num || x.lbl).map(x => `${x.num}::${x.lbl}`).join(' | ')
+                                                setTextos(t => ({ ...t, footer_phone: joined }))
+                                            }}
+                                            placeholder="Ej: Administración"
+                                            className="w-1/2"
                                         />
                                         {arr.length > 1 && (
                                             <button
                                                 onClick={() => {
                                                     const newArr = arr.filter((_, idx) => idx !== i)
-                                                    setTextos(t => ({ ...t, footer_phone: newArr.filter(Boolean).join(' | ') }))
+                                                    const joined = newArr.filter(x => x.num || x.lbl).map(x => `${x.num}::${x.lbl}`).join(' | ')
+                                                    setTextos(t => ({ ...t, footer_phone: joined }))
                                                 }}
                                                 className="p-2 text-destructive hover:bg-destructive/10 rounded-lg shrink-0 cursor-pointer transition-colors"
                                             >
@@ -478,8 +495,13 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                                 ))}
                                 <button
                                     onClick={() => {
-                                        const current = textos.footer_phone ? textos.footer_phone.split(/\||,/).map(s => s.trim()) : [];
-                                        setTextos(t => ({ ...t, footer_phone: [...current, ''].join(' | ') }))
+                                        const current = textos.footer_phone ? textos.footer_phone.split(/\|/).map(s => {
+                                            const [num, lbl] = s.split('::')
+                                            return { num: num?.trim() || '', lbl: (lbl?.trim() || '') }
+                                        }) : [];
+                                        const withNew = [...current, { num: '', lbl: '' }]
+                                        const joined = withNew.map(x => `${x.num}::${x.lbl}`).join(' | ')
+                                        setTextos(t => ({ ...t, footer_phone: joined }))
                                     }}
                                     className="flex items-center text-xs font-semibold text-primary hover:text-primary/80 transition-colors mt-1 cursor-pointer"
                                 >

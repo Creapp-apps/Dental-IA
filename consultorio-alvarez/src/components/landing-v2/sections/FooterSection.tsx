@@ -31,13 +31,18 @@ export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
                     <div>
                         <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-gray-400 mb-4">Contacto</h4>
                         <div className="space-y-3">
-                            {phone.split(/\||,/).map((p, idx) => {
-                                const trimmed = p.trim()
-                                if (!trimmed) return null
+                            {(phone.split(/\|/)).map((p, idx) => {
+                                const [num, lbl] = p.split('::')
+                                const trimmedNum = num?.trim() || ''
+                                const trimmedLbl = lbl?.trim() || ''
+                                if (!trimmedNum && !trimmedLbl) return null
+                                const telClean = trimmedNum.replace(/[^\d+]/g, '')
                                 return (
-                                    <a key={idx} href={`tel:${trimmed.replace(/\s+/g, '')}`} className="flex items-center gap-2 text-sm text-gray-600 transition-colors" style={{ '--tw-text-opacity': 1, ':hover': { color: 'var(--landing-primary, #0d9488)' } } as any}>
+                                    <a key={idx} href={`tel:${telClean}`} className="flex items-center gap-2 text-sm text-gray-600 transition-colors" style={{ '--tw-text-opacity': 1, ':hover': { color: 'var(--landing-primary, #0d9488)' } } as any}>
                                         <Phone className="h-3.5 w-3.5" />
-                                        {trimmed}
+                                        <span>
+                                            {trimmedNum} {trimmedLbl && <span className="text-gray-400 font-medium">- {trimmedLbl}</span>}
+                                        </span>
                                     </a>
                                 )
                             })}
