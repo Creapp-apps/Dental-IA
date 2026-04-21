@@ -20,7 +20,7 @@ export function HeroSection({ onBookingClick, config }: Props) {
     const ctaRef = useRef<HTMLDivElement>(null)
     const chipsRef = useRef<HTMLDivElement>(null)
     const badge1Ref = useRef<HTMLDivElement>(null)
-    const badge2Ref = useRef<HTMLDivElement>(null)
+    const badge2Ref = useRef<HTMLButtonElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
@@ -258,9 +258,10 @@ export function HeroSection({ onBookingClick, config }: Props) {
                     </div>
 
                     {/* Turnos badge — bottom left */}
-                    <div
+                    <button
                         ref={badge2Ref}
-                        className="absolute bottom-4 left-0 lg:-left-4 z-10 glass-light rounded-2xl px-4 py-3 flex items-center gap-3"
+                        onClick={onBookingClick}
+                        className="absolute bottom-4 left-0 lg:-left-4 z-10 glass-light rounded-2xl px-4 py-3 flex items-center gap-3 text-left cursor-pointer hover:scale-105 hover:shadow-lg hover:-translate-y-0.5 transition-all outline-none"
                         style={{ opacity: 0 }}
                     >
                         <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-sm shrink-0"
@@ -272,7 +273,7 @@ export function HeroSection({ onBookingClick, config }: Props) {
                             <p className="text-xs font-bold text-gray-900 leading-none">Turnos online</p>
                             <p className="text-[10px] text-gray-400 leading-none mt-0.5">disponibles 24h</p>
                         </div>
-                    </div>
+                    </button>
 
                     {/* Sparkle dots */}
                     {[
