@@ -20,7 +20,7 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
 
     const { data: allProfs } = await supabase
         .from('profesionales')
-        .select('id, nombre, apellido, especialidad, matricula, color, activo')
+        .select('id, nombre, apellido, especialidad, matricula, color_agenda, activo')
         .eq('tenant_id', tenant.id)
         .eq('activo', true)
         .order('nombre')

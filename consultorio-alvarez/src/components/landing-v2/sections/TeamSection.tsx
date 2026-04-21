@@ -90,7 +90,7 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                             >
                                 <div
                                     className="mx-auto mb-5 h-20 w-20 rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
-                                    style={{ backgroundColor: prof.color || 'var(--landing-primary, #0d9488)' }}
+                                    style={{ backgroundColor: prof.color_agenda || 'var(--landing-primary, #0d9488)' }}
                                 >
                                     {initials}
                                 </div>
