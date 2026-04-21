@@ -452,8 +452,8 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Teléfonos / WhatsApp">
                             <div className="space-y-2">
-                                {(textos.footer_phone ? textos.footer_phone.split(/\|/).map(s => {
-                                    const parts = s.trim().split('::')
+                                {(textos.footer_phone ? textos.footer_phone.split(' | ').map(s => {
+                                    const parts = s.split('::')
                                     const numStr = parts[0] || ''
                                     const lblStr = parts.slice(1).join('::') || ''
                                     return { num: numStr, lbl: lblStr }
@@ -497,9 +497,11 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                                 ))}
                                 <button
                                     onClick={() => {
-                                        const current = textos.footer_phone ? textos.footer_phone.split(/\|/).map(s => {
-                                            const [num, lbl] = s.split('::')
-                                            return { num: num?.trim() || '', lbl: (lbl?.trim() || '') }
+                                        const current = textos.footer_phone ? textos.footer_phone.split(' | ').map(s => {
+                                            const parts = s.split('::')
+                                            const numStr = parts[0] || ''
+                                            const lblStr = parts.slice(1).join('::') || ''
+                                            return { num: numStr, lbl: lblStr }
                                         }) : [];
                                         const withNew = [...current, { num: '', lbl: '' }]
                                         const joined = withNew.map(x => `${x.num}::${x.lbl}`).join(' | ')
