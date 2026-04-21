@@ -453,8 +453,10 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                         <Field label="Teléfonos / WhatsApp">
                             <div className="space-y-2">
                                 {(textos.footer_phone ? textos.footer_phone.split(/\|/).map(s => {
-                                    const [num, lbl] = s.split('::')
-                                    return { num: num?.trim() || '', lbl: (lbl?.trim() || '') }
+                                    const parts = s.trim().split('::')
+                                    const numStr = parts[0] || ''
+                                    const lblStr = parts.slice(1).join('::') || ''
+                                    return { num: numStr, lbl: lblStr }
                                 }) : [{ num: '', lbl: '' }]).map((item, i, arr) => (
                                     <div key={i} className="flex gap-2">
                                         <Input
