@@ -175,20 +175,23 @@ export function HeroSection({ onBookingClick, config }: Props) {
                     </div>
 
                     <div ref={chipsRef} className="flex flex-wrap gap-2" style={{ opacity: 0 }}>
-                        <div className="flex items-center gap-1.5 rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs text-gray-500">
+                        <a href={`https://maps.google.com/?q=${encodeURIComponent(config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full bg-gray-100 hover:bg-gray-200 border border-gray-200 px-3 py-1.5 text-xs text-gray-500 transition-colors">
                             <MapPin className="h-3 w-3" />
                             {config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`}
-                        </div>
+                        </a>
                         {(config?.footer_phone ?? CLINIC.phone).split(/\|/).map((phoneStr, idx) => {
                             const [num, lbl] = phoneStr.split('::')
                             const trimmedNum = num?.trim()
                             const trimmedLbl = lbl?.trim()
                             if (!trimmedNum && !trimmedLbl) return null
+                            const telClean = trimmedNum?.replace(/[^\d+]/g, '') || ''
+                            const isMobile = telClean.replace('+', '').length >= 10
+                            const href = isMobile ? `https://wa.me/549${telClean.replace(/^\+?549?/, '')}` : `tel:${telClean}`
                             return (
-                                <div key={idx} className="flex items-center gap-1.5 rounded-full bg-gray-100 border border-gray-200 px-3 py-1.5 text-xs text-gray-500">
+                                <a key={idx} href={href} target={isMobile ? "_blank" : undefined} rel={isMobile ? "noopener noreferrer" : undefined} className="flex items-center gap-1.5 rounded-full bg-gray-100 hover:bg-gray-200 border border-gray-200 px-3 py-1.5 text-xs text-gray-500 transition-colors">
                                     <Phone className="h-3 w-3" />
                                     {trimmedNum} {trimmedLbl && <span className="text-gray-400 font-medium">({trimmedLbl})</span>}
-                                </div>
+                                </a>
                             )
                         })}
                     </div>

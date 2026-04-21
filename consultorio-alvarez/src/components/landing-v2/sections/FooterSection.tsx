@@ -37,8 +37,10 @@ export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
                                 const trimmedLbl = lbl?.trim() || ''
                                 if (!trimmedNum && !trimmedLbl) return null
                                 const telClean = trimmedNum.replace(/[^\d+]/g, '')
+                                const isMobile = telClean.replace('+', '').length >= 10
+                                const href = isMobile ? `https://wa.me/549${telClean.replace(/^\+?549?/, '')}` : `tel:${telClean}`
                                 return (
-                                    <a key={idx} href={`tel:${telClean}`} className="flex items-center gap-2 text-sm text-gray-600 transition-colors" style={{ '--tw-text-opacity': 1, ':hover': { color: 'var(--landing-primary, #0d9488)' } } as any}>
+                                    <a key={idx} href={href} target={isMobile ? "_blank" : undefined} rel={isMobile ? "noopener noreferrer" : undefined} className="flex items-center gap-2 text-sm text-gray-600 transition-colors" style={{ '--tw-text-opacity': 1, ':hover': { color: 'var(--landing-primary, #0d9488)' } } as any}>
                                         <Phone className="h-3.5 w-3.5" />
                                         <span>
                                             {trimmedNum} {trimmedLbl && <span className="text-gray-400 font-medium">- {trimmedLbl}</span>}
@@ -50,10 +52,10 @@ export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
                                 <Mail className="h-3.5 w-3.5" />
                                 {email}
                             </a>
-                            <span className="flex items-center gap-2 text-sm text-gray-600">
+                            <a href={`https://maps.google.com/?q=${encodeURIComponent(address)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-gray-600 transition-colors" style={{ '--tw-text-opacity': 1, ':hover': { color: 'var(--landing-primary, #0d9488)' } } as any}>
                                 <MapPin className="h-3.5 w-3.5 shrink-0" />
                                 {address}
-                            </span>
+                            </a>
                         </div>
                     </div>
 
