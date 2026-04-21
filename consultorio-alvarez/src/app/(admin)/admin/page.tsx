@@ -4,7 +4,6 @@ import { Calendar, Clock, Users, AlertCircle, DollarSign, Stethoscope } from 'lu
 import { getDashboardStats, getTurnosDelDia, getProfesionales } from '@/lib/supabase/queries'
 import { DashboardKPI } from '@/components/dashboard/DashboardKPI'
 import { TurnoCardGlass } from '@/components/dashboard/TurnoCardGlass'
-import { ThemeToggle } from '@/components/ui/theme-toggle'
 
 export default async function DashboardPage() {
     const hoy = new Date()
@@ -37,7 +36,6 @@ export default async function DashboardPage() {
                         Vista del día — panel principal
                     </p>
                 </div>
-                <ThemeToggle />
             </div>
 
             {/* KPIs */}

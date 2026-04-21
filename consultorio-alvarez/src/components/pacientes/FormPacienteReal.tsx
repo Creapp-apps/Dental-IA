@@ -21,6 +21,7 @@ const schema = z.object({
     apellido: z.string().min(2, 'Mínimo 2 caracteres'),
     foto_url: z.string().optional(),
     dni: z.string().optional(),
+    cuit: z.string().optional(),
     fecha_nacimiento: z.string().optional(),
     genero: z.string().optional(),
     telefono: z.string().optional(),
@@ -113,9 +114,12 @@ export function FormPacienteReal({ obrasSociales }: { obrasSociales: any[] }) {
                         <Input {...register('apellido')} placeholder="Pérez" />
                     </Field>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-4 gap-3">
                     <Field label="DNI">
                         <Input {...register('dni')} placeholder="12345678" />
+                    </Field>
+                    <Field label="CUIT / CUIL">
+                        <Input {...register('cuit')} placeholder="20-12345678-9" />
                     </Field>
                     <Field label="Fecha Nac.">
                         <GlassDatePicker

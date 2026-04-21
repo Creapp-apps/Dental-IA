@@ -24,11 +24,16 @@ export function TenantLogo({
 
     // Si es imagen
     if (type === 'image' && config?.image_url) {
+        const scale = config.image_scale || 100
+        // h-8 equals 32px. We use it as the base (100%).
+        const heightPx = Math.round(32 * (scale / 100))
+
         return (
             <img
                 src={config.image_url}
                 alt="Logo"
-                className={cn("h-8 object-contain", className)}
+                style={{ height: `${heightPx}px` }}
+                className={cn("object-contain", className)}
             />
         )
     }

@@ -3,8 +3,8 @@ import { getLandingConfigPublica } from '@/lib/actions/landing'
 import { DEFAULT_LANDING_CONFIG } from '@/lib/types/landing'
 import { LandingPageClient } from '@/components/landing-v2/LandingPageClient'
 
-export default async function LandingPage({ params }: { params: Promise<{ slug: string }> }) {
-    const { slug } = await params
+export default async function LandingPage() {
+    const slug = process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
     const config = (await getLandingConfigPublica(slug)) ?? { id: '', tenant_id: '', ...DEFAULT_LANDING_CONFIG }
 
     return (

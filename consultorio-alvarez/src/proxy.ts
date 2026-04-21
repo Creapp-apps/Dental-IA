@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
 // Rutas que requieren sesión activa (admin)
-const ADMIN_PREFIXES = ['/dashboard', '/agenda', '/pacientes', '/cobros', '/configuracion']
+const ADMIN_PREFIXES = ['/admin', '/agenda', '/pacientes', '/cobros', '/configuracion']
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
@@ -40,7 +40,8 @@ export async function proxy(request: NextRequest) {
         }
     )
 
-    const { data: { user } } = await supabase.auth.getUser()
+    const { data: { session } } = await supabase.auth.getSession()
+    const user = session?.user
 
     // ── Portal routes ──────────────────────────────────────────
     if (isPortalRoute && !user) {
@@ -60,7 +61,7 @@ export async function proxy(request: NextRequest) {
     }
 
     // ── Admin routes ───────────────────────────────────────────
-    if (!user && (isAdminRoute || isRoot)) {
+    if (!user && isAdminRoute) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
         return NextResponse.redirect(url)
@@ -68,7 +69,7 @@ export async function proxy(request: NextRequest) {
 
     if (user && (isAdminLogin || isRoot)) {
         const url = request.nextUrl.clone()
-        url.pathname = '/dashboard'
+        url.pathname = '/admin'
         return NextResponse.redirect(url)
     }
 

@@ -130,7 +130,7 @@ export async function crearCobro(formData: {
     if (error) return { error: error.message }
 
     revalidatePath('/cobros')
-    revalidatePath('/dashboard')
+    revalidatePath('/admin')
     return { data }
 }
 
@@ -155,7 +155,7 @@ export async function registrarPago(cobroId: string, montoPago: number) {
     if (error) return { error: error.message }
 
     revalidatePath('/cobros')
-    revalidatePath('/dashboard')
+    revalidatePath('/admin')
     return { success: true, nuevoEstado }
 }
 

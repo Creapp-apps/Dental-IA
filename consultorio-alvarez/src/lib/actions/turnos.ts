@@ -52,6 +52,49 @@ export async function crearTurno(formData: {
 
     if (error) return { error: error.message }
 
+    // --- INTEGRACIÓN RESEND ---
+    if (process.env.RESEND_API_KEY) {
+        try {
+            const { Resend } = await import('resend')
+            const { ConfirmacionTurnoEmail } = await import('@/components/emails/ConfirmacionTurnoEmail')
+            const { format } = await import('date-fns')
+            const { es } = await import('date-fns/locale')
+
+            const resend = new Resend(process.env.RESEND_API_KEY)
+
+            // Obtener información relacionada completa para armar el correo
+            const [pacienteRes, profesionalRes, tratamientoRes] = await Promise.all([
+                supabase.from('pacientes').select('nombre, email').eq('id', formData.paciente_id).single(),
+                supabase.from('profesionales').select('nombre, apellido').eq('id', formData.profesional_id).single(),
+                supabase.from('tipos_tratamiento').select('nombre').eq('id', formData.tipo_tratamiento_id).single()
+            ])
+
+            const paciente = pacienteRes.data
+            if (paciente?.email) {
+                const fechaObj = new Date(formData.fecha_inicio)
+                const fechaStr = format(fechaObj, "EEEE d 'de' MMMM", { locale: es })
+                const horaStr = format(fechaObj, "HH:mm")
+
+                await resend.emails.send({
+                    // 'onboarding@resend.dev' permite hacer tests a uno mismo sin verificar el dominio en la capa gratuita
+                    from: 'Consultorio Alvarez <onboarding@resend.dev>',
+                    to: paciente.email,
+                    subject: 'Confirmación de Turno - Consultorio Alvarez',
+                    react: ConfirmacionTurnoEmail({
+                        pacienteNombre: paciente.nombre,
+                        fecha: fechaStr,
+                        hora: horaStr,
+                        tratamiento: tratamientoRes.data?.nombre || 'Consulta M.',
+                        profesional: `${profesionalRes.data?.nombre} ${profesionalRes.data?.apellido}`
+                    })
+                })
+            }
+        } catch (err) {
+            console.error("Error al despachar el correo de confirmación de Resend:", err)
+        }
+    }
+    // -------------------------
+
     revalidatePath('/agenda')
     revalidatePath('/dashboard')
     return { data }
@@ -68,7 +111,7 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
     if (error) return { error: error.message }
 
     revalidatePath('/agenda')
-    revalidatePath('/dashboard')
+    revalidatePath('/admin')
     return { success: true }
 }
 
@@ -86,7 +129,7 @@ export async function moverTurno(turnoId: string, nuevaFechaInicio: string, nuev
     if (error) return { error: error.message }
 
     revalidatePath('/agenda')
-    revalidatePath('/dashboard')
+    revalidatePath('/admin')
     return { success: true }
 }
 

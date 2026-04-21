@@ -18,6 +18,7 @@ export async function crearPaciente(formData: {
     apellido: string
     foto_url?: string
     dni?: string
+    cuit?: string
     fecha_nacimiento?: string
     genero?: string
     telefono?: string
@@ -52,6 +53,7 @@ export async function crearPaciente(formData: {
             apellido: formData.apellido,
             foto_url: formData.foto_url || null,
             dni: formData.dni || null,
+            cuit: formData.cuit || null,
             fecha_nacimiento: formData.fecha_nacimiento || null,
             genero: formData.genero || null,
             telefono: formData.telefono || null,
@@ -79,6 +81,7 @@ export async function actualizarPaciente(id: string, formData: {
     apellido?: string
     foto_url?: string
     dni?: string
+    cuit?: string
     fecha_nacimiento?: string
     genero?: string
     telefono?: string

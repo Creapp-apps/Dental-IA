@@ -103,6 +103,7 @@ export default async function FichaPacientePage({
 
                         <div className="space-y-2.5 text-sm">
                             <DatoFila label="DNI" valor={p.dni} />
+                            <DatoFila label="CUIT" valor={p.cuit} />
                             <DatoFila label="Nac." valor={p.fecha_nacimiento ? format(new Date(p.fecha_nacimiento), "dd/MM/yyyy") : null} />
                             <DatoFila label="Género" valor={p.genero ? GENERO_LABEL[p.genero] : null} />
                             <div className="h-px bg-border my-1" />

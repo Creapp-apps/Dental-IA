@@ -17,7 +17,7 @@ import { logoutAction } from '@/lib/actions/auth'
 import { TenantLogo } from '@/components/ui/tenant-logo'
 
 const navItems = [
-    { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { label: 'Agenda', href: '/agenda', icon: Calendar },
     { label: 'Pacientes', href: '/pacientes', icon: Users },
     { label: 'Cobros', href: '/cobros', icon: CreditCard },
@@ -48,13 +48,12 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
     return (
         <aside className="flex h-screen w-64 flex-col bg-sidebar/30 backdrop-blur-2xl border-r border-sidebar-border/50">
             {/* Logo */}
-            <div className="flex items-center justify-between px-6 py-5 border-b border-sidebar-border">
+            <div className="flex items-center justify-center px-6 py-5 border-b border-sidebar-border min-h-[5rem]">
                 <TenantLogo
                     config={logoConfig}
                     colorPrimary={themeColor}
                     fallbackName="Consultorio"
                 />
-                <ThemeToggle />
             </div>
 
             {/* Nav */}
@@ -89,13 +88,16 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
             </nav>
 
             {/* Footer */}
-            <div className="border-t border-sidebar-border px-3 py-4 space-y-1">
-                {/* Email del usuario */}
-                {userEmail && (
-                    <p className="px-3 py-1 text-xs text-sidebar-accent-foreground truncate" title={userEmail}>
-                        {userEmail}
-                    </p>
-                )}
+            <div className="border-t border-sidebar-border px-3 py-4 space-y-2">
+                <div className="flex items-center justify-between px-3">
+                    {userEmail ? (
+                        <p className="text-xs font-medium text-sidebar-foreground/70 truncate flex-1 mr-3" title={userEmail}>
+                            {userEmail}
+                        </p>
+                    ) : <span className="flex-1" />}
+                    <ThemeToggle />
+                </div>
+
                 <button
                     onClick={handleLogout}
                     disabled={isPending}

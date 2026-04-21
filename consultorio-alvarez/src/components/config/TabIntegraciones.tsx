@@ -113,10 +113,16 @@ function IntegrationCard({ title, description, icon: Icon, isActive, onClick }: 
 function WizardWhatsApp({ currentConfig }: { currentConfig: any }) {
     const [isPending, startTransition] = useTransition()
     const [webhookUrl, setWebhookUrl] = useState(currentConfig?.credentials?.webhook_url || '')
+    const [whatsappNumber, setWhatsappNumber] = useState(currentConfig?.credentials?.whatsapp_number || '')
+    const [domainUrl, setDomainUrl] = useState(currentConfig?.credentials?.domain_url || '')
 
     function guardar() {
         startTransition(async () => {
-            const data = await guardarIntegracion('whatsapp', { webhook_url: webhookUrl })
+            const data = await guardarIntegracion('whatsapp', {
+                webhook_url: webhookUrl,
+                whatsapp_number: whatsappNumber,
+                domain_url: domainUrl
+            })
             if (data.error) glassAlert.error({ title: 'Error', description: data.error })
             else glassAlert.success({ title: '¡WhatsApp conectado!', description: 'Credenciales guardadas con éxito.' })
         })
@@ -129,38 +135,55 @@ function WizardWhatsApp({ currentConfig }: { currentConfig: any }) {
                     <MessageCircle className="h-5 w-5 text-emerald-600" />
                 </div>
                 <div>
-                    <h2 className="text-lg font-bold text-foreground">Conectar WhatsApp Business</h2>
-                    <p className="text-sm text-muted-foreground">Envíos automáticos por API Oficial o n8n</p>
+                    <h2 className="text-lg font-bold text-foreground">Conectar Automatización WhatsApp</h2>
+                    <p className="text-sm text-muted-foreground">Envío automático (n8n o API de Meta) para confirmación de turnos.</p>
                 </div>
             </div>
 
             <div className="bg-muted/30 rounded-xl p-4 space-y-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                     <span className="bg-primary text-white h-5 w-5 rounded-full flex items-center justify-center text-xs">1</span>
-                    Instrucciones paso a paso
+                    Configuración de Meta / n8n
                 </h3>
                 <ul className="text-sm text-muted-foreground space-y-2 ml-7 list-decimal">
-                    <li>Creá un flujo en <strong>n8n</strong>, Make o Zapier.</li>
-                    <li>Agregá un nodo de tipo <strong>Webhook (POST)</strong> como iniciador (Trigger).</li>
-                    <li>Copiá la URL de prueba o producción (Ej: <code>https://n8n.tu-dominio.com/webhook/...</code>).</li>
-                    <li>Pegala en el campo de abajo. Al agendar un turno, enviaremos un JSON con todos los datos.</li>
+                    <li>El robot enviará un mensaje al paciente al crearse un turno, y recordatorios 48hs antes.</li>
+                    <li>Ingresá el dominio configurado y el número de línea telefónica autorizada por Meta.</li>
+                    <li>Agregá la URL del Webhook (n8n o Meta) para enviar el payload de turnos.</li>
                 </ul>
             </div>
 
             <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                        <Label>Dominio Registrado</Label>
+                        <Input
+                            value={domainUrl}
+                            onChange={e => setDomainUrl(e.target.value)}
+                            placeholder="https://consultorio.com"
+                        />
+                    </div>
+                    <div className="space-y-1.5">
+                        <Label>Línea Oficial WhatsApp</Label>
+                        <Input
+                            value={whatsappNumber}
+                            onChange={e => setWhatsappNumber(e.target.value)}
+                            placeholder="+54 9 11 1234 5678"
+                        />
+                    </div>
+                </div>
                 <div className="space-y-1.5">
-                    <Label>URL del Webhook (n8n / Make / Zapier)</Label>
+                    <Label>URL del Webhook / API</Label>
                     <Input
                         value={webhookUrl}
                         onChange={e => setWebhookUrl(e.target.value)}
-                        placeholder="https://n8n..."
+                        placeholder="https://n8n.tu-dominio.com/webhook/..."
                     />
                 </div>
             </div>
 
             <div className="flex justify-end pt-4 border-t border-border/50">
                 <GlassButton onClick={guardar} loading={isPending}>
-                    <CheckCircle2 className="h-4 w-4 mr-2" /> Verificar y Guardar
+                    <CheckCircle2 className="h-4 w-4 mr-2" /> Guardar Configuración
                 </GlassButton>
             </div>
         </div>

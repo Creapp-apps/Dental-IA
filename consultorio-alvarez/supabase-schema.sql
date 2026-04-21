@@ -1,9 +1,7 @@
 -- ============================================================
--- SCHEMA COMPLETO — Consultorio Álvarez
--- Ejecutar en Supabase SQL Editor
+-- SCHEMA COMPLETO MULTI-TENANT — Consultorio Álvarez (Dental-IA)
 -- ============================================================
 
--- Extensiones necesarias
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
@@ -18,10 +16,22 @@ CREATE TYPE canal_recordatorio AS ENUM ('WHATSAPP', 'SMS', 'EMAIL');
 CREATE TYPE rol_usuario AS ENUM ('admin', 'profesional', 'secretaria');
 
 -- ============================================================
--- PERFILES DE USUARIO (extiende auth.users)
+-- TENANTS (CLÍNICAS)
 -- ============================================================
-CREATE TABLE perfiles (
+CREATE TABLE tenants (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nombre TEXT NOT NULL,
+  dominio TEXT UNIQUE, -- ej: alvarez.dental-ia.com
+  activo BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ============================================================
+-- PROFILES (USUARIOS EXTENDIDOS)
+-- ============================================================
+CREATE TABLE profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  tenant_id UUID REFERENCES tenants(id) ON DELETE CASCADE,
   email TEXT NOT NULL,
   nombre TEXT,
   apellido TEXT,
@@ -30,12 +40,20 @@ CREATE TABLE perfiles (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- Trigger para crear perfil automáticamente al registrar usuario
+-- Trigger para perfil automático: Crea un super-admin si es el primer usuario o la clínica base si no hay
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS TRIGGER AS $$
+DECLARE
+  v_tenant_id UUID;
 BEGIN
-  INSERT INTO perfiles (id, email)
-  VALUES (NEW.id, NEW.email);
+  -- Buscar o crear el tenant principal si no hay ninguno
+  SELECT id INTO v_tenant_id FROM tenants ORDER BY created_at ASC LIMIT 1;
+  IF v_tenant_id IS NULL THEN
+    INSERT INTO tenants (nombre, dominio) VALUES ('Consultorio Principal', 'principal') RETURNING id INTO v_tenant_id;
+  END IF;
+
+  INSERT INTO profiles (id, email, tenant_id, rol)
+  VALUES (NEW.id, NEW.email, v_tenant_id, 'admin'); -- Por defecto admin al auto-crearse (ajustable)
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -46,10 +64,18 @@ CREATE TRIGGER on_auth_user_created
   EXECUTE FUNCTION handle_new_user();
 
 -- ============================================================
--- PROFESIONALES
+-- TABLAS DEL NEGOCIO (MULTI-TENANT)
 -- ============================================================
+
+-- Helper Function para obtener el tenant_id del usuario logueado rápidamente
+CREATE OR REPLACE FUNCTION get_auth_tenant_id() RETURNS UUID AS $$
+  SELECT tenant_id FROM profiles WHERE id = auth.uid() LIMIT 1;
+$$ LANGUAGE sql STABLE;
+
+-- PROFESIONALES
 CREATE TABLE profesionales (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
   nombre TEXT NOT NULL,
   apellido TEXT NOT NULL,
   color_agenda TEXT NOT NULL DEFAULT '#3b82f6',
@@ -59,22 +85,32 @@ CREATE TABLE profesionales (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
+-- INTEGRACIONES
+CREATE TABLE tenant_integrations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
+  provider TEXT NOT NULL, -- Ej: 'whatsapp', 'mercadopago'
+  credentials JSONB NOT NULL DEFAULT '{}',
+  is_active BOOLEAN NOT NULL DEFAULT false,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(tenant_id, provider)
+);
+
 -- OBRAS SOCIALES
--- ============================================================
 CREATE TABLE obras_sociales (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
   nombre TEXT NOT NULL,
   codigo TEXT,
+  planes TEXT,
   activo BOOLEAN NOT NULL DEFAULT true,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
 -- TIPOS DE TRATAMIENTO
--- ============================================================
 CREATE TABLE tipos_tratamiento (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
   nombre TEXT NOT NULL,
   duracion_minutos INTEGER NOT NULL DEFAULT 30,
   prioridad prioridad_tratamiento NOT NULL DEFAULT 'NORMAL',
@@ -84,14 +120,14 @@ CREATE TABLE tipos_tratamiento (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
 -- PACIENTES
--- ============================================================
 CREATE TABLE pacientes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
   nombre TEXT NOT NULL,
   apellido TEXT NOT NULL,
   dni TEXT,
+  cuit TEXT,
   fecha_nacimiento DATE,
   telefono TEXT,
   email TEXT,
@@ -105,11 +141,10 @@ CREATE TABLE pacientes (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
 -- TURNOS
--- ============================================================
 CREATE TABLE turnos (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
   paciente_id UUID NOT NULL REFERENCES pacientes(id) ON DELETE RESTRICT,
   profesional_id UUID NOT NULL REFERENCES profesionales(id) ON DELETE RESTRICT,
   tipo_tratamiento_id UUID NOT NULL REFERENCES tipos_tratamiento(id) ON DELETE RESTRICT,
@@ -128,12 +163,12 @@ CREATE INDEX idx_turnos_fecha ON turnos(fecha_inicio);
 CREATE INDEX idx_turnos_profesional ON turnos(profesional_id);
 CREATE INDEX idx_turnos_paciente ON turnos(paciente_id);
 CREATE INDEX idx_turnos_estado ON turnos(estado);
+CREATE INDEX idx_tenant_id_turnos ON turnos(tenant_id);
 
--- ============================================================
 -- HISTORIAL CLÍNICO
--- ============================================================
 CREATE TABLE historial_clinico (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
   paciente_id UUID NOT NULL REFERENCES pacientes(id) ON DELETE CASCADE,
   turno_id UUID REFERENCES turnos(id) ON DELETE SET NULL,
   profesional_id UUID NOT NULL REFERENCES profesionales(id) ON DELETE RESTRICT,
@@ -144,13 +179,10 @@ CREATE TABLE historial_clinico (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_historial_paciente ON historial_clinico(paciente_id);
-
--- ============================================================
 -- COBROS
--- ============================================================
 CREATE TABLE cobros (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
   turno_id UUID REFERENCES turnos(id) ON DELETE SET NULL,
   paciente_id UUID NOT NULL REFERENCES pacientes(id) ON DELETE RESTRICT,
   monto_total DECIMAL(10,2) NOT NULL DEFAULT 0,
@@ -163,11 +195,10 @@ CREATE TABLE cobros (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
 -- BLOQUEOS DE AGENDA
--- ============================================================
 CREATE TABLE bloqueos_agenda (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
   profesional_id UUID REFERENCES profesionales(id) ON DELETE CASCADE,
   fecha_inicio TIMESTAMPTZ NOT NULL,
   fecha_fin TIMESTAMPTZ NOT NULL,
@@ -176,11 +207,10 @@ CREATE TABLE bloqueos_agenda (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- ============================================================
--- LOG DE RECORDATORIOS
--- ============================================================
+-- RECORDATORIOS LOG
 CREATE TABLE recordatorios_log (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL DEFAULT get_auth_tenant_id() REFERENCES tenants(id) ON DELETE CASCADE,
   turno_id UUID NOT NULL REFERENCES turnos(id) ON DELETE CASCADE,
   canal canal_recordatorio NOT NULL,
   estado TEXT NOT NULL DEFAULT 'PENDIENTE',
@@ -190,7 +220,7 @@ CREATE TABLE recordatorios_log (
 );
 
 -- ============================================================
--- UPDATED_AT TRIGGER
+-- TRIGGERS DE UPDATED_AT
 -- ============================================================
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
@@ -200,18 +230,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER update_pacientes_updated_at
-  BEFORE UPDATE ON pacientes
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_turnos_updated_at
-  BEFORE UPDATE ON turnos
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_pacientes_updated_at BEFORE UPDATE ON pacientes FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_turnos_updated_at BEFORE UPDATE ON turnos FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_integrations_updated_at BEFORE UPDATE ON tenant_integrations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- ============================================================
--- ROW LEVEL SECURITY
+-- ROW LEVEL SECURITY (RLS) MULTI-TENANT BLINDADA
 -- ============================================================
-ALTER TABLE perfiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE tenant_integrations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profesionales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tipos_tratamiento ENABLE ROW LEVEL SECURITY;
 ALTER TABLE pacientes ENABLE ROW LEVEL SECURITY;
@@ -222,68 +250,30 @@ ALTER TABLE obras_sociales ENABLE ROW LEVEL SECURITY;
 ALTER TABLE bloqueos_agenda ENABLE ROW LEVEL SECURITY;
 ALTER TABLE recordatorios_log ENABLE ROW LEVEL SECURITY;
 
--- Política simple: usuarios autenticados ven todo (con rol)
-CREATE POLICY "Autenticados pueden ver" ON profesionales FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Admin gestiona profesionales" ON profesionales FOR ALL TO authenticated USING (
-  EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol = 'admin')
-);
+-- Tenants: Solo ver su propio tenant
+CREATE POLICY "Ver propio tenant" ON tenants FOR SELECT TO authenticated USING (id = get_auth_tenant_id());
 
-CREATE POLICY "Autenticados ven tipos" ON tipos_tratamiento FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Admin gestiona tipos" ON tipos_tratamiento FOR ALL TO authenticated USING (
-  EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol = 'admin')
-);
+-- Profiles: Usuarios ven perfiles de su mismo tenant
+CREATE POLICY "Ver perfiles del tenant" ON profiles FOR SELECT TO authenticated USING (tenant_id = get_auth_tenant_id());
+CREATE POLICY "Editar propio perfil" ON profiles FOR UPDATE TO authenticated USING (id = auth.uid());
 
-CREATE POLICY "Autenticados ven obras sociales" ON obras_sociales FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Admin gestiona obras sociales" ON obras_sociales FOR ALL TO authenticated USING (
-  EXISTS (SELECT 1 FROM perfiles WHERE id = auth.uid() AND rol = 'admin')
-);
+-- Tablas compartidas (Aisladas 100% por tenant_id)
+CREATE POLICY "Tenant isolation (SELECT)" ON profesionales FOR SELECT TO authenticated USING (tenant_id = get_auth_tenant_id());
+CREATE POLICY "Tenant isolation (INSERT)" ON profesionales FOR INSERT TO authenticated WITH CHECK (tenant_id = get_auth_tenant_id());
+CREATE POLICY "Tenant isolation (UPDATE)" ON profesionales FOR UPDATE TO authenticated USING (tenant_id = get_auth_tenant_id());
+CREATE POLICY "Tenant isolation (DELETE)" ON profesionales FOR DELETE TO authenticated USING (tenant_id = get_auth_tenant_id() AND (SELECT rol FROM profiles WHERE id = auth.uid()) = 'admin');
 
-CREATE POLICY "Autenticados gestionan pacientes" ON pacientes FOR ALL TO authenticated USING (true);
-CREATE POLICY "Autenticados gestionan turnos" ON turnos FOR ALL TO authenticated USING (true);
-CREATE POLICY "Autenticados gestionan historial" ON historial_clinico FOR ALL TO authenticated USING (true);
-CREATE POLICY "Autenticados gestionan cobros" ON cobros FOR ALL TO authenticated USING (true);
-CREATE POLICY "Autenticados gestionan bloqueos" ON bloqueos_agenda FOR ALL TO authenticated USING (true);
-CREATE POLICY "Autenticados ven recordatorios" ON recordatorios_log FOR SELECT TO authenticated USING (true);
-
--- Portal público: pacientes pueden insertar turnos (PENDIENTE)
-CREATE POLICY "Público puede crear turno pendiente" ON turnos FOR INSERT TO anon
-  WITH CHECK (estado = 'PENDIENTE' AND origen = 'ONLINE');
-CREATE POLICY "Público puede crear paciente" ON pacientes FOR INSERT TO anon WITH CHECK (true);
-CREATE POLICY "Público ve profesionales activos" ON profesionales FOR SELECT TO anon USING (activo = true);
-CREATE POLICY "Público ve tipos activos" ON tipos_tratamiento FOR SELECT TO anon USING (activo = true);
-
--- ============================================================
--- SEED DATA
--- ============================================================
-
--- Obras sociales comunes en Argentina
-INSERT INTO obras_sociales (nombre, codigo) VALUES
-  ('OSDE', 'OSDE'),
-  ('Swiss Medical', 'SWISS'),
-  ('Galeno', 'GAL'),
-  ('IOMA', 'IOMA'),
-  ('OSECAC', 'OSECAC'),
-  ('PAMI', 'PAMI'),
-  ('Medifé', 'MDF'),
-  ('Particular / Sin obra social', NULL);
-
--- Tipos de tratamiento iniciales
-INSERT INTO tipos_tratamiento (nombre, duracion_minutos, prioridad, color, descripcion) VALUES
-  ('Tratamiento de Conducto', 90, 'ALTA', '#ef4444', 'Endodoncia completa'),
-  ('Extracción Simple', 45, 'ALTA', '#f97316', 'Extracción dental simple'),
-  ('Extracción Compleja', 60, 'ALTA', '#f97316', 'Extracción molar o pieza incluida'),
-  ('Limpieza Dental', 45, 'NORMAL', '#3b82f6', 'Profilaxis y detartraje'),
-  ('Revisión de Rutina', 30, 'BAJA', '#22c55e', 'Control periódico'),
-  ('Consulta de Urgencia', 30, 'URGENTE', '#dc2626', 'Atención de emergencia dental'),
-  ('Colocación de Corona', 60, 'NORMAL', '#8b5cf6', 'Corona cerámica o porcelana'),
-  ('Prótesis Parcial', 60, 'NORMAL', '#06b6d4', 'Prótesis removible parcial'),
-  ('Ortodoncia - Control', 30, 'NORMAL', '#6366f1', 'Control y ajuste de brackets'),
-  ('Blanqueamiento', 60, 'BAJA', '#84cc16', 'Blanqueamiento dental profesional'),
-  ('Implante - Evaluación', 45, 'NORMAL', '#7c3aed', 'Evaluación para implante oseointegrado'),
-  ('Selladores', 30, 'BAJA', '#0ea5e9', 'Sellado de fisuras preventivo'),
-  ('Incrustación / Obturación', 45, 'NORMAL', '#f59e0b', 'Restauración con composite o amalgama');
-
--- Profesionales (padre e hijo — personalizar nombres)
-INSERT INTO profesionales (nombre, apellido, color_agenda, email) VALUES
-  ('Dr. Ricardo', 'Álvarez', '#2563eb', 'ricardo.alvarez@consultorioalvarez.com'),
-  ('Dr. Martín', 'Álvarez', '#16a34a', 'martin.alvarez@consultorioalvarez.com');
+-- Tipos Tratamiento, Obras Sociales, Pacientes, Turnos, Historial, Cobros, Bloqueos, Log, Integrations
+-- Aplicar política idéntica en masa para simplificar (Todos CRUD sobre su tenant_id)
+DO $$ 
+DECLARE 
+  t text;
+BEGIN 
+  FOR t IN SELECT unnest(ARRAY['tipos_tratamiento','obras_sociales','pacientes','turnos','historial_clinico','cobros','bloqueos_agenda','recordatorios_log', 'tenant_integrations']) 
+  LOOP
+    EXECUTE format('CREATE POLICY "Tenant isolation (SELECT)" ON %I FOR SELECT TO authenticated USING (tenant_id = get_auth_tenant_id());', t);
+    EXECUTE format('CREATE POLICY "Tenant isolation (INSERT)" ON %I FOR INSERT TO authenticated WITH CHECK (tenant_id = get_auth_tenant_id());', t);
+    EXECUTE format('CREATE POLICY "Tenant isolation (UPDATE)" ON %I FOR UPDATE TO authenticated USING (tenant_id = get_auth_tenant_id());', t);
+    EXECUTE format('CREATE POLICY "Tenant isolation (DELETE)" ON %I FOR DELETE TO authenticated USING (tenant_id = get_auth_tenant_id());', t);
+  END LOOP;
+END $$;

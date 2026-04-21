@@ -3,6 +3,7 @@
 export interface LogoConfig {
     type: 'image' | 'text'
     image_url: string | null
+    image_scale?: number
     text: string
     font: string
     icon: string

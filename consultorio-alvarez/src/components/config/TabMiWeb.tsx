@@ -15,6 +15,7 @@ import type { LandingConfig, LogoConfig } from '@/lib/types/landing'
 import { TenantLogo } from '@/components/ui/tenant-logo'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { ImageUploader } from '@/components/ui/image-uploader'
 
 // ── Paleta de colores predefinida ─────────────────────────────────
 
@@ -259,14 +260,35 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                                     </Field>
                                 </div>
                             ) : (
-                                <Field label="URL de tu imagen (reemplazará el texto)">
-                                    <Input
-                                        value={logoConfig.image_url || ''}
-                                        onChange={e => setLogoConfig(l => ({ ...l, image_url: e.target.value }))}
-                                        placeholder="https://misitio.com/logo.png"
-                                    />
-                                    <p className="text-xs text-muted-foreground mt-1 opacity-70">Pegá una URL directa a un archivo PNG transparente.</p>
-                                </Field>
+                                <div className="space-y-4">
+                                    <Field label="Sube el logo de tu clínica">
+                                        <ImageUploader
+                                            value={logoConfig.image_url}
+                                            onChange={(url) => setLogoConfig(l => ({ ...l, image_url: url }))}
+                                        />
+                                    </Field>
+
+                                    {logoConfig.image_url && (
+                                        <Field label="Tamaño del logo">
+                                            <div className="glass-subtle p-4 rounded-xl border border-white/5 space-y-3">
+                                                <div className="flex justify-between items-center text-xs">
+                                                    <span className="text-muted-foreground">Más pequeño</span>
+                                                    <span className="text-foreground font-mono font-medium">{logoConfig.image_scale || 100}%</span>
+                                                    <span className="text-muted-foreground">Más grande</span>
+                                                </div>
+                                                <input
+                                                    type="range"
+                                                    min="50"
+                                                    max="250"
+                                                    step="5"
+                                                    value={logoConfig.image_scale || 100}
+                                                    onChange={e => setLogoConfig(l => ({ ...l, image_scale: Number(e.target.value) }))}
+                                                    className="w-full accent-primary h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
+                                                />
+                                            </div>
+                                        </Field>
+                                    )}
+                                </div>
                             )}
                         </div>
                     </div>

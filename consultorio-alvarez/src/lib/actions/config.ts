@@ -74,7 +74,7 @@ export async function toggleProfesionalEstado(id: string, activo: boolean) {
     return { success: true }
 }
 
-export async function crearObraSocial(data: { nombre: string; codigo?: string }) {
+export async function crearObraSocial(data: { nombre: string; codigo?: string; planes?: string }) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()
     if (!tenantId) return { error: 'Tenant no encontrado' }

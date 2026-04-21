@@ -147,11 +147,20 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
                     <div className="glass-subtle rounded-xl p-3 space-y-2">
                         <div className="grid grid-cols-4 gap-2">
                             <Input placeholder="Nombre" value={newTrat.nombre} onChange={e => setNewTrat(f => ({ ...f, nombre: e.target.value }))} />
-                            <Input type="number" placeholder="Min" value={newTrat.duracion_minutos} onChange={e => setNewTrat(f => ({ ...f, duracion_minutos: e.target.value }))} />
-                            <Input type="number" placeholder="Precio $" value={newTrat.precio_referencia} onChange={e => setNewTrat(f => ({ ...f, precio_referencia: e.target.value }))} />
+
+                            <div className="relative flex items-center">
+                                <Input type="number" className="pr-16 text-right" placeholder="Duración" value={newTrat.duracion_minutos} onChange={e => setNewTrat(f => ({ ...f, duracion_minutos: e.target.value }))} />
+                                <span className="absolute right-3 text-xs text-muted-foreground pointer-events-none">minutos</span>
+                            </div>
+
+                            <div className="relative flex items-center">
+                                <span className="absolute left-3 text-xs text-muted-foreground pointer-events-none">$</span>
+                                <Input type="number" className="pl-6" placeholder="Precio" value={newTrat.precio_referencia} onChange={e => setNewTrat(f => ({ ...f, precio_referencia: e.target.value }))} />
+                            </div>
+
                             <div className="flex gap-1">
-                                <input type="color" value={newTrat.color} onChange={e => setNewTrat(f => ({ ...f, color: e.target.value }))} className="h-9 w-9 rounded cursor-pointer" />
-                                <GlassButton size="sm" onClick={agregarTratamiento} loading={isPending}>Crear</GlassButton>
+                                <input type="color" value={newTrat.color} onChange={e => setNewTrat(f => ({ ...f, color: e.target.value }))} className="h-9 w-9 rounded cursor-pointer shrink-0" />
+                                <GlassButton size="sm" onClick={agregarTratamiento} loading={isPending} className="flex-1">Crear</GlassButton>
                             </div>
                         </div>
                     </div>
@@ -304,13 +313,14 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
     const [showForm, setShowForm] = useState(false)
     const [nombre, setNombre] = useState('')
     const [codigo, setCodigo] = useState('')
+    const [planes, setPlanes] = useState('')
 
     function agregar() {
         if (!nombre) return
         startTransition(async () => {
-            const r = await crearObraSocial({ nombre, codigo: codigo || undefined })
+            const r = await crearObraSocial({ nombre, codigo: codigo || undefined, planes: planes || undefined })
             if (r.error) glassAlert.error({ title: 'Error', description: r.error })
-            else { glassAlert.success({ title: 'Obra social creada' }); setNombre(''); setCodigo(''); setShowForm(false) }
+            else { glassAlert.success({ title: 'Obra social creada' }); setNombre(''); setCodigo(''); setPlanes(''); setShowForm(false) }
         })
     }
 
@@ -323,7 +333,8 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
             {showForm && (
                 <div className="glass-subtle rounded-xl p-3 flex gap-2 items-end">
                     <Field label="Nombre"><Input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="OSDE" /></Field>
-                    <Field label="Código"><Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="OSDE-01" /></Field>
+                    <Field label="Código"><Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="01" /></Field>
+                    <Field label="Planes (Opcional)"><Input value={planes} onChange={e => setPlanes(e.target.value)} placeholder="Ej: 210, 310" /></Field>
                     <GlassButton onClick={agregar} loading={isPending} className="shrink-0">Crear</GlassButton>
                 </div>
             )}
@@ -332,7 +343,10 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
                     <div key={os.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-muted/30 transition-colors">
                         <div>
                             <p className="text-sm font-medium text-foreground">{os.nombre}</p>
-                            {os.codigo && <p className="text-xs text-muted-foreground">{os.codigo}</p>}
+                            <div className="flex items-center gap-2 mt-0.5">
+                                {os.codigo && <span className="text-xs font-mono text-muted-foreground bg-white/5 px-1.5 rounded">{os.codigo}</span>}
+                                {os.planes && <span className="text-[10px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-md border border-primary/20">Planes: {os.planes}</span>}
+                            </div>
                         </div>
                         <button onClick={() => { startTransition(async () => { await toggleObraSocial(os.id, !os.activo) }) }}
                             className={cn('text-xs px-2 py-0.5 rounded-lg cursor-pointer', os.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400')}>

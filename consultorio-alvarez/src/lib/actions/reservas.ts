@@ -240,43 +240,56 @@ export async function crearReservaPublica(data: {
 
     if (error) return { error: error.message }
 
-    // --- DISPARAR WEBHOOK n8n (WhatsApp) ---
-    try {
-        const { data: wpConfig } = await supabase
-            .from('tenant_integrations')
-            .select('credentials, is_active')
-            .eq('tenant_id', tenant.id)
-            .eq('provider', 'whatsapp')
-            .single()
+    // --- DISPARAR META WHATSAPP CLOUD API ---
+    console.log("=== WA DEBUG ===")
+    console.log("Token:", !!process.env.META_WA_ACCESS_TOKEN, "PhoneID:", !!process.env.META_WA_PHONE_NUMBER_ID, "Tel:", data.telefono)
 
-        if (wpConfig?.is_active && wpConfig.credentials?.webhook_url) {
-            // Disparo asíncrono sin bloquear la respuesta
-            fetch(wpConfig.credentials.webhook_url, {
+    if (process.env.META_WA_ACCESS_TOKEN && process.env.META_WA_PHONE_NUMBER_ID && data.telefono) {
+        try {
+            // Formatear el número: Meta Cloud API tiene una regla específica MUY estricta para Argentina.
+            // A diferencia de los links wa.me (que usan 549), la API OFICIAL requiere usar SOLO 54 y omitir el 9.
+            let cleanPhone = data.telefono.replace(/\D/g, '')
+            if (cleanPhone.startsWith('11') || cleanPhone.length === 10) {
+                // Usamos 54 en vez de 549
+                cleanPhone = `54${cleanPhone}`
+            } else if (cleanPhone.startsWith('549')) {
+                // Si por alguna razón vino con 549, le quitamos el 9 para que quede 54
+                cleanPhone = cleanPhone.replace(/^549/, '54')
+            }
+
+            console.log("Intentando fetch hacia Meta a:", cleanPhone)
+
+            // Petición OBLIGATORIAMENTE esperada (await) para evitar que Next.js mate el contexto
+            const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
-                    evento: 'nuevo_turno',
-                    paciente: {
-                        nombre: data.nombre,
-                        apellido: data.apellido,
-                        telefono: data.telefono,
-                        email: data.email
-                    },
-                    turno: {
-                        fecha: data.fecha,
-                        hora: data.hora,
-                        profesional_id: profesionalId,
-                        notas: data.notas
-                    },
-                    clinica: {
-                        nombre: tenant.nombre
+                    messaging_product: 'whatsapp',
+                    to: cleanPhone,
+                    type: 'template',
+                    template: {
+                        name: 'hello_world',
+                        language: { code: 'en_US' }
                     }
                 })
-            }).catch(console.error)
+            })
+
+            const wpResult = await wpResponse.json()
+            if (!wpResponse.ok) {
+                console.error('❌ Error Meta WhatsApp API:', JSON.stringify(wpResult, null, 2))
+            } else {
+                console.log('✅ WhatsApp de prueba despachado con éxito a', cleanPhone)
+            }
+        } catch (e) {
+            console.error("❌ Excepción al ejecutar fetch hacia Meta:", e)
         }
-    } catch (e) {
-        console.error("Excepción webhook WhatsApp:", e)
+    } else {
+        console.log("⚠️ No se disparó WhatsApp por falta de vars de entorno.")
     }
+    console.log("=== FIN WA DEBUG ===")
 
     revalidatePath('/agenda')
     return { success: true }
