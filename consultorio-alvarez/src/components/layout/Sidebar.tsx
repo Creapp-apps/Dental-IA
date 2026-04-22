@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { logoutAction } from '@/lib/actions/auth'
 import { TenantLogo } from '@/components/ui/tenant-logo'
+import { NotificationBell } from '@/components/layout/NotificationBell'
 
 const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -90,8 +91,9 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
             {/* Footer */}
             <div className="border-t border-sidebar-border px-3 py-4 space-y-2">
                 <div className="flex items-center justify-between px-3">
+                    <NotificationBell themeColor={themeColor} />
                     {userEmail ? (
-                        <p className="text-xs font-medium text-sidebar-foreground/70 truncate flex-1 mr-3" title={userEmail}>
+                        <p className="text-xs font-medium text-sidebar-foreground/70 truncate flex-1 ml-3 mr-3" title={userEmail}>
                             {userEmail}
                         </p>
                     ) : <span className="flex-1" />}

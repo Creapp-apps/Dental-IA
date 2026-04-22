@@ -202,3 +202,16 @@ export const ESTADO_TURNO_COLOR: Record<EstadoTurno, string> = {
   CANCELADO: 'bg-red-100 text-red-800 border-red-200',
   AUSENTE: 'bg-gray-100 text-gray-800 border-gray-200',
 }
+
+export type TipoNotificacion = 'turno_nuevo' | 'alerta' | 'sistema'
+
+export interface Notificacion {
+  id: string
+  tenant_id: string
+  titulo: string
+  mensaje: string
+  tipo: TipoNotificacion
+  referencia_id: string | null
+  leida: boolean
+  created_at: string
+}

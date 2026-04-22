@@ -4,6 +4,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 
 import { AdminBackground } from '@/components/ui/admin-background'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
+import { NotificationProvider } from '@/components/providers/NotificationProvider'
 
 export default async function AdminLayout({
     children,
@@ -38,12 +39,14 @@ export default async function AdminLayout({
             <div className="flex h-screen overflow-hidden bg-background relative selection:bg-primary/30">
                 <AdminBackground colorHex={primaryStr} />
                 <div className="relative z-10 flex w-full h-full">
-                    <Sidebar userEmail={user.email} themeColor={primaryStr} logoConfig={config?.logo_config} />
-                    <main className="flex-1 overflow-y-auto">
-                        <div className="min-h-full p-6 lg:p-8">
-                            {children}
-                        </div>
-                    </main>
+                    <NotificationProvider>
+                        <Sidebar userEmail={user.email} themeColor={primaryStr} logoConfig={config?.logo_config} />
+                        <main className="flex-1 overflow-y-auto">
+                            <div className="min-h-full p-6 lg:p-8">
+                                {children}
+                            </div>
+                        </main>
+                    </NotificationProvider>
                 </div>
             </div>
         </>

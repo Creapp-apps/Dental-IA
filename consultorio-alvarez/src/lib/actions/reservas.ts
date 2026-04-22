@@ -240,6 +240,14 @@ export async function crearReservaPublica(data: {
 
     if (error) return { error: error.message }
 
+    // --- DISPARAR NOTIFICACION REALTIME ---
+    await supabase.from('notificaciones').insert({
+        tenant_id: tenant.id,
+        titulo: '🌟 Nuevo Turno Web',
+        mensaje: `${data.nombre} ${data.apellido} reservó un turno desde la página pública a las ${data.hora}.`,
+        tipo: 'turno_nuevo',
+    })
+
     // --- DISPARAR META WHATSAPP CLOUD API ---
     console.log("=== WA DEBUG ===")
     console.log("Token:", !!process.env.META_WA_ACCESS_TOKEN, "PhoneID:", !!process.env.META_WA_PHONE_NUMBER_ID, "Tel:", data.telefono)
