@@ -12,9 +12,9 @@ export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
     return (
         <footer className="relative z-10 border-t border-gray-200/50 bg-white/80 backdrop-blur-sm">
             <div className="max-w-5xl mx-auto px-6 sm:px-10 py-14">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-10">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-10 text-center md:text-left">
                     {/* Brand */}
-                    <div>
+                    <div className="flex flex-col items-center md:items-start">
                         <div className="mb-3">
                             <TenantLogo
                                 config={(config as any)?.logo_config}
@@ -22,15 +22,15 @@ export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
                                 fallbackName={CLINIC.name}
                             />
                         </div>
-                        <p className="text-sm text-gray-500 leading-relaxed max-w-xs">
+                        <p className="text-sm text-gray-500 leading-relaxed max-w-xs mx-auto md:mx-0">
                             Atención odontológica de alta gama con tecnología de vanguardia.
                         </p>
                     </div>
 
                     {/* Contact */}
-                    <div>
+                    <div className="flex flex-col items-center md:items-start">
                         <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-gray-400 mb-4">Contacto</h4>
-                        <div className="space-y-3">
+                        <div className="flex flex-col space-y-3 items-center md:items-start">
                             {(phone.split(/\|/)).map((p, idx) => {
                                 const [num, lbl] = p.split('::')
                                 const trimmedNum = num?.trim() || ''
@@ -60,11 +60,11 @@ export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
                     </div>
 
                     {/* Hours */}
-                    <div>
+                    <div className="flex flex-col items-center md:items-start">
                         <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-gray-400 mb-4">Horarios</h4>
-                        <span className="flex items-center gap-2 text-sm text-gray-600">
-                            <Clock className="h-3.5 w-3.5 shrink-0" />
-                            {hours}
+                        <span className="flex flex-col md:flex-row items-center md:items-start gap-2 text-sm text-gray-600">
+                            <Clock className="h-3.5 w-3.5 shrink-0 hidden md:block" />
+                            <span>{hours}</span>
                         </span>
                     </div>
                 </div>

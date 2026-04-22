@@ -125,7 +125,7 @@ export function HeroSection({ onBookingClick, config }: Props) {
                 className="max-w-7xl mx-auto px-6 sm:px-10 pt-24 pb-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center min-h-screen w-full"
             >
                 {/* LEFT — Text */}
-                <div className="flex flex-col justify-center order-2 lg:order-1">
+                <div className="flex flex-col justify-center order-2 lg:order-1 items-center text-center lg:items-start lg:text-left">
                     {config?.hero_badge && (
                         <div className="mb-4" style={{ opacity: 0 }} ref={heroBadgeRef}>
                             <span
@@ -156,7 +156,7 @@ export function HeroSection({ onBookingClick, config }: Props) {
                         {config?.hero_subtitulo || CLINIC.description}
                     </p>
 
-                    <div ref={ctaRef} className="flex flex-wrap gap-3 mb-8" style={{ opacity: 0 }}>
+                    <div ref={ctaRef} className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-8" style={{ opacity: 0 }}>
                         <StaggerButton
                             onClick={onBookingClick}
                             text="Reservar turno online"
@@ -174,9 +174,9 @@ export function HeroSection({ onBookingClick, config }: Props) {
                         </a>
                     </div>
 
-                    <div ref={chipsRef} className="flex flex-wrap gap-2" style={{ opacity: 0 }}>
-                        <a href={`https://maps.google.com/?q=${encodeURIComponent(config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`)}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1.5 rounded-full bg-gray-100 hover:bg-gray-200 border border-gray-200 px-3 py-1.5 text-xs text-gray-500 transition-colors">
-                            <MapPin className="h-3 w-3" />
+                    <div ref={chipsRef} className="flex flex-col flex-wrap items-center justify-center lg:flex-row lg:justify-start gap-2 w-full lg:w-auto" style={{ opacity: 0 }}>
+                        <a href={`https://maps.google.com/?q=${encodeURIComponent(config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`)}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 rounded-full bg-gray-100 hover:bg-gray-200 border border-gray-200 px-4 py-2 w-full lg:w-auto text-xs text-gray-600 font-medium shadow-sm transition-all hover:shadow-md">
+                            <MapPin className="h-3.5 w-3.5" />
                             {config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`}
                         </a>
                         {(config?.footer_phone ?? CLINIC.phone).split(/\|/).map((phoneStr, idx) => {
@@ -188,8 +188,8 @@ export function HeroSection({ onBookingClick, config }: Props) {
                             const isMobile = telClean.replace('+', '').length >= 10
                             const href = isMobile ? `https://wa.me/549${telClean.replace(/^\+?549?/, '')}` : `tel:${telClean}`
                             return (
-                                <a key={idx} href={href} target={isMobile ? "_blank" : undefined} rel={isMobile ? "noopener noreferrer" : undefined} className="flex items-center gap-1.5 rounded-full bg-gray-100 hover:bg-gray-200 border border-gray-200 px-3 py-1.5 text-xs text-gray-500 transition-colors">
-                                    <Phone className="h-3 w-3" />
+                                <a key={idx} href={href} target={isMobile ? "_blank" : undefined} rel={isMobile ? "noopener noreferrer" : undefined} className="flex items-center justify-center gap-1.5 rounded-full bg-gray-100 hover:bg-gray-200 border border-gray-200 px-4 py-2 w-full lg:w-auto text-xs text-gray-600 font-medium shadow-sm transition-all hover:shadow-md">
+                                    <Phone className="h-3.5 w-3.5" />
                                     {trimmedNum} {trimmedLbl && <span className="text-gray-400 font-medium">({trimmedLbl})</span>}
                                 </a>
                             )
