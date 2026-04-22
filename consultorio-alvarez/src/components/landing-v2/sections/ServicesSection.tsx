@@ -26,58 +26,98 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
 
         // Use a scoped context so cleanup ONLY kills THIS component's triggers
         const ctx = gsap.context(() => {
-            // Pin the section
-            ScrollTrigger.create({
-                trigger: sectionRef.current,
-                start: 'top top',
-                end: '+=150%',
-                pin: true,
-                pinSpacing: true,
+            let mm = gsap.matchMedia()
+
+            mm.add("(min-width: 768px)", () => {
+                // Desktop: Pin the section and scrub
+                ScrollTrigger.create({
+                    trigger: sectionRef.current,
+                    start: 'top top',
+                    end: '+=150%',
+                    pin: true,
+                    pinSpacing: true,
+                })
+
+                // Title reveal
+                gsap.fromTo(
+                    titleRef.current,
+                    { opacity: 0, y: 60 },
+                    {
+                        opacity: 1,
+                        y: 0,
+                        duration: 0.8,
+                        scrollTrigger: {
+                            trigger: sectionRef.current,
+                            start: 'top 80%',
+                            end: 'top 40%',
+                            scrub: 1,
+                        },
+                    }
+                )
+
+                // Cards stagger
+                const cards = cardsRef.current!.querySelectorAll('.service-card')
+                gsap.fromTo(
+                    cards,
+                    {
+                        opacity: 0,
+                        y: 80,
+                        x: (i) => (i % 2 === 0 ? -40 : 40),
+                        scale: 0.9,
+                    },
+                    {
+                        opacity: 1,
+                        y: 0,
+                        x: 0,
+                        scale: 1,
+                        duration: 0.8,
+                        stagger: 0.15,
+                        ease: 'power3.out',
+                        scrollTrigger: {
+                            trigger: sectionRef.current,
+                            start: 'top 60%',
+                            end: 'top 10%',
+                            scrub: 1,
+                        },
+                    }
+                )
             })
 
-            // Title reveal
-            gsap.fromTo(
-                titleRef.current,
-                { opacity: 0, y: 60 },
-                {
-                    opacity: 1,
-                    y: 0,
-                    duration: 0.8,
-                    scrollTrigger: {
-                        trigger: sectionRef.current,
-                        start: 'top 80%',
-                        end: 'top 40%',
-                        scrub: 1,
-                    },
-                }
-            )
+            mm.add("(max-width: 767px)", () => {
+                // Mobile: No pinning, fluid scroll-triggered entrance (no scrub)
+                gsap.fromTo(
+                    titleRef.current,
+                    { opacity: 0, y: 30 },
+                    {
+                        opacity: 1,
+                        y: 0,
+                        duration: 0.6,
+                        ease: 'power2.out',
+                        scrollTrigger: {
+                            trigger: sectionRef.current,
+                            start: 'top 85%',
+                        },
+                    }
+                )
 
-            // Cards stagger
-            const cards = cardsRef.current!.querySelectorAll('.service-card')
-            gsap.fromTo(
-                cards,
-                {
-                    opacity: 0,
-                    y: 80,
-                    x: (i) => (i % 2 === 0 ? -40 : 40),
-                    scale: 0.9,
-                },
-                {
-                    opacity: 1,
-                    y: 0,
-                    x: 0,
-                    scale: 1,
-                    duration: 0.8,
-                    stagger: 0.15,
-                    ease: 'power3.out',
-                    scrollTrigger: {
-                        trigger: sectionRef.current,
-                        start: 'top 60%',
-                        end: 'top 10%',
-                        scrub: 1,
-                    },
-                }
-            )
+                const cards = cardsRef.current!.querySelectorAll('.service-card')
+                gsap.fromTo(
+                    cards,
+                    { opacity: 0, y: 40, scale: 0.95 },
+                    {
+                        opacity: 1,
+                        y: 0,
+                        scale: 1,
+                        duration: 0.5,
+                        stagger: 0.1,
+                        ease: 'power2.out',
+                        scrollTrigger: {
+                            trigger: cardsRef.current,
+                            start: 'top 85%',
+                        },
+                    }
+                )
+            })
         }, sectionRef)
 
         return () => ctx.revert() // Only kills triggers scoped to this component
