@@ -111,8 +111,8 @@ export function HeroSection({ onBookingClick, config }: Props) {
 
     return (
         <section className="relative min-h-screen flex items-center z-10">
-            {/* Header público: Logo en la esquina superior izquierda */}
-            <div className="absolute top-6 left-6 lg:top-8 lg:left-10 z-50">
+            {/* Header público: Logo centralizado en mobile, superior izquierda en desktop */}
+            <div className="absolute top-6 w-full flex justify-center lg:w-auto lg:justify-start lg:top-8 lg:left-10 z-50">
                 <TenantLogo
                     config={(config as any)?.logo_config}
                     colorPrimary={config?.color_primary}
@@ -122,7 +122,7 @@ export function HeroSection({ onBookingClick, config }: Props) {
 
             <div
                 ref={containerRef}
-                className="max-w-7xl mx-auto px-6 sm:px-10 pt-24 pb-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center min-h-screen w-full"
+                className="max-w-7xl mx-auto px-6 sm:px-10 pt-32 lg:pt-24 pb-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center min-h-screen w-full"
             >
                 {/* LEFT — Text */}
                 <div className="flex flex-col justify-center order-2 lg:order-1 items-center text-center lg:items-start lg:text-left">
