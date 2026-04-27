@@ -10,12 +10,14 @@ import {
     CreditCard,
     Settings,
     LogOut,
+    Menu,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { logoutAction } from '@/lib/actions/auth'
 import { TenantLogo } from '@/components/ui/tenant-logo'
 import { NotificationBell } from '@/components/layout/NotificationBell'
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet'
 
 const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -35,9 +37,11 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
     const pathname = usePathname()
     const [pendingPath, setPendingPath] = useState<string | null>(null)
     const [isPending, startTransition] = useTransition()
+    const [isOpen, setIsOpen] = useState(false)
 
     useEffect(() => {
         setPendingPath(null)
+        setIsOpen(false)
     }, [pathname])
 
     function handleLogout() {
@@ -46,8 +50,8 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
         })
     }
 
-    return (
-        <aside className="flex h-screen w-64 flex-col bg-sidebar/30 backdrop-blur-2xl border-r border-sidebar-border/50">
+    const SidebarContent = () => (
+        <>
             {/* Logo */}
             <div className="flex items-center justify-center px-6 py-5 border-b border-sidebar-border min-h-[5rem]">
                 <TenantLogo
@@ -89,7 +93,7 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
             </nav>
 
             {/* Footer */}
-            <div className="border-t border-sidebar-border px-3 py-4 space-y-2">
+            <div className="border-t border-sidebar-border px-3 py-4 space-y-2 pb-8 lg:pb-4">
                 <div className="flex items-center justify-between px-3">
                     <NotificationBell themeColor={themeColor} />
                     {userEmail ? (
@@ -109,6 +113,38 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
                     {isPending ? 'Cerrando sesión…' : 'Cerrar sesión'}
                 </button>
             </div>
-        </aside>
+        </>
+    )
+
+    return (
+        <>
+            {/* Mobile Top Nav */}
+            <div className="lg:hidden flex items-center justify-between p-4 border-b border-sidebar-border/50 bg-background/80 backdrop-blur-md w-full shrink-0">
+                <div className="flex items-center gap-4">
+                    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+                        <SheetTrigger className="p-1 -ml-1 rounded-md text-foreground hover:bg-sidebar-accent transition-colors">
+                            <Menu className="h-6 w-6" />
+                            <span className="sr-only">Toggle Menu</span>
+                        </SheetTrigger>
+                        <SheetContent side="left" className="p-0 w-72 bg-gradient-to-b from-background to-secondary/10 border-r border-sidebar-border flex flex-col pt-0 gap-0">
+                            <SheetTitle className="sr-only">Menú Principal</SheetTitle>
+                            <SidebarContent />
+                        </SheetContent>
+                    </Sheet>
+                    <div className="scale-90 origin-left">
+                        <TenantLogo
+                            config={logoConfig}
+                            colorPrimary={themeColor}
+                            fallbackName="Consultorio"
+                        />
+                    </div>
+                </div>
+            </div>
+
+            {/* Desktop Sidebar */}
+            <aside className="hidden lg:flex h-screen w-64 flex-col bg-sidebar/30 backdrop-blur-2xl border-r border-sidebar-border/50 shrink-0">
+                <SidebarContent />
+            </aside>
+        </>
     )
 }

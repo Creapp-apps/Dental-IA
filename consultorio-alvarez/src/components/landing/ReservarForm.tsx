@@ -2,8 +2,9 @@
 
 import { useState, useMemo } from 'react'
 import type { Tenant, Profesional, TipoTratamiento } from '@/types'
-import { Check, ChevronRight, ChevronLeft, Calendar, CalendarDays, User, Stethoscope, Clock, CheckCircle2 } from 'lucide-react'
+import { Check, ChevronRight, ChevronLeft, Calendar, CalendarDays, User, Stethoscope, Clock, CheckCircle2, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { crearReservaPublica } from '@/lib/actions/reservas'
 
 interface Props {
     tenant: Tenant
@@ -449,6 +450,7 @@ const PASO_ICONS = [CalendarDays, User, Calendar]
 export function ReservarForm({ tenant, profesionales, tratamientos }: Props) {
     const [paso, setPaso] = useState(0)
     const [enviado, setEnviado] = useState(false)
+    const [isSubmitting, setIsSubmitting] = useState(false)
     const [selectedDate, setSelectedDate] = useState<string | null>(null)
     const [selectedTime, setSelectedTime] = useState<string | null>(null)
     const [profesionalId, setProfesionalId] = useState<string | null>(null)
@@ -473,10 +475,35 @@ export function ReservarForm({ tenant, profesionales, tratamientos }: Props) {
         else handleSubmit()
     }
 
-    function handleSubmit() {
-        // En prod: POST a API. Por ahora: mock
-        console.log('Reserva:', { selectedDate, selectedTime, profesionalId, datos })
-        setEnviado(true)
+    async function handleSubmit() {
+        if (!selectedDate || !selectedTime) return
+        setIsSubmitting(true)
+
+        try {
+            const result = await crearReservaPublica({
+                tenantSlug: tenant.slug,
+                fecha: selectedDate,
+                hora: selectedTime,
+                profesionalId,
+                nombre: datos.nombre,
+                apellido: datos.apellido,
+                telefono: datos.telefono,
+                email: datos.email,
+                es_nuevo: datos.es_nuevo,
+                notas: datos.notas
+            })
+
+            if (result?.error) {
+                alert(result.error)
+            } else {
+                setEnviado(true)
+            }
+        } catch (error) {
+            console.error(error)
+            alert('Error al reservar turno')
+        } finally {
+            setIsSubmitting(false)
+        }
     }
 
     function handleDato(key: keyof FormDatos, val: string) {
@@ -584,12 +611,17 @@ export function ReservarForm({ tenant, profesionales, tratamientos }: Props) {
 
                 <button
                     onClick={handleNext}
-                    disabled={!canNext[paso]}
+                    disabled={!canNext[paso] || isSubmitting}
                     className="flex items-center gap-1.5 rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ backgroundColor: tenant.color_primario }}
                 >
-                    {paso === 2 ? 'Enviar solicitud' : 'Continuar'}
-                    <ChevronRight className="h-4 w-4" />
+                    {isSubmitting ? (
+                        <>Procesando... <Loader2 className="h-4 w-4 animate-spin" /></>
+                    ) : paso === 2 ? (
+                        'Enviar solicitud'
+                    ) : (
+                        <>Continuar <ChevronRight className="h-4 w-4" /></>
+                    )}
                 </button>
             </div>
         </div>

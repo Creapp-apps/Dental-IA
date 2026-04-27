@@ -224,7 +224,7 @@ export async function crearReservaPublica(data: {
     }
 
     // Insert turno
-    const { error } = await supabase
+    const { data: turnoData, error } = await supabase
         .from('turnos')
         .insert({
             tenant_id: tenant.id,
@@ -237,6 +237,8 @@ export async function crearReservaPublica(data: {
             notas: data.notas || null,
             origen: 'ONLINE',
         })
+        .select('id')
+        .single()
 
     if (error) return { error: error.message }
 
@@ -246,6 +248,7 @@ export async function crearReservaPublica(data: {
         titulo: '🌟 Nuevo Turno Web',
         mensaje: `${data.nombre} ${data.apellido} reservó un turno desde la página pública a las ${data.hora}.`,
         tipo: 'turno_nuevo',
+        referencia_id: turnoData?.id,
     })
 
     // --- DISPARAR META WHATSAPP CLOUD API ---

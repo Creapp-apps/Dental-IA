@@ -1,11 +1,28 @@
-import { startOfWeek, endOfWeek } from 'date-fns'
+import { startOfWeek, endOfWeek, parseISO } from 'date-fns'
 import { getProfesionales, getTiposTratamiento, getTurnosSemana, getPacientes } from '@/lib/supabase/queries'
 import { AgendaView } from '@/components/agenda/AgendaView'
+import { createAdminClient } from '@/lib/supabase/admin'
 
-export default async function AgendaPage() {
-    const hoy = new Date()
-    const inicio = startOfWeek(hoy, { weekStartsOn: 1 })
-    const fin = endOfWeek(hoy, { weekStartsOn: 1 })
+export default async function AgendaPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+    let focusDate = new Date()
+
+    // Auto-Target Notification
+    const urlTurnoId = searchParams?.turno as string | undefined
+    if (urlTurnoId) {
+        const supabase = createAdminClient()
+        const { data: turno } = await supabase
+            .from('turnos')
+            .select('fecha_inicio')
+            .eq('id', urlTurnoId)
+            .single()
+
+        if (turno?.fecha_inicio) {
+            focusDate = parseISO(turno.fecha_inicio)
+        }
+    }
+
+    const inicio = startOfWeek(focusDate, { weekStartsOn: 1 })
+    const fin = endOfWeek(focusDate, { weekStartsOn: 1 })
 
     const [profesionales, tiposTratamiento, turnos, pacientes] = await Promise.all([
         getProfesionales(),

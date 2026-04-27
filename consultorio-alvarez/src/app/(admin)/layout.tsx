@@ -36,13 +36,13 @@ export default async function AdminLayout({
     return (
         <>
             <style dangerouslySetInnerHTML={{ __html: customStyle }} />
-            <div className="flex h-screen overflow-hidden bg-background relative selection:bg-primary/30">
+            <div className="flex h-screen overflow-hidden bg-background relative selection:bg-primary/30 flex-col lg:flex-row">
                 <AdminBackground colorHex={primaryStr} />
-                <div className="relative z-10 flex w-full h-full">
+                <div className="relative z-10 flex w-full h-full flex-col lg:flex-row">
                     <NotificationProvider>
                         <Sidebar userEmail={user.email} themeColor={primaryStr} logoConfig={config?.logo_config} />
                         <main className="flex-1 overflow-y-auto">
-                            <div className="min-h-full p-6 lg:p-8">
+                            <div className="min-h-full p-4 sm:p-6 lg:p-8 overflow-x-hidden">
                                 {children}
                             </div>
                         </main>

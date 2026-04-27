@@ -6,9 +6,11 @@ import { useNotifications } from '@/components/providers/NotificationProvider'
 import { cn } from '@/lib/utils'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
+import { useRouter } from 'next/navigation'
 
 export function NotificationBell({ themeColor }: { themeColor?: string }) {
     const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
+    const router = useRouter()
 
     return (
         <Popover>
@@ -53,7 +55,12 @@ export function NotificationBell({ themeColor }: { themeColor?: string }) {
                             return (
                                 <button
                                     key={n.id}
-                                    onClick={() => isUnread && markAsRead(n.id)}
+                                    onClick={() => {
+                                        if (isUnread) markAsRead(n.id)
+                                        if (n.referencia_id && n.tipo === 'turno_nuevo') {
+                                            router.push(`/agenda?turno=${n.referencia_id}`)
+                                        }
+                                    }}
                                     className={cn(
                                         "w-full flex items-start gap-3 p-4 text-left transition-colors border-b border-sidebar-border/20 last:border-0 hover:bg-secondary/40",
                                         isUnread ? "bg-primary/5" : "opacity-80"

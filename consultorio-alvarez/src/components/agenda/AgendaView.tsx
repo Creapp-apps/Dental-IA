@@ -1,6 +1,7 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useTransition, useMemo, useEffect } from 'react'
+import { useSearchParams } from 'next/navigation'
 import {
     format, startOfWeek, endOfWeek, addWeeks, subWeeks,
     addDays, subDays, addMonths, subMonths, isSameDay, parseISO, isToday,
@@ -64,6 +65,31 @@ export function AgendaView({
     const [modalOpen, setModalOpen] = useState(false)
     const [modalProfId, setModalProfId] = useState<string>('')
     const [isPending, startTransition] = useTransition()
+
+    // Auto-focus incoming webhook coordinates
+    const searchParams = useSearchParams()
+    const urlTurnoId = searchParams.get('turno')
+
+    useEffect(() => {
+        if (!urlTurnoId || !turnosIniciales) return
+        const turno = turnosIniciales.find(t => t.id === urlTurnoId)
+        if (turno) {
+            const date = parseISO(turno.fecha_inicio)
+            setBaseDate(date)
+            setDiaSeleccionado(date)
+            setVistaActiva('hoy') // Foco en el día específico
+            setTimeout(() => {
+                const el = document.getElementById(`turno-${turno.id}`)
+                if (el) {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                    const pulseClasses = ['ring-4', 'ring-red-500', 'animate-pulse', 'shadow-[0_0_25px_rgba(239,68,68,0.8)]']
+                    el.classList.add(...pulseClasses)
+                    // Quitar el latido después de 10 segundos
+                    setTimeout(() => el.classList.remove(...pulseClasses), 10000)
+                }
+            }, 500)
+        }
+    }, [urlTurnoId, turnosIniciales])
 
     // ── Compute visible days based on view mode ────────────────
     const diasVisibles = useMemo(() => {
@@ -289,14 +315,15 @@ export function AgendaView({
                                         className="space-y-2.5"
                                     >
                                         {turnosDia.map((turno: any, i: number) => (
-                                            <TurnoAgendaCard
-                                                key={turno.id}
-                                                turno={turno}
-                                                colorProf={prof.color_agenda}
-                                                index={i}
-                                                onCambiarEstado={handleCambiarEstado}
-                                                isPending={isPending}
-                                            />
+                                            <div key={turno.id} id={`turno-${turno.id}`} className="rounded-lg transition-all duration-300">
+                                                <TurnoAgendaCard
+                                                    turno={turno}
+                                                    colorProf={prof.color_agenda}
+                                                    index={i}
+                                                    onCambiarEstado={handleCambiarEstado}
+                                                    isPending={isPending}
+                                                />
+                                            </div>
                                         ))}
                                     </motion.div>
                                 )}
