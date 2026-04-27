@@ -50,17 +50,17 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     return (
         <div className="space-y-4">
             {/* Search + Add */}
-            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="flex items-center gap-3">
-                <div className="relative flex-1">
+            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                <div className="relative flex-1 w-full">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder="Buscar por nombre, DNI o N° HC..."
                         value={query}
                         onChange={(e) => handleSearch(e.target.value)}
-                        className="pl-9"
+                        className="pl-9 w-full"
                     />
                 </div>
-                <GlassButton onClick={handleNuevoPaciente} loading={isNavigating}>
+                <GlassButton onClick={handleNuevoPaciente} loading={isNavigating} className="w-full sm:w-auto">
                     {!isNavigating && <Plus className="h-4 w-4 mr-2" />}
                     {isNavigating ? 'Cargando…' : 'Nuevo paciente'}
                 </GlassButton>

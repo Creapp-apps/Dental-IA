@@ -89,7 +89,7 @@ export function CobrosView({ cobros, filtroActual }: CobrosViewProps) {
     return (
         <div className="space-y-4">
             {/* KPIs */}
-            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="grid grid-cols-2 gap-4">
+            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="glass rounded-2xl shadow-glass p-5">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Pendiente de cobro</p>
                     <p className="text-2xl font-bold text-foreground mt-1 tabular-nums">
@@ -105,20 +105,20 @@ export function CobrosView({ cobros, filtroActual }: CobrosViewProps) {
             </motion.div>
 
             {/* Filters */}
-            <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="flex gap-1 glass rounded-xl p-1 shadow-glass">
+            <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="flex gap-1 glass rounded-xl p-1 shadow-glass overflow-x-auto">
                 {FILTROS.map(f => (
                     <button
                         key={f.value}
                         onClick={() => handleFiltro(f.value)}
                         className={cn(
-                            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center cursor-pointer',
+                            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center cursor-pointer whitespace-nowrap',
                             filtroActual === f.value
                                 ? 'bg-primary text-primary-foreground shadow-sm'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                         )}
                     >
-                        <f.icon className="h-4 w-4" />
-                        <span className="hidden sm:inline">{f.label}</span>
+                        <f.icon className="h-4 w-4 shrink-0" />
+                        <span>{f.label}</span>
                     </button>
                 ))}
             </motion.div>

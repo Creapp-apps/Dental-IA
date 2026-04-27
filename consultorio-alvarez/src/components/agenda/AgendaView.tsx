@@ -279,7 +279,7 @@ export function AgendaView({
             )}
 
             {/* Columnas por profesional */}
-            <motion.div custom={2} variants={sectionVariants} initial="hidden" animate="visible" className="grid gap-5" style={{ gridTemplateColumns: `repeat(${profesionales.length}, 1fr)` }}>
+            <motion.div custom={2} variants={sectionVariants} initial="hidden" animate="visible" className="flex flex-col lg:grid gap-5" style={{ gridTemplateColumns: `repeat(${profesionales.length}, minmax(0, 1fr))` }}>
                 {profesionales.map((prof: any) => {
                     const turnosDia = getTurnosDia(diaSeleccionado, prof.id)
                     return (

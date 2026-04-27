@@ -118,16 +118,16 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
         <div className="space-y-5">
             <div className="glass rounded-2xl shadow-glass p-5 space-y-4">
                 <h3 className="text-sm font-semibold text-foreground">Datos del consultorio</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field label="Nombre"><Input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} /></Field>
                     <Field label="CUIT"><Input value={form.cuit} onChange={e => setForm(f => ({ ...f, cuit: e.target.value }))} placeholder="30-12345678-9" /></Field>
                 </div>
                 <Field label="Descripción"><Input value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} /></Field>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <Field label="Teléfono"><Input value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} /></Field>
                     <Field label="Email"><Input value={form.email_contacto} onChange={e => setForm(f => ({ ...f, email_contacto: e.target.value }))} /></Field>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
                     <Field label="Dirección"><Input value={form.direccion} onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))} /></Field>
                     <Field label="Ciudad"><Input value={form.ciudad} onChange={e => setForm(f => ({ ...f, ciudad: e.target.value }))} /></Field>
                     <Field label="Provincia"><Input value={form.provincia} onChange={e => setForm(f => ({ ...f, provincia: e.target.value }))} /></Field>
@@ -147,7 +147,7 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
                 </div>
                 {showTratForm && (
                     <div className="glass-subtle rounded-xl p-3 space-y-2">
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
                             <Input placeholder="Nombre" value={newTrat.nombre} onChange={e => setNewTrat(f => ({ ...f, nombre: e.target.value }))} />
 
                             <div className="relative flex items-center">
@@ -319,11 +319,11 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                             <p className="text-xs text-muted-foreground">Recomendado encuadre 1:1 circular.</p>
                         </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <Field label="Nombre *"><Input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} /></Field>
                         <Field label="Apellido *"><Input value={form.apellido} onChange={e => setForm(f => ({ ...f, apellido: e.target.value }))} /></Field>
                     </div>
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                         <Field label="Especialidad"><Input value={form.especialidad} onChange={e => setForm(f => ({ ...f, especialidad: e.target.value }))} placeholder="Odontología general" /></Field>
                         <Field label="Matrícula"><Input value={form.matricula} onChange={e => setForm(f => ({ ...f, matricula: e.target.value }))} /></Field>
                         <Field label="Email *"><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></Field>
@@ -474,9 +474,11 @@ function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
                             {h.activo && <Check className="h-3 w-3" />}
                         </button>
                         <span className="text-sm font-medium text-foreground w-10">{DIA_LABEL[h.dia]}</span>
-                        <Input type="time" value={h.apertura} onChange={e => update(h.dia, 'apertura', e.target.value)} className="w-28 text-sm" disabled={!h.activo} />
-                        <span className="text-xs text-muted-foreground">a</span>
-                        <Input type="time" value={h.cierre} onChange={e => update(h.dia, 'cierre', e.target.value)} className="w-28 text-sm" disabled={!h.activo} />
+                        <div className="flex flex-1 gap-2">
+                            <Input type="time" value={h.apertura} onChange={e => update(h.dia, 'apertura', e.target.value)} className="w-[4.5rem] sm:w-28 text-xs sm:text-sm px-1.5 sm:px-3" disabled={!h.activo} />
+                            <span className="text-xs text-muted-foreground self-center">a</span>
+                            <Input type="time" value={h.cierre} onChange={e => update(h.dia, 'cierre', e.target.value)} className="w-[4.5rem] sm:w-28 text-xs sm:text-sm px-1.5 sm:px-3" disabled={!h.activo} />
+                        </div>
                     </div>
                 ))}
             </div>
