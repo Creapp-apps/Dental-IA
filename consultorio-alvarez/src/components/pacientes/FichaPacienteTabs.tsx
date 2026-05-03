@@ -5,9 +5,10 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign } from 'lucide-react'
+import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
+import { TabAdjuntos } from '@/components/pacientes/TabAdjuntos'
 import { type EstadoTurno } from '@/types'
 
 const TABS = [
@@ -16,6 +17,7 @@ const TABS = [
     { id: 'evoluciones', label: 'Evoluciones', icon: FileText },
     { id: 'odontograma', label: 'Odontograma', icon: ClipboardList },
     { id: 'presupuestos', label: 'Presupuestos', icon: DollarSign },
+    { id: 'adjuntos', label: 'Adjuntos', icon: Paperclip },
 ] as const
 
 type TabId = typeof TABS[number]['id']
@@ -26,6 +28,7 @@ interface FichaPacienteTabsProps {
     historial: any[]
     odontograma: any[]
     presupuestos: any[]
+    adjuntos: any[]
     motivoConsulta: string | null
 }
 
@@ -35,6 +38,7 @@ export function FichaPacienteTabs({
     historial,
     odontograma,
     presupuestos,
+    adjuntos,
     motivoConsulta,
 }: FichaPacienteTabsProps) {
     const [tab, setTab] = useState<TabId>('consulta')
@@ -76,6 +80,7 @@ export function FichaPacienteTabs({
                         <OdontogramaInteractivo pacienteId={pacienteId} piezasData={odontograma} />
                     )}
                     {tab === 'presupuestos' && <TabPresupuestos presupuestos={presupuestos} />}
+                    {tab === 'adjuntos' && <TabAdjuntos pacienteId={pacienteId} adjuntos={adjuntos} />}
                 </motion.div>
             </AnimatePresence>
         </div>

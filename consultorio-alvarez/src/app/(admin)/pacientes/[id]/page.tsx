@@ -12,7 +12,7 @@ const GENERO_LABEL: Record<string, string> = { M: 'Masculino', F: 'Femenino', X:
 async function getPacienteCompleto(id: string) {
     const supabase = await createClient()
 
-    const [pacienteRes, turnosRes, historialRes, odontogramaRes, presupuestosRes] = await Promise.all([
+    const [pacienteRes, turnosRes, historialRes, odontogramaRes, presupuestosRes, adjuntosRes] = await Promise.all([
         supabase.from('pacientes').select('*, obra_social:obras_sociales(*)').eq('id', id).single(),
         supabase.from('turnos').select(`
             *, profesional:profesionales(nombre, apellido),
@@ -26,6 +26,7 @@ async function getPacienteCompleto(id: string) {
             *, profesional:profesionales(nombre, apellido),
             items:presupuesto_items(*, tipo_tratamiento:tipos_tratamiento(nombre))
         `).eq('paciente_id', id).order('created_at', { ascending: false }),
+        supabase.from('paciente_adjuntos').select('*').eq('paciente_id', id).order('created_at', { ascending: false }),
     ])
 
     return {
@@ -34,6 +35,7 @@ async function getPacienteCompleto(id: string) {
         historial: historialRes.data ?? [],
         odontograma: odontogramaRes.data ?? [],
         presupuestos: presupuestosRes.data ?? [],
+        adjuntos: adjuntosRes.data ?? [],
     }
 }
 
@@ -43,7 +45,7 @@ export default async function FichaPacientePage({
     params: Promise<{ id: string }>
 }) {
     const { id } = await params
-    const { paciente: p, turnos, historial, odontograma, presupuestos } = await getPacienteCompleto(id)
+    const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos } = await getPacienteCompleto(id)
     if (!p) notFound()
 
     const iniciales = `${p.nombre.charAt(0)}${p.apellido.charAt(0)}`
@@ -131,6 +133,7 @@ export default async function FichaPacientePage({
                     historial={historial}
                     odontograma={odontograma}
                     presupuestos={presupuestos}
+                    adjuntos={adjuntos}
                     motivoConsulta={p.motivo_consulta}
                 />
             </div>
