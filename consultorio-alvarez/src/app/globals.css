@@ -314,3 +314,11 @@
     opacity: 1;
   }
 }
+
+/* ============================================
+   FULLSCREEN MODES
+   ============================================ */
+#admin-layout-root:fullscreen #desktop-sidebar,
+#admin-layout-root:fullscreen #mobile-top-nav {
+  display: none !important;
+}

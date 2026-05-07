@@ -56,7 +56,7 @@ export function LandingHorarios({ horarios, colorPrimario }: Props) {
                                 <div
                                     key={h.dia}
                                     className="flex flex-col items-center gap-1"
-                                    title={`${DIA_LABEL[h.dia]}: ${h.activo ? `${h.apertura} – ${h.cierre}` : 'Cerrado'}`}
+                                    title={`${DIA_LABEL[h.dia]}: ${h.activo ? `${h.apertura_manana || h.apertura} – ${h.cierre_manana || h.cierre}${h.apertura_tarde ? ` / ${h.apertura_tarde} – ${h.cierre_tarde}` : ''}` : 'Cerrado'}`}
                                 >
                                     <div
                                         className="w-8 h-10 rounded-lg flex items-end justify-center pb-1.5 text-[9px] font-bold transition-all"
@@ -102,9 +102,18 @@ export function LandingHorarios({ horarios, colorPrimario }: Props) {
                                     </span>
                                 </div>
                                 {h.activo ? (
-                                    <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                                        <Clock className="h-3.5 w-3.5 text-gray-400" />
-                                        {h.apertura} – {h.cierre}
+                                    <div className="flex flex-col sm:flex-row items-end sm:items-center gap-1 sm:gap-4 text-sm text-gray-600">
+                                        <div className="flex items-center gap-1.5">
+                                            <Clock className="h-3.5 w-3.5 text-gray-400" />
+                                            {h.apertura_manana || h.apertura} – {h.cierre_manana || h.cierre}
+                                        </div>
+                                        {(h.apertura_tarde && h.cierre_tarde) && (
+                                            <div className="flex items-center gap-1.5 text-gray-500">
+                                                <span className="hidden sm:inline text-gray-300">/</span>
+                                                <Clock className="h-3.5 w-3.5 text-gray-400 sm:hidden" />
+                                                {h.apertura_tarde} – {h.cierre_tarde}
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2.5 py-0.5 rounded-full">

@@ -27,6 +27,8 @@ async function getPacienteCompleto(id: string) {
             items:presupuesto_items(*, tipo_tratamiento:tipos_tratamiento(nombre))
         `).eq('paciente_id', id).order('created_at', { ascending: false }),
         supabase.from('paciente_adjuntos').select('*').eq('paciente_id', id).order('created_at', { ascending: false }),
+        supabase.from('profesionales').select('id, nombre, apellido, especialidad').eq('activo', true),
+        supabase.from('tipos_tratamiento').select('id, nombre, precio_referencia, duracion_minutos').eq('activo', true)
     ])
 
     return {
@@ -36,6 +38,8 @@ async function getPacienteCompleto(id: string) {
         odontograma: odontogramaRes.data ?? [],
         presupuestos: presupuestosRes.data ?? [],
         adjuntos: adjuntosRes.data ?? [],
+        profesionales: [],
+        tipos_tratamiento: [],
     }
 }
 
@@ -47,6 +51,15 @@ export default async function FichaPacientePage({
     const { id } = await params
     const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos } = await getPacienteCompleto(id)
     if (!p) notFound()
+
+    // Fetch lists separately since they don't depend on patient ID
+    const supabase = await createClient()
+    const [profRes, tratRes] = await Promise.all([
+        supabase.from('profesionales').select('id, nombre, apellido, especialidad').eq('activo', true),
+        supabase.from('tipos_tratamiento').select('id, nombre, precio_referencia, duracion_minutos').eq('activo', true)
+    ])
+    const profesionales = profRes.data ?? []
+    const tiposTratamiento = tratRes.data ?? []
 
     const iniciales = `${p.nombre.charAt(0)}${p.apellido.charAt(0)}`
     const edad = p.fecha_nacimiento
@@ -62,7 +75,7 @@ export default async function FichaPacientePage({
                         <ArrowLeft className="h-4 w-4" />
                     </Link>
                     <div>
-                        <h1 className="text-2xl font-bold text-foreground tracking-tight">
+                        <h1 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
                             Historia Clínica — N° {p.nro_historia_clinica}
                         </h1>
                     </div>
@@ -104,8 +117,8 @@ export default async function FichaPacientePage({
                         </div>
 
                         <div className="space-y-2.5 text-sm">
-                            <DatoFila label="DNI" valor={p.dni} />
-                            <DatoFila label="CUIT" valor={p.cuit} />
+                            <DatoFila label="DNI" valor={p.dni || '—'} />
+                            <DatoFila label="CUIT" valor={p.cuit || '—'} />
                             <DatoFila label="Nac." valor={p.fecha_nacimiento ? format(new Date(p.fecha_nacimiento), "dd/MM/yyyy") : null} />
                             <DatoFila label="Género" valor={p.genero ? GENERO_LABEL[p.genero] : null} />
                             <div className="h-px bg-border my-1" />
@@ -114,6 +127,7 @@ export default async function FichaPacientePage({
                             <DatoFila label="Dirección" valor={p.direccion} icon={<MapPin className="h-3 w-3" />} />
                             <div className="h-px bg-border my-1" />
                             <DatoFila label="Obra Social" valor={p.obra_social?.nombre ?? 'Particular'} icon={<CreditCard className="h-3 w-3" />} />
+                            <DatoFila label="Plan" valor={p.plan_obra_social} />
                             {p.n_afiliado && <DatoFila label="N° Afiliado" valor={p.n_afiliado} />}
                         </div>
                     </div>
@@ -135,6 +149,8 @@ export default async function FichaPacientePage({
                     presupuestos={presupuestos}
                     adjuntos={adjuntos}
                     motivoConsulta={p.motivo_consulta}
+                    profesionales={profesionales}
+                    tiposTratamiento={tiposTratamiento}
                 />
             </div>
         </div>

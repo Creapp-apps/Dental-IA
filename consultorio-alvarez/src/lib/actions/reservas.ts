@@ -7,7 +7,7 @@ async function getTenantBySlug(slug: string) {
     const supabase = createAdminClient()
     const { data } = await supabase
         .from('tenants')
-        .select('id, nombre, slug')
+        .select('id, nombre, slug, horarios')
         .eq('slug', slug)
         .single()
     return data
@@ -46,6 +46,21 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
 
     // Filter out busy professionals
     return allProfs.filter(p => !ocupadosIds.has(p.id))
+}
+
+export async function getObrasSocialesPublicas(tenantSlug: string) {
+    const supabase = createAdminClient()
+    const tenant = await getTenantBySlug(tenantSlug)
+    if (!tenant) return []
+
+    const { data: obras } = await supabase
+        .from('obras_sociales')
+        .select('id, nombre, codigo, planes')
+        .eq('tenant_id', tenant.id)
+        .eq('activo', true)
+        .order('nombre')
+
+    return obras || []
 }
 
 export async function getTurnosDisponibles(tenantSlug: string) {
@@ -89,11 +104,49 @@ export async function getTurnosDisponibles(tenantSlug: string) {
         slotBookingCount.set(slotKey, (slotBookingCount.get(slotKey) ?? 0) + 1)
     }
 
-    // Generate available slots (9-18 weekdays, 10-13 saturdays)
-    const allSlotTimes = [
-        '09:00', '09:30', '10:00', '10:30', '11:00', '11:30',
-        '14:00', '14:30', '15:00', '15:30', '16:00', '16:30', '17:00',
-    ]
+    function generarSlotsParaDia(horario: any): string[] {
+        if (!horario || !horario.activo) return [];
+        const slots: string[] = [];
+        
+        const addSlots = (apertura: string, cierre: string) => {
+            if (!apertura || !cierre) return;
+            const [apH, apM] = apertura.split(':').map(Number);
+            const [ciH, ciM] = cierre.split(':').map(Number);
+            
+            let currH = apH;
+            let currM = apM;
+            
+            while (currH < ciH || (currH === ciH && currM < ciM)) {
+                const endM = currM + 20;
+                const endH = currH + Math.floor(endM / 60);
+                const rEndM = endM % 60;
+                
+                if (endH > ciH || (endH === ciH && rEndM > ciM)) break;
+                
+                slots.push(`${currH.toString().padStart(2, '0')}:${currM.toString().padStart(2, '0')}`);
+                
+                currM += 20;
+                if (currM >= 60) {
+                    currH++;
+                    currM -= 60;
+                }
+            }
+        }
+        
+        if (horario.apertura_manana) {
+            addSlots(horario.apertura_manana, horario.cierre_manana);
+            addSlots(horario.apertura_tarde, horario.cierre_tarde);
+        } else {
+            addSlots(horario.apertura, horario.cierre);
+        }
+        
+        return slots;
+    }
+
+    const diasConfig = new Map<number, any>()
+    for (const h of tenant.horarios || []) {
+        diasConfig.set(h.dia, h)
+    }
 
     const days: { date: string; dayOfWeek: number; dayNum: number; month: number; slots: string[] }[] = []
 
@@ -101,12 +154,12 @@ export async function getTurnosDisponibles(tenantSlug: string) {
         const d = new Date(now)
         d.setDate(now.getDate() + i)
         const dow = d.getDay()
-        if (dow === 0) continue // skip sunday
+
+        const configDia = diasConfig.get(dow)
+        if (!configDia || !configDia.activo) continue
 
         const dateStr = d.toISOString().split('T')[0]
-        const slotsForDay = dow === 6
-            ? allSlotTimes.filter(s => parseInt(s) < 13)
-            : allSlotTimes
+        const slotsForDay = generarSlotsParaDia(configDia)
 
         // A slot is fully occupied only when ALL professionals are booked for it
         const available = slotsForDay.filter(slot => {
@@ -140,6 +193,8 @@ export async function crearReservaPublica(data: {
     email?: string
     es_nuevo: string
     notas?: string
+    obraSocialId?: string | null
+    planSeleccionado?: string | null
 }) {
     const supabase = createAdminClient()
     const tenant = await getTenantBySlug(data.tenantSlug)
@@ -148,7 +203,7 @@ export async function crearReservaPublica(data: {
     // Build the turno datetime
     const fechaInicio = new Date(`${data.fecha}T${data.hora}:00`)
     const fechaFin = new Date(fechaInicio)
-    fechaFin.setMinutes(fechaFin.getMinutes() + 30) // 30 min default
+    fechaFin.setMinutes(fechaFin.getMinutes() + 20) // 20 min default
 
     // Determine profesional
     let profesionalId = data.profesionalId
@@ -200,27 +255,42 @@ export async function crearReservaPublica(data: {
 
     // Create patient if new
     if (!pacienteId) {
-        const { count } = await supabase
-            .from('pacientes')
-            .select('id', { count: 'exact', head: true })
-            .eq('tenant_id', tenant.id)
-
-        const nro = `HC-${String((count ?? 0) + 1).padStart(5, '0')}`
-
         const { data: newPat } = await supabase
             .from('pacientes')
             .insert({
                 tenant_id: tenant.id,
-                nro_historia_clinica: nro,
+                nro_historia_clinica: null,
                 nombre: data.nombre,
                 apellido: data.apellido,
                 telefono: data.telefono,
                 email: data.email || null,
+                obra_social_id: data.obraSocialId || null,
             })
             .select('id')
             .single()
 
         pacienteId = newPat?.id ?? null
+    } else if (data.obraSocialId) {
+        // Update existing patient's obra social if provided
+        await supabase
+            .from('pacientes')
+            .update({ obra_social_id: data.obraSocialId })
+            .eq('id', pacienteId)
+    }
+
+    // Build notes with plan info
+    let finalNotas = data.notas || ''
+    if (data.obraSocialId || data.planSeleccionado) {
+        let coberturaInfo = '[Cobertura: '
+        if (data.obraSocialId) {
+            const { data: osData } = await supabase.from('obras_sociales').select('nombre').eq('id', data.obraSocialId).single()
+            if (osData) coberturaInfo += osData.nombre
+        }
+        if (data.planSeleccionado) {
+            coberturaInfo += ` - Plan: ${data.planSeleccionado}`
+        }
+        coberturaInfo += ']\n'
+        finalNotas = coberturaInfo + finalNotas
     }
 
     // Insert turno
@@ -234,7 +304,7 @@ export async function crearReservaPublica(data: {
             fecha_inicio: fechaInicio.toISOString(),
             fecha_fin: fechaFin.toISOString(),
             estado: 'PENDIENTE',
-            notas: data.notas || null,
+            notas: finalNotas || null,
             origen: 'ONLINE',
         })
         .select('id')

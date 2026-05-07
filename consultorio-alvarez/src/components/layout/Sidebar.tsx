@@ -23,7 +23,7 @@ const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { label: 'Agenda', href: '/agenda', icon: Calendar },
     { label: 'Pacientes', href: '/pacientes', icon: Users },
-    { label: 'Cobros', href: '/cobros', icon: CreditCard },
+    // { label: 'Cobros', href: '/cobros', icon: CreditCard },
     { label: 'Configuración', href: '/configuracion', icon: Settings },
 ]
 
@@ -119,7 +119,7 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
     return (
         <>
             {/* Mobile Top Nav */}
-            <div className="lg:hidden flex items-center justify-between p-4 border-b border-sidebar-border/50 bg-background/80 backdrop-blur-md w-full shrink-0">
+            <div id="mobile-top-nav" className="lg:hidden flex items-center justify-between p-4 border-b border-sidebar-border/50 bg-background/80 backdrop-blur-md w-full shrink-0">
                 <div className="flex items-center gap-4">
                     <Sheet open={isOpen} onOpenChange={setIsOpen}>
                         <SheetTrigger className="p-1 -ml-1 rounded-md text-foreground hover:bg-sidebar-accent transition-colors">
@@ -142,7 +142,7 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
             </div>
 
             {/* Desktop Sidebar */}
-            <aside className="hidden lg:flex h-screen w-64 flex-col bg-sidebar/30 backdrop-blur-2xl border-r border-sidebar-border/50 shrink-0">
+            <aside id="desktop-sidebar" className="hidden lg:flex h-screen w-64 flex-col bg-sidebar/30 backdrop-blur-2xl border-r border-sidebar-border/50 shrink-0">
                 <SidebarContent />
             </aside>
         </>

@@ -94,6 +94,22 @@ export async function toggleObraSocial(id: string, activo: boolean) {
     return { success: true }
 }
 
+export async function actualizarObraSocial(id: string, data: { nombre?: string; codigo?: string; planes?: string }) {
+    const supabase = getAdmin()
+    const { error } = await supabase.from('obras_sociales').update(data).eq('id', id)
+    if (error) return { error: error.message }
+    revalidatePath('/configuracion')
+    return { success: true }
+}
+
+export async function eliminarObraSocial(id: string) {
+    const supabase = getAdmin()
+    const { error } = await supabase.from('obras_sociales').delete().eq('id', id)
+    if (error) return { error: error.message }
+    revalidatePath('/configuracion')
+    return { success: true }
+}
+
 export async function crearTipoTratamiento(data: {
     nombre: string; duracion_minutos: number; precio_referencia?: number;
     color?: string; descripcion?: string
@@ -115,6 +131,25 @@ export async function crearTipoTratamiento(data: {
 export async function toggleTipoTratamiento(id: string, activo: boolean) {
     const supabase = getAdmin()
     const { error } = await supabase.from('tipos_tratamiento').update({ activo }).eq('id', id)
+    if (error) return { error: error.message }
+    revalidatePath('/configuracion')
+    return { success: true }
+}
+
+export async function actualizarTipoTratamiento(id: string, data: {
+    nombre?: string; duracion_minutos?: number; precio_referencia?: number;
+    color?: string; descripcion?: string
+}) {
+    const supabase = getAdmin()
+    const { error } = await supabase.from('tipos_tratamiento').update(data).eq('id', id)
+    if (error) return { error: error.message }
+    revalidatePath('/configuracion')
+    return { success: true }
+}
+
+export async function eliminarTipoTratamiento(id: string) {
+    const supabase = getAdmin()
+    const { error } = await supabase.from('tipos_tratamiento').delete().eq('id', id)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
     return { success: true }

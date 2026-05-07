@@ -13,6 +13,7 @@ import {
     getProfesionalesPublicos,
     getTurnosDisponibles,
     crearReservaPublica,
+    getObrasSocialesPublicas,
 } from '@/lib/actions/reservas'
 import {
     Check,
@@ -456,13 +457,17 @@ interface PatientFormData {
     email: string
     es_nuevo: string
     notas: string
+    obraSocialId: string
+    plan: string
 }
 
 function StepPatientData({
     datos,
+    obrasSociales,
     onChange,
 }: {
     datos: PatientFormData
+    obrasSociales: any[]
     onChange: (key: keyof PatientFormData, val: string) => void
 }) {
     const inputClass =
@@ -505,6 +510,43 @@ function StepPatientData({
                         onChange={(val) => onChange('es_nuevo', val)}
                     />
                 </div>
+                
+                <div className="sm:col-span-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Prepaga / Obra Social *</label>
+                    <PremiumSelect
+                        value={datos.obraSocialId || ''}
+                        options={[
+                            ...obrasSociales.map(o => ({ value: o.id, label: o.nombre })),
+                            { value: 'particular', label: 'No tengo / Particular' }
+                        ]}
+                        onChange={(val) => {
+                            onChange('obraSocialId', val)
+                            onChange('plan', '') // reset plan
+                        }}
+                    />
+                </div>
+
+                {datos.obraSocialId && datos.obraSocialId !== 'particular' && (() => {
+                    const selectedObra = obrasSociales.find(o => o.id === datos.obraSocialId)
+                    const opcionesPlanes = selectedObra?.planes 
+                        ? selectedObra.planes.split(',').map((p: string) => ({ value: p.trim(), label: p.trim() })) 
+                        : []
+                    
+                    if (opcionesPlanes.length > 0) {
+                        return (
+                            <div className="sm:col-span-1">
+                                <label className="block text-xs font-medium text-gray-600 mb-1.5">Plan *</label>
+                                <PremiumSelect
+                                    value={datos.plan || ''}
+                                    options={opcionesPlanes}
+                                    onChange={(val) => onChange('plan', val)}
+                                />
+                            </div>
+                        )
+                    }
+                    return null
+                })()}
+
                 <div className="sm:col-span-2">
                     <label className="block text-xs font-medium text-gray-600 mb-1.5">Motivo (opcional)</label>
                     <textarea className={`${inputClass} resize-none focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} rows={3} placeholder="Contanos brevemente el motivo de tu consulta..." value={datos.notas} onChange={(e) => onChange('notas', e.target.value)} />
@@ -553,23 +595,28 @@ export function BookingForm() {
         email: '',
         es_nuevo: 'si',
         notas: '',
+        obraSocialId: '',
+        plan: '',
     })
 
     // Real data from Supabase
     const [professionals, setProfessionals] = useState<Professional[]>([])
     const [availableDays, setAvailableDays] = useState<AvailableDay[]>([])
+    const [obrasSociales, setObrasSociales] = useState<any[]>([])
     const [loadingDays, setLoadingDays] = useState(true)
     const [loadingProfs, setLoadingProfs] = useState(true)
 
     useEffect(() => {
         async function loadData() {
             try {
-                const [profs, days] = await Promise.all([
+                const [profs, days, obras] = await Promise.all([
                     getProfesionalesPublicos('alvarez'),
                     getTurnosDisponibles('alvarez'),
+                    getObrasSocialesPublicas('alvarez')
                 ])
                 setProfessionals(profs as Professional[])
                 setAvailableDays(days)
+                setObrasSociales(obras)
             } catch (err) {
                 console.error('Error loading booking data:', err)
             } finally {
@@ -610,6 +657,16 @@ export function BookingForm() {
             setDirection(1)
             setStep((s) => s + 1)
         } else {
+            const isParticular = datos.obraSocialId === 'particular' || !datos.obraSocialId;
+            if (isParticular) {
+                // Redirigir a WhatsApp
+                const prof = professionals.find(p => p.id === professionalId) || professionals[0]
+                const msj = `Hola, quería solicitar un turno particular para el día ${selectedDate} a las ${selectedTime} hs con el Dr/a. ${prof?.nombre} ${prof?.apellido}. Mis datos son: ${datos.nombre} ${datos.apellido}, Tel: ${datos.telefono}.`
+                const url = `https://wa.me/${CLINIC.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msj)}`
+                window.open(url, '_blank')
+                return
+            }
+
             setSubmitting(true)
             try {
                 const result = await crearReservaPublica({
@@ -623,6 +680,8 @@ export function BookingForm() {
                     email: datos.email,
                     es_nuevo: datos.es_nuevo,
                     notas: datos.notas,
+                    obraSocialId: datos.obraSocialId !== 'particular' ? datos.obraSocialId : null,
+                    planSeleccionado: datos.plan,
                 })
                 if (result.error) {
                     alert(`Error: ${result.error}`)
@@ -700,6 +759,7 @@ export function BookingForm() {
                         {step === 2 && (
                             <StepPatientData
                                 datos={datos}
+                                obrasSociales={obrasSociales}
                                 onChange={(key, val) => setDatos((prev) => ({ ...prev, [key]: val }))}
                             />
                         )}
@@ -722,12 +782,12 @@ export function BookingForm() {
                 <StaggerButton
                     onClick={handleNext}
                     disabled={!canNext[step] || submitting}
-                    text={step === 2 ? (submitting ? 'Enviando...' : 'Confirmar turno') : 'Continuar'}
+                    text={step === 2 ? (submitting ? 'Enviando...' : (datos.obraSocialId === 'particular' || !datos.obraSocialId) ? 'Solicitar por WhatsApp' : 'Confirmar turno') : 'Continuar'}
                     direction="up"
                     className="rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer h-auto border-0"
                     style={{ backgroundColor: 'var(--landing-primary, #0d9488)' }}
                 >
-                    {step === 2 ? (submitting ? 'Enviando...' : 'Confirmar turno') : 'Continuar'}
+                    {step === 2 ? (submitting ? 'Enviando...' : (datos.obraSocialId === 'particular' || !datos.obraSocialId) ? 'Solicitar por WhatsApp' : 'Confirmar turno') : 'Continuar'}
                 </StaggerButton>
             </div>
         </div>

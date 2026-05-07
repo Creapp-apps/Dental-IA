@@ -108,7 +108,7 @@ export function AgendaViewMock({
             genero: null,
             dni: null, fecha_nacimiento: null, telefono: null, email: null,
             direccion: null, ciudad: null,
-            obra_social_id: null, n_afiliado: null, alergias: null,
+            obra_social_id: null, plan_obra_social: null, n_afiliado: null, alergias: null,
             medicacion_actual: null, antecedentes: null, notas_internas: null,
             motivo_consulta: null,
             created_at: new Date().toISOString(),

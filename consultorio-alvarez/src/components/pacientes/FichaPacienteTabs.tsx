@@ -9,7 +9,9 @@ import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Papercl
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
 import { TabAdjuntos } from '@/components/pacientes/TabAdjuntos'
+import { ModalCrearPresupuesto } from '@/components/pacientes/ModalCrearPresupuesto'
 import { type EstadoTurno } from '@/types'
+import { Plus } from 'lucide-react'
 
 const TABS = [
     { id: 'consulta', label: 'Consulta', icon: Stethoscope },
@@ -30,6 +32,8 @@ interface FichaPacienteTabsProps {
     presupuestos: any[]
     adjuntos: any[]
     motivoConsulta: string | null
+    profesionales: any[]
+    tiposTratamiento: any[]
 }
 
 export function FichaPacienteTabs({
@@ -40,6 +44,8 @@ export function FichaPacienteTabs({
     presupuestos,
     adjuntos,
     motivoConsulta,
+    profesionales,
+    tiposTratamiento,
 }: FichaPacienteTabsProps) {
     const [tab, setTab] = useState<TabId>('consulta')
 
@@ -79,7 +85,14 @@ export function FichaPacienteTabs({
                     {tab === 'odontograma' && (
                         <OdontogramaInteractivo pacienteId={pacienteId} piezasData={odontograma} />
                     )}
-                    {tab === 'presupuestos' && <TabPresupuestos presupuestos={presupuestos} />}
+                    {tab === 'presupuestos' && (
+                        <TabPresupuestos 
+                            pacienteId={pacienteId} 
+                            presupuestos={presupuestos} 
+                            profesionales={profesionales} 
+                            tiposTratamiento={tiposTratamiento} 
+                        />
+                    )}
                     {tab === 'adjuntos' && <TabAdjuntos pacienteId={pacienteId} adjuntos={adjuntos} />}
                 </motion.div>
             </AnimatePresence>
@@ -188,13 +201,43 @@ const PRESUPUESTO_BADGE: Record<string, string> = {
     VENCIDO: 'bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300',
 }
 
-function TabPresupuestos({ presupuestos }: { presupuestos: any[] }) {
+function TabPresupuestos({ 
+    pacienteId,
+    presupuestos,
+    profesionales,
+    tiposTratamiento
+}: { 
+    pacienteId: string,
+    presupuestos: any[],
+    profesionales: any[],
+    tiposTratamiento: any[]
+}) {
+    const [isModalOpen, setIsModalOpen] = useState(false)
+
     return (
         <div className="glass rounded-2xl shadow-glass p-5">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-                Presupuestos ({presupuestos.length})
-            </h3>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <DollarSign className="h-4 w-4 text-muted-foreground" />
+                    Presupuestos ({presupuestos.length})
+                </h3>
+                <button
+                    onClick={() => setIsModalOpen(true)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-medium rounded-lg shadow-sm transition-colors w-full sm:w-auto justify-center"
+                >
+                    <Plus className="h-3.5 w-3.5" />
+                    Crear presupuesto
+                </button>
+            </div>
+            
+            <ModalCrearPresupuesto 
+                open={isModalOpen} 
+                onOpenChange={setIsModalOpen} 
+                pacienteId={pacienteId}
+                profesionales={profesionales}
+                tiposTratamiento={tiposTratamiento}
+            />
+            
             {presupuestos.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sin presupuestos registrados</p>
             ) : (

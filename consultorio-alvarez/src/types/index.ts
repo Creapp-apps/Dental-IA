@@ -8,8 +8,13 @@ export type PlanTenant = 'free' | 'pro' | 'elite'
 
 export interface HorarioAtencion {
   dia: 0 | 1 | 2 | 3 | 4 | 5 | 6 // 0=domingo, 1=lunes, ...
-  apertura: string // "09:00"
-  cierre: string   // "18:00"
+  apertura_manana?: string // "09:00"
+  cierre_manana?: string   // "13:00"
+  apertura_tarde?: string  // "14:00"
+  cierre_tarde?: string    // "18:00"
+  // Legacy
+  apertura?: string
+  cierre?: string
   activo: boolean
 }
 
@@ -105,6 +110,7 @@ export interface Paciente {
   direccion: string | null
   ciudad: string | null
   obra_social_id: string | null
+  plan_obra_social: string | null
   n_afiliado: string | null
   motivo_consulta: string | null
   alergias: string | null

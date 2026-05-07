@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Calendar } from '@/components/ui/calendar'
 import { GlassDatePicker } from '@/components/ui/glass-date-picker'
-import { crearTurno } from '@/lib/actions/turnos'
+import { crearTurno, editarTurno, getOcupacionProfesionalDia } from '@/lib/actions/turnos'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { type PrioridadTratamiento, PRIORIDAD_LABEL } from '@/types'
 
@@ -80,59 +80,7 @@ function GlassSelect({
     )
 }
 
-/* ──────────── Custom Glass Time Picker ──────────── */
-function GlassTimePicker({ hora, onChange }: { hora: string, onChange: (h: string) => void }) {
-    const [open, setOpen] = useState(false)
 
-    const timeSlots = Array.from({ length: 25 }, (_, i) => {
-        const h = Math.floor(i / 2) + 8
-        const m = i % 2 === 0 ? '00' : '30'
-        return `${h.toString().padStart(2, '0')}:${m}`
-    })
-
-    return (
-        <div className="relative">
-            <button
-                type="button"
-                onClick={() => setOpen(!open)}
-                className="flex w-full items-center justify-between rounded-lg border border-input px-3 py-2 text-sm bg-background hover:bg-accent focus:ring-2 focus:ring-ring/50 transition-all outline-none"
-            >
-                <span>{hora || 'Seleccionar hora'}</span>
-                <Clock className="h-4 w-4 opacity-50 shrink-0 ml-2" />
-            </button>
-            <AnimatePresence>
-                {open && (
-                    <>
-                        <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
-                        <motion.div
-                            initial={{ opacity: 0, y: -5, scale: 0.98 }}
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={{ opacity: 0, y: -5, scale: 0.98 }}
-                            transition={{ duration: 0.15, ease: 'easeOut' }}
-                            className="absolute top-full left-0 w-full mt-1.5 z-[99999] bg-background/95 supports-[backdrop-filter]:bg-background/95 backdrop-blur-3xl shadow-glass-xl rounded-xl p-1.5 overflow-y-auto max-h-[250px] border border-border custom-scrollbar"
-                        >
-                            <div className="grid grid-cols-2 gap-1">
-                                {timeSlots.map(time => (
-                                    <button
-                                        key={time}
-                                        type="button"
-                                        onClick={() => { onChange(time); setOpen(false) }}
-                                        className={`w-full text-center px-1 py-2 text-sm rounded-lg transition-colors ${hora === time
-                                            ? 'bg-primary text-primary-foreground font-medium'
-                                            : 'hover:bg-accent hover:text-accent-foreground text-foreground'
-                                            }`}
-                                    >
-                                        {time}
-                                    </button>
-                                ))}
-                            </div>
-                        </motion.div>
-                    </>
-                )}
-            </AnimatePresence>
-        </div>
-    )
-}
 
 interface NuevoTurnoModalProps {
     open: boolean
@@ -142,6 +90,7 @@ interface NuevoTurnoModalProps {
     pacientes: any[]
     defaultProfesionalId?: string
     defaultFecha?: string
+    turnoAEditar?: any
 }
 
 export function NuevoTurnoModal({
@@ -152,6 +101,7 @@ export function NuevoTurnoModal({
     pacientes,
     defaultProfesionalId = '',
     defaultFecha,
+    turnoAEditar,
 }: NuevoTurnoModalProps) {
     const [isPending, startTransition] = useTransition()
     const [pacienteId, setPacienteId] = useState('')
@@ -164,20 +114,64 @@ export function NuevoTurnoModal({
     const [prioridad, setPrioridad] = useState('')
     const [showResults, setShowResults] = useState(false)
     const [esSobreturno, setEsSobreturno] = useState(false)
+    const [ocupacion, setOcupacion] = useState<{fecha_inicio: string, fecha_fin: string}[]>([])
 
     useEffect(() => {
         if (open) {
-            setProfId(defaultProfesionalId || (profesionales[0]?.id ?? ''))
-            setFecha(defaultFecha || format(new Date(), 'yyyy-MM-dd'))
-            setPacienteId('')
-            setPacienteSearch('')
-            setTratId('')
-            setHora('09:00')
-            setNotas('')
-            setPrioridad('')
-            setEsSobreturno(false)
+            if (turnoAEditar) {
+                setPacienteId(turnoAEditar.paciente_id)
+                setPacienteSearch(`${turnoAEditar.paciente?.apellido || ''}, ${turnoAEditar.paciente?.nombre || ''}`)
+                setProfId(turnoAEditar.profesional_id)
+                setTratId(turnoAEditar.tipo_tratamiento_id)
+                setFecha(format(parseISO(turnoAEditar.fecha_inicio), 'yyyy-MM-dd'))
+                setHora(format(parseISO(turnoAEditar.fecha_inicio), 'HH:mm'))
+                setNotas(turnoAEditar.notas || '')
+                setPrioridad(turnoAEditar.prioridad_override || '')
+                setEsSobreturno(turnoAEditar.es_sobreturno || false)
+            } else {
+                setProfId(defaultProfesionalId || (profesionales[0]?.id ?? ''))
+                setFecha(defaultFecha || format(new Date(), 'yyyy-MM-dd'))
+                setPacienteId('')
+                setPacienteSearch('')
+                setTratId('')
+                setHora('09:00')
+                setNotas('')
+                setPrioridad('')
+                setEsSobreturno(false)
+            }
         }
-    }, [open, defaultProfesionalId, defaultFecha, profesionales])
+    }, [open, defaultProfesionalId, defaultFecha, profesionales, turnoAEditar])
+
+    useEffect(() => {
+        if (open && profId && fecha) {
+            startTransition(async () => {
+                const data = await getOcupacionProfesionalDia(profId, fecha)
+                setOcupacion(data)
+            })
+        }
+    }, [open, profId, fecha])
+
+    const slots = useMemo(() => {
+        const arr = []
+        for (let h = 9; h <= 18; h++) {
+            for (let m = 0; m < 60; m += 20) {
+                if (h === 18 && m > 0) continue // Solo hasta 18:00
+                arr.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`)
+            }
+        }
+        return arr
+    }, [])
+
+    function isSlotOccupied(slotHora: string) {
+        const slotDate = new Date(`${fecha}T${slotHora}:00`)
+        const slotEnd = new Date(slotDate.getTime() + 20 * 60000)
+        return ocupacion.some((t: any) => {
+            if (turnoAEditar && t.id === turnoAEditar.id) return false // No checkear contra si mismo
+            const tStart = new Date(t.fecha_inicio)
+            const tEnd = new Date(t.fecha_fin)
+            return slotDate < tEnd && slotEnd > tStart
+        })
+    }
 
     // Auto-select 'Chequeo de rutina' treatment when sobreturno is toggled
     function toggleSobreturno() {
@@ -217,22 +211,42 @@ export function NuevoTurnoModal({
         const fechaFin = new Date(fechaInicio.getTime() + duracion * 60000)
 
         startTransition(async () => {
-            const result = await crearTurno({
-                paciente_id: pacienteId,
-                profesional_id: profId,
-                tipo_tratamiento_id: tratId,
-                fecha_inicio: fechaInicio.toISOString(),
-                fecha_fin: fechaFin.toISOString(),
-                notas: notas || undefined,
-                prioridad_override: prioridad || undefined,
-                es_sobreturno: esSobreturno,
-            })
+            if (turnoAEditar) {
+                const result = await editarTurno(turnoAEditar.id, {
+                    paciente_id: pacienteId,
+                    profesional_id: profId,
+                    tipo_tratamiento_id: tratId,
+                    fecha_inicio: fechaInicio.toISOString(),
+                    fecha_fin: fechaFin.toISOString(),
+                    notas: notas || undefined,
+                    prioridad_override: prioridad || undefined,
+                    es_sobreturno: esSobreturno,
+                })
 
-            if (result.error) {
-                glassAlert.error({ title: 'Error al crear turno', description: result.error })
+                if (result.error) {
+                    glassAlert.error({ title: 'Error al editar turno', description: result.error })
+                } else {
+                    glassAlert.success({ title: 'Turno editado', description: `${format(parseISO(fecha), 'dd/MM/yyyy')} a las ${hora}` })
+                    onOpenChange(false)
+                }
             } else {
-                glassAlert.success({ title: 'Turno creado', description: `${format(parseISO(fecha), 'dd/MM/yyyy')} a las ${hora}` })
-                onOpenChange(false)
+                const result = await crearTurno({
+                    paciente_id: pacienteId,
+                    profesional_id: profId,
+                    tipo_tratamiento_id: tratId,
+                    fecha_inicio: fechaInicio.toISOString(),
+                    fecha_fin: fechaFin.toISOString(),
+                    notas: notas || undefined,
+                    prioridad_override: prioridad || undefined,
+                    es_sobreturno: esSobreturno,
+                })
+
+                if (result.error) {
+                    glassAlert.error({ title: 'Error al crear turno', description: result.error })
+                } else {
+                    glassAlert.success({ title: 'Turno creado', description: `${format(parseISO(fecha), 'dd/MM/yyyy')} a las ${hora}` })
+                    onOpenChange(false)
+                }
             }
         })
     }
@@ -241,7 +255,7 @@ export function NuevoTurnoModal({
         <GlassDialog open={open} onOpenChange={onOpenChange}>
             <GlassDialogContent className="max-w-md">
                 <GlassDialogHeader>
-                    <GlassDialogTitle>{esSobreturno ? '⚡ Sobreturno rápido' : 'Nuevo turno'}</GlassDialogTitle>
+                    <GlassDialogTitle>{turnoAEditar ? 'Editar turno' : (esSobreturno ? '⚡ Sobreturno rápido' : 'Nuevo turno')}</GlassDialogTitle>
                 </GlassDialogHeader>
 
                 <div className="space-y-4 py-2">
@@ -345,7 +359,44 @@ export function NuevoTurnoModal({
                         </div>
                         <div className="space-y-1.5">
                             <Label>Hora *</Label>
-                            <GlassTimePicker hora={hora} onChange={setHora} />
+                            <Input 
+                                type="time" 
+                                value={hora} 
+                                onChange={(e) => setHora(e.target.value)} 
+                            />
+                        </div>
+                    </div>
+
+                    {/* Disponibilidad */}
+                    <div className="space-y-1.5 pt-1">
+                        <div className="flex items-center justify-between">
+                            <Label>Disponibilidad del profesional</Label>
+                            <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
+                                <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-emerald-500/50"></span> Libre</span>
+                                <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-red-500/50"></span> Ocupado</span>
+                            </span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-black/20 border border-white/5 max-h-[135px] overflow-y-auto custom-scrollbar">
+                            {slots.map(s => {
+                                const ocupado = isSlotOccupied(s)
+                                return (
+                                    <button
+                                        key={s}
+                                        type="button"
+                                        disabled={ocupado}
+                                        onClick={() => setHora(s)}
+                                        className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-colors border ${
+                                            ocupado 
+                                                ? "bg-red-500/10 text-red-400/50 border-red-500/10 cursor-not-allowed" 
+                                                : hora === s 
+                                                    ? "bg-primary text-primary-foreground border-primary" 
+                                                    : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                                        }`}
+                                    >
+                                        {s}
+                                    </button>
+                                )
+                            })}
                         </div>
                     </div>
 
@@ -383,7 +434,7 @@ export function NuevoTurnoModal({
                         Cancelar
                     </GlassButton>
                     <GlassButton onClick={handleGuardar} loading={isPending}>
-                        Crear turno
+                        {turnoAEditar ? 'Guardar cambios' : 'Crear turno'}
                     </GlassButton>
                 </GlassDialogFooter>
             </GlassDialogContent>

@@ -14,6 +14,7 @@ async function getTenantId() {
 }
 
 export async function crearPaciente(formData: {
+    nro_historia_clinica?: string
     nombre: string
     apellido: string
     foto_url?: string
@@ -26,6 +27,7 @@ export async function crearPaciente(formData: {
     direccion?: string
     ciudad?: string
     obra_social_id?: string
+    plan_obra_social?: string
     n_afiliado?: string
     alergias?: string
     medicacion_actual?: string
@@ -36,19 +38,11 @@ export async function crearPaciente(formData: {
     const tenantId = await getTenantId()
     if (!tenantId) return { error: 'Tenant no encontrado' }
 
-    // Generar nro_historia_clinica
-    const { count } = await supabase
-        .from('pacientes')
-        .select('id', { count: 'exact', head: true })
-        .eq('tenant_id', tenantId)
-
-    const nro = `HC-${String((count ?? 0) + 1).padStart(5, '0')}`
-
     const { data, error } = await supabase
         .from('pacientes')
         .insert({
             tenant_id: tenantId,
-            nro_historia_clinica: nro,
+            nro_historia_clinica: formData.nro_historia_clinica || null,
             nombre: formData.nombre,
             apellido: formData.apellido,
             foto_url: formData.foto_url || null,
@@ -61,6 +55,7 @@ export async function crearPaciente(formData: {
             direccion: formData.direccion || null,
             ciudad: formData.ciudad || null,
             obra_social_id: formData.obra_social_id || null,
+            plan_obra_social: formData.plan_obra_social || null,
             n_afiliado: formData.n_afiliado || null,
             alergias: formData.alergias || null,
             medicacion_actual: formData.medicacion_actual || null,
@@ -77,6 +72,7 @@ export async function crearPaciente(formData: {
 }
 
 export async function actualizarPaciente(id: string, formData: {
+    nro_historia_clinica?: string
     nombre?: string
     apellido?: string
     foto_url?: string
@@ -89,6 +85,7 @@ export async function actualizarPaciente(id: string, formData: {
     direccion?: string
     ciudad?: string
     obra_social_id?: string
+    plan_obra_social?: string
     n_afiliado?: string
     alergias?: string
     medicacion_actual?: string
@@ -111,6 +108,20 @@ export async function actualizarPaciente(id: string, formData: {
 
     revalidatePath('/pacientes')
     revalidatePath(`/pacientes/${id}`)
+    return { success: true }
+}
+
+export async function eliminarPaciente(id: string) {
+    const supabase = await createClient()
+
+    const { error } = await supabase
+        .from('pacientes')
+        .delete()
+        .eq('id', id)
+
+    if (error) return { error: error.message }
+
+    revalidatePath('/pacientes')
     return { success: true }
 }
 

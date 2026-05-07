@@ -36,7 +36,7 @@ export default async function AdminLayout({
     return (
         <>
             <style dangerouslySetInnerHTML={{ __html: customStyle }} />
-            <div className="flex h-screen overflow-hidden bg-background relative selection:bg-primary/30 flex-col lg:flex-row">
+            <div id="admin-layout-root" className="flex h-screen overflow-hidden bg-background relative selection:bg-primary/30 flex-col lg:flex-row">
                 <AdminBackground colorHex={primaryStr} />
                 <div className="relative z-10 flex w-full h-full flex-col lg:flex-row">
                     <NotificationProvider>

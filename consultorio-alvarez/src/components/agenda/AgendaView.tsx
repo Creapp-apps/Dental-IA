@@ -8,12 +8,12 @@ import {
     startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Plus, Clock } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { NuevoTurnoModal } from '@/components/agenda/NuevoTurnoModal'
-import { cambiarEstadoTurno } from '@/lib/actions/turnos'
+import { cambiarEstadoTurno, eliminarTurno } from '@/lib/actions/turnos'
 import { glassAlert } from '@/components/ui/glass-alert'
 import {
     type EstadoTurno,
@@ -64,7 +64,27 @@ export function AgendaView({
     const [diaSeleccionado, setDiaSeleccionado] = useState(new Date())
     const [modalOpen, setModalOpen] = useState(false)
     const [modalProfId, setModalProfId] = useState<string>('')
+    const [turnoAEditar, setTurnoAEditar] = useState<any>(null)
     const [isPending, startTransition] = useTransition()
+    const [isFullscreen, setIsFullscreen] = useState(false)
+
+    useEffect(() => {
+        const handleFullscreenChange = () => {
+            setIsFullscreen(!!document.fullscreenElement)
+        }
+        document.addEventListener('fullscreenchange', handleFullscreenChange)
+        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
+    }, [])
+
+    function toggleFullscreen() {
+        const el = document.getElementById('admin-layout-root')
+        if (!el) return
+        if (!document.fullscreenElement) {
+            el.requestFullscreen().catch(err => console.error('Error attempting to enable fullscreen:', err))
+        } else {
+            document.exitFullscreen()
+        }
+    }
 
     // Auto-focus incoming webhook coordinates
     const searchParams = useSearchParams()
@@ -90,6 +110,18 @@ export function AgendaView({
             }, 500)
         }
     }, [urlTurnoId, turnosIniciales])
+
+    const editTurnoId = searchParams.get('edit')
+    useEffect(() => {
+        if (!editTurnoId || !turnosIniciales) return
+        const turno = turnosIniciales.find(t => t.id === editTurnoId)
+        if (turno) {
+            setTurnoAEditar(turno)
+            setModalProfId(turno.profesional_id)
+            setModalOpen(true)
+        }
+    }, [editTurnoId, turnosIniciales])
+
 
     // ── Compute visible days based on view mode ────────────────
     const diasVisibles = useMemo(() => {
@@ -162,6 +194,22 @@ export function AgendaView({
         })
     }
 
+    function handleEditTurno(turno: any) {
+        setTurnoAEditar(turno)
+        setModalProfId(turno.profesional_id)
+        setModalOpen(true)
+    }
+
+    function handleDeleteTurno(id: string) {
+        if (window.confirm('¿Estás seguro de que querés eliminar este turno? Esta acción no se puede deshacer.')) {
+            startTransition(async () => {
+                const res = await eliminarTurno(id)
+                if (res.error) glassAlert.error({ title: 'Error al eliminar', description: res.error })
+                else glassAlert.success({ title: 'Turno eliminado correctamente' })
+            })
+        }
+    }
+
     function abrirModalConProf(profId: string) {
         setModalProfId(profId)
         setModalOpen(true)
@@ -209,10 +257,19 @@ export function AgendaView({
                     </span>
                 </div>
 
-                <GlassButton onClick={() => { setModalProfId(profesionales[0]?.id ?? ''); setModalOpen(true) }}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Nuevo turno
-                </GlassButton>
+                <div className="flex items-center gap-2">
+                    <GlassButton onClick={toggleFullscreen} variant="glass" size="icon" title="Pantalla completa">
+                        {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+                    </GlassButton>
+                    <GlassButton onClick={() => { 
+                        setTurnoAEditar(null)
+                        setModalProfId(profesionales[0]?.id ?? '')
+                        setModalOpen(true) 
+                    }}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Nuevo turno
+                    </GlassButton>
+                </div>
             </motion.div>
 
             {/* Selector de día (strip) — hidden in 'hoy' mode */}
@@ -321,6 +378,8 @@ export function AgendaView({
                                                     colorProf={prof.color_agenda}
                                                     index={i}
                                                     onCambiarEstado={handleCambiarEstado}
+                                                    onEdit={handleEditTurno}
+                                                    onDelete={handleDeleteTurno}
                                                     isPending={isPending}
                                                 />
                                             </div>
@@ -336,12 +395,16 @@ export function AgendaView({
             {/* Modal nuevo turno */}
             <NuevoTurnoModal
                 open={modalOpen}
-                onOpenChange={setModalOpen}
+                onOpenChange={(o) => {
+                    setModalOpen(o)
+                    if (!o) setTurnoAEditar(null)
+                }}
                 profesionales={profesionales}
                 tiposTratamiento={tiposTratamiento}
                 pacientes={pacientes}
                 defaultProfesionalId={modalProfId}
                 defaultFecha={format(diaSeleccionado, 'yyyy-MM-dd')}
+                turnoAEditar={turnoAEditar}
             />
         </div>
     )
@@ -354,12 +417,16 @@ function TurnoAgendaCard({
     colorProf,
     index,
     onCambiarEstado,
+    onEdit,
+    onDelete,
     isPending,
 }: {
     turno: any
     colorProf: string
     index: number
     onCambiarEstado: (id: string, estado: EstadoTurno) => void
+    onEdit: (turno: any) => void
+    onDelete: (id: string) => void
     isPending: boolean
 }) {
     const estado = turno.estado as EstadoTurno
@@ -368,10 +435,13 @@ function TurnoAgendaCard({
     return (
         <motion.div
             className={cn(
-                'glass rounded-xl shadow-glass hover:shadow-glass-lg transition-shadow',
+                'rounded-xl shadow-glass hover:shadow-glass-lg transition-shadow backdrop-blur-md border border-white/5',
                 isST ? 'p-2.5' : 'p-3.5'
             )}
-            style={{ borderLeft: `3px solid ${isST ? '#f59e0b' : (turno.tipo_tratamiento?.color ?? colorProf)}` }}
+            style={{ 
+                borderLeft: `3px solid ${isST ? '#f59e0b' : (turno.tipo_tratamiento?.color ?? colorProf)}`,
+                backgroundColor: `${isST ? '#f59e0b' : (turno.tipo_tratamiento?.color ?? colorProf)}33`
+            }}
             initial={{ opacity: 0, x: -16, filter: 'blur(4px)' }}
             animate={{ opacity: 1, x: 0, filter: 'blur(0px)' }}
             transition={{ delay: index * 0.05, type: 'spring', stiffness: 260, damping: 24 }}
@@ -426,6 +496,21 @@ function TurnoAgendaCard({
                         Cancelar
                     </GlassButton>
                 )}
+                {estado === 'ATENDIDO' && (
+                    <GlassButton size="sm" variant="glass" className="h-6 text-xs px-2"
+                        onClick={() => onCambiarEstado(turno.id, 'PENDIENTE')} disabled={isPending}>
+                        Revertir a pendiente
+                    </GlassButton>
+                )}
+                <div className="flex-1"></div>
+                <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    onClick={() => onEdit(turno)} disabled={isPending} title="Editar">
+                    <Edit2 className="h-3 w-3" />
+                </GlassButton>
+                <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                    onClick={() => onDelete(turno.id)} disabled={isPending} title="Eliminar">
+                    <Trash2 className="h-3 w-3" />
+                </GlassButton>
             </div>
         </motion.div>
     )

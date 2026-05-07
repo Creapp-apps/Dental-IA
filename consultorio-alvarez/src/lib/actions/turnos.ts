@@ -148,3 +148,73 @@ export async function buscarPacientes(query: string) {
     if (error) { console.error('buscarPacientes:', error); return [] }
     return data ?? []
 }
+
+export async function getOcupacionProfesionalDia(profesionalId: string, fecha: string) {
+    const supabase = await createClient()
+    const tenantId = await getTenantId()
+    if (!tenantId) return []
+
+    const localStart = new Date(`${fecha}T00:00:00-03:00`).toISOString()
+    const localEnd = new Date(`${fecha}T23:59:59-03:00`).toISOString()
+
+    const { data } = await supabase
+        .from('turnos')
+        .select('fecha_inicio, fecha_fin')
+        .eq('tenant_id', tenantId)
+        .eq('profesional_id', profesionalId)
+        .in('estado', ['PENDIENTE', 'CONFIRMADO', 'EN_SALA'])
+        .gte('fecha_inicio', localStart)
+        .lte('fecha_inicio', localEnd)
+
+    return data ?? []
+}
+
+export async function editarTurno(turnoId: string, formData: {
+    paciente_id?: string
+    profesional_id: string
+    tipo_tratamiento_id: string
+    fecha_inicio: string
+    fecha_fin: string
+    notas?: string
+    prioridad_override?: string
+    es_sobreturno?: boolean
+}) {
+    const supabase = await createClient()
+
+    const { data, error } = await supabase
+        .from('turnos')
+        .update({
+            paciente_id: formData.paciente_id,
+            profesional_id: formData.profesional_id,
+            tipo_tratamiento_id: formData.tipo_tratamiento_id,
+            fecha_inicio: formData.fecha_inicio,
+            fecha_fin: formData.fecha_fin,
+            notas: formData.notas || null,
+            prioridad_override: formData.prioridad_override || null,
+            es_sobreturno: formData.es_sobreturno ?? false,
+        })
+        .eq('id', turnoId)
+        .select()
+        .single()
+
+    if (error) return { error: error.message }
+
+    revalidatePath('/agenda')
+    revalidatePath('/admin')
+    return { data }
+}
+
+export async function eliminarTurno(turnoId: string) {
+    const supabase = await createClient()
+
+    const { error } = await supabase
+        .from('turnos')
+        .delete()
+        .eq('id', turnoId)
+
+    if (error) return { error: error.message }
+
+    revalidatePath('/agenda')
+    revalidatePath('/admin')
+    return { success: true }
+}

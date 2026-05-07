@@ -1,8 +1,14 @@
 'use client'
 
+import { useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
+import { Edit2, Trash2 } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
+import { GlassButton } from '@/components/ui/glass-button'
+import { glassAlert } from '@/components/ui/glass-alert'
+import { eliminarTurno } from '@/lib/actions/turnos'
 import { PRIORIDAD_COLOR, PRIORIDAD_LABEL, type EstadoTurno, type PrioridadTratamiento } from '@/types'
 
 interface TurnoCardGlassProps {
@@ -26,10 +32,22 @@ interface TurnoCardGlassProps {
 export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps) {
     const prioridad = (turno.prioridad_override ?? turno.tipo_tratamiento?.prioridad ?? 'NORMAL') as PrioridadTratamiento
     const estado = turno.estado as EstadoTurno
+    const [isPending, startTransition] = useTransition()
+    const router = useRouter()
+
+    function handleDelete() {
+        if (window.confirm('¿Estás seguro de que querés eliminar este turno? Esta acción no se puede deshacer.')) {
+            startTransition(async () => {
+                const res = await eliminarTurno(turno.id)
+                if (res.error) glassAlert.error({ title: 'Error al eliminar', description: res.error })
+                else glassAlert.success({ title: 'Turno eliminado correctamente' })
+            })
+        }
+    }
 
     return (
         <motion.div
-            className="flex items-start gap-3 glass rounded-xl p-3.5 shadow-glass hover:shadow-glass-lg transition-shadow cursor-default"
+            className="group flex items-start gap-3 glass rounded-xl p-3.5 shadow-glass hover:shadow-glass-lg transition-shadow cursor-default"
             style={{ borderLeft: `3px solid ${colorProf}` }}
             initial={{ opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
@@ -68,8 +86,20 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
                 </p>
             </div>
 
-            {/* Badge */}
-            <StatusBadge status={estado} className="shrink-0" />
+            {/* Badge & Actions */}
+            <div className="shrink-0 flex flex-col items-end gap-2">
+                <StatusBadge status={estado} />
+                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                        onClick={() => router.push(`/agenda?edit=${turno.id}`)} disabled={isPending} title="Editar">
+                        <Edit2 className="h-3 w-3" />
+                    </GlassButton>
+                    <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                        onClick={handleDelete} disabled={isPending} title="Eliminar">
+                        <Trash2 className="h-3 w-3" />
+                    </GlassButton>
+                </div>
+            </div>
         </motion.div>
     )
 }

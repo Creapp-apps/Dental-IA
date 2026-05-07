@@ -13,10 +13,11 @@ import { GlassButton } from '@/components/ui/glass-button'
 import { GlassDatePicker } from '@/components/ui/glass-date-picker'
 import { GlassSelect } from '@/components/ui/glass-select'
 import { GlassPhotoCapture } from '@/components/ui/glass-photo-capture'
-import { crearPaciente } from '@/lib/actions/pacientes'
+import { crearPaciente, actualizarPaciente } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
 
 const schema = z.object({
+    nro_historia_clinica: z.string().optional(),
     nombre: z.string().min(2, 'Mínimo 2 caracteres'),
     apellido: z.string().min(2, 'Mínimo 2 caracteres'),
     foto_url: z.string().optional(),
@@ -29,6 +30,7 @@ const schema = z.object({
     direccion: z.string().optional(),
     ciudad: z.string().optional(),
     obra_social_id: z.string().optional(),
+    plan_obra_social: z.string().optional(),
     n_afiliado: z.string().optional(),
     motivo_consulta: z.string().optional(),
     alergias: z.string().optional(),
@@ -41,11 +43,12 @@ type FormData = z.infer<typeof schema>
 
 // ── Apple-style staggered spring animation ─────────────────────
 const sectionVariants = {
-    hidden: { opacity: 0, x: -40, filter: 'blur(6px)' },
+    hidden: { opacity: 0, x: -40, filter: 'blur(6px)', zIndex: 0 },
     visible: (i: number) => ({
         opacity: 1,
         x: 0,
         filter: 'blur(0px)',
+        zIndex: 50 - i,
         transition: {
             delay: i * 0.08,
             type: 'spring' as const,
@@ -55,25 +58,65 @@ const sectionVariants = {
     }),
 }
 
-export function FormPacienteReal({ obrasSociales }: { obrasSociales: any[] }) {
+export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: any[], paciente?: any }) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
         resolver: zodResolver(schema),
-        defaultValues: { genero: '', obra_social_id: '' },
+        defaultValues: paciente ? {
+            nro_historia_clinica: paciente.nro_historia_clinica || '',
+            nombre: paciente.nombre || '',
+            apellido: paciente.apellido || '',
+            foto_url: paciente.foto_url || '',
+            dni: paciente.dni || '',
+            cuit: paciente.cuit || '',
+            fecha_nacimiento: paciente.fecha_nacimiento || '',
+            genero: paciente.genero || '',
+            telefono: paciente.telefono || '',
+            email: paciente.email || '',
+            direccion: paciente.direccion || '',
+            ciudad: paciente.ciudad || '',
+            obra_social_id: paciente.obra_social_id || '',
+            plan_obra_social: paciente.plan_obra_social || '',
+            n_afiliado: paciente.n_afiliado || '',
+            motivo_consulta: paciente.motivo_consulta || '',
+            alergias: paciente.alergias || '',
+            medicacion_actual: paciente.medicacion_actual || '',
+            antecedentes: paciente.antecedentes || '',
+            notas_internas: paciente.notas_internas || '',
+        } : { genero: '', obra_social_id: '' },
     })
 
     function onSubmit(data: FormData) {
         startTransition(async () => {
-            const result = await crearPaciente(data)
-            if (result.error) {
-                glassAlert.error({ title: 'Error al crear paciente', description: result.error })
+            if (paciente) {
+                const result = await actualizarPaciente(paciente.id, data)
+                if (result.error) {
+                    glassAlert.error({ title: 'Error al actualizar paciente', description: result.error })
+                } else {
+                    glassAlert.success({ title: 'Paciente actualizado' })
+                    router.push(`/pacientes/${paciente.id}`)
+                }
             } else {
-                glassAlert.success({ title: 'Paciente creado', description: `HC: ${result.data?.nro_historia_clinica}` })
-                router.push(`/pacientes/${result.data?.id}`)
+                const result = await crearPaciente(data)
+                if (result.error) {
+                    glassAlert.error({ title: 'Error al crear paciente', description: result.error })
+                } else {
+                    glassAlert.success({ title: 'Paciente creado', description: `HC: ${result.data?.nro_historia_clinica}` })
+                    router.push(`/pacientes/${result.data?.id}`)
+                }
             }
         })
     }
+
+    const selectedObraId = watch('obra_social_id')
+    const selectedObra = obrasSociales.find(os => os.id === selectedObraId)
+    
+    // Parse the comma-separated string into an array
+    const rawPlanes = selectedObra?.planes || ''
+    const planesDisponibles: string[] = typeof rawPlanes === 'string' && rawPlanes.trim() !== '' 
+        ? rawPlanes.split(',').map(p => p.trim()).filter(Boolean) 
+        : (Array.isArray(rawPlanes) ? rawPlanes : [])
 
     return (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
@@ -106,7 +149,10 @@ export function FormPacienteReal({ obrasSociales }: { obrasSociales: any[] }) {
                 className="glass rounded-2xl shadow-glass p-5 space-y-4 relative z-40"
             >
                 <h3 className="text-sm font-semibold text-foreground">Datos personales</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
+                    <Field label="Nº Hist. Clínica" error={errors.nro_historia_clinica?.message}>
+                        <Input {...register('nro_historia_clinica')} placeholder="HC-123" />
+                    </Field>
                     <Field label="Nombre *" error={errors.nombre?.message}>
                         <Input {...register('nombre')} placeholder="Juan" />
                     </Field>
@@ -178,13 +224,24 @@ export function FormPacienteReal({ obrasSociales }: { obrasSociales: any[] }) {
                 className="glass rounded-2xl shadow-glass p-5 space-y-4 relative z-20"
             >
                 <h3 className="text-sm font-semibold text-foreground">Obra Social</h3>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-3 gap-3">
                     <Field label="Obra Social">
                         <GlassSelect
                             value={watch('obra_social_id') || ''}
-                            onChange={v => setValue('obra_social_id', v)}
+                            onChange={v => {
+                                setValue('obra_social_id', v)
+                                setValue('plan_obra_social', '')
+                            }}
                             options={obrasSociales.map((os: any) => ({ value: os.id, label: os.nombre }))}
                             placeholder="Particular"
+                        />
+                    </Field>
+                    <Field label="Plan">
+                        <GlassSelect
+                            value={watch('plan_obra_social') || ''}
+                            onChange={v => setValue('plan_obra_social', v)}
+                            options={planesDisponibles.map((plan: string) => ({ value: plan, label: plan }))}
+                            placeholder={planesDisponibles.length > 0 ? "Seleccionar plan" : "—"}
                         />
                     </Field>
                     <Field label="N° Afiliado">
@@ -230,7 +287,7 @@ export function FormPacienteReal({ obrasSociales }: { obrasSociales: any[] }) {
                     Cancelar
                 </GlassButton>
                 <GlassButton type="submit" loading={isPending}>
-                    Crear paciente
+                    {paciente ? 'Guardar cambios' : 'Crear paciente'}
                 </GlassButton>
             </motion.div>
         </form>

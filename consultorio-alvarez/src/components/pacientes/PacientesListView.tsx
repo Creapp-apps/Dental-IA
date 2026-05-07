@@ -4,10 +4,12 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Search, Plus, Phone, Mail, User } from 'lucide-react'
+import { Search, Plus, Phone, Mail, User, Pencil, Trash } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { GlassButton } from '@/components/ui/glass-button'
 import { cn } from '@/lib/utils'
+import { eliminarPaciente } from '@/lib/actions/pacientes'
+import { glassAlert } from '@/components/ui/glass-alert'
 
 // ── Apple-style staggered spring animation ─────────────────────
 const sectionVariants = {
@@ -45,6 +47,27 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
         setQuery(q)
         const url = q ? `/pacientes?q=${encodeURIComponent(q)}` : '/pacientes'
         router.replace(url, { scroll: false })
+    }
+
+    async function handleEliminar(e: React.MouseEvent, id: string, nombre: string) {
+        e.preventDefault()
+        e.stopPropagation()
+        if (confirm(`¿Estás seguro que querés eliminar a ${nombre}? Esta acción no se puede deshacer y borrará todo su historial y turnos.`)) {
+            const res = await eliminarPaciente(id)
+            if (res.error) {
+                glassAlert.error({ title: 'Error', description: res.error })
+            } else {
+                glassAlert.success({ title: 'Paciente eliminado' })
+            }
+        }
+    }
+
+    function handleEditar(e: React.MouseEvent, id: string) {
+        e.preventDefault()
+        e.stopPropagation()
+        startNavigation(() => {
+            router.push(`/pacientes/${id}/editar`)
+        })
     }
 
     return (
@@ -130,6 +153,24 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                                                 {p.obra_social.nombre}
                                             </span>
                                         )}
+
+                                        {/* Acciones */}
+                                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                                            <button
+                                                onClick={(e) => handleEditar(e, p.id)}
+                                                className="p-2 hover:bg-white/10 rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+                                                title="Editar"
+                                            >
+                                                <Pencil className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                                onClick={(e) => handleEliminar(e, p.id, `${p.nombre} ${p.apellido}`)}
+                                                className="p-2 hover:bg-destructive/10 rounded-lg transition-colors text-muted-foreground hover:text-destructive"
+                                                title="Eliminar"
+                                            >
+                                                <Trash className="h-4 w-4" />
+                                            </button>
+                                        </div>
                                     </Link>
                                 </motion.div>
                             )

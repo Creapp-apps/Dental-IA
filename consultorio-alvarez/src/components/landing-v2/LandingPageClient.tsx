@@ -8,6 +8,7 @@ import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { HeroSection } from '@/components/landing-v2/sections/HeroSection'
 import { ServicesSection } from '@/components/landing-v2/sections/ServicesSection'
 import { TeamSection } from '@/components/landing-v2/sections/TeamSection'
+import { ObrasSocialesSection } from '@/components/landing-v2/sections/ObrasSocialesSection'
 import { BookingSection } from '@/components/landing-v2/sections/BookingSection'
 import { FooterSection } from '@/components/landing-v2/sections/FooterSection'
 import type { LandingConfig } from '@/lib/types/landing'
@@ -33,9 +34,10 @@ interface LandingPageClientProps {
     slug: string
     config: LandingConfig & { id: string; tenant_id: string }
     professionals: any[]
+    obrasSociales: any[]
 }
 
-export function LandingPageClient({ slug, config, professionals }: LandingPageClientProps) {
+export function LandingPageClient({ slug, config, professionals, obrasSociales }: LandingPageClientProps) {
     const [scrollProgress, setScrollProgress] = useState(0)
     const mainRef = useRef<HTMLDivElement>(null)
     const bgRef = useRef<HTMLDivElement>(null)
@@ -94,6 +96,9 @@ export function LandingPageClient({ slug, config, professionals }: LandingPageCl
                 <HeroSection onBookingClick={scrollToBooking} config={config} />
                 <ServicesSection config={config} />
                 <TeamSection config={config} professionals={professionals} />
+                {obrasSociales && obrasSociales.length > 0 && (
+                    <ObrasSocialesSection config={config} obrasSociales={obrasSociales} />
+                )}
                 <BookingSection config={config} />
                 <FooterSection config={config} />
             </main>

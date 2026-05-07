@@ -3,7 +3,7 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera } from 'lucide-react'
+import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,8 +11,9 @@ import { cn } from '@/lib/utils'
 import {
     actualizarTenant, actualizarHorarios,
     crearProfesional, actualizarProfesional, toggleProfesionalEstado,
-    crearObraSocial, toggleObraSocial,
+    crearObraSocial, toggleObraSocial, actualizarObraSocial, eliminarObraSocial,
     crearTipoTratamiento, toggleTipoTratamiento,
+    actualizarTipoTratamiento, eliminarTipoTratamiento,
 } from '@/lib/actions/config'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { TabMiWeb } from '@/components/config/TabMiWeb'
@@ -91,8 +92,9 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
         direccion: tenant.direccion || '', ciudad: tenant.ciudad || '',
         provincia: tenant.provincia || '', cuit: tenant.cuit || '',
     })
-    const [newTrat, setNewTrat] = useState({ nombre: '', duracion_minutos: '30', precio_referencia: '', color: '#3b82f6' })
+    const [tratForm, setTratForm] = useState({ nombre: '', duracion_minutos: '30', precio_referencia: '', color: '#3b82f6' })
     const [showTratForm, setShowTratForm] = useState(false)
+    const [editingTratId, setEditingTratId] = useState<string | null>(null)
 
     function guardar() {
         startTransition(async () => {
@@ -101,16 +103,56 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
         })
     }
 
-    function agregarTratamiento() {
-        if (!newTrat.nombre) return
+    function abrirNuevoTratamiento() {
+        setTratForm({ nombre: '', duracion_minutos: '30', precio_referencia: '', color: '#3b82f6' })
+        setEditingTratId(null)
+        setShowTratForm(true)
+    }
+
+    function abrirEditarTratamiento(t: any) {
+        setTratForm({
+            nombre: t.nombre,
+            duracion_minutos: String(t.duracion_minutos || 30),
+            precio_referencia: t.precio_referencia ? String(t.precio_referencia) : '',
+            color: t.color || '#3b82f6'
+        })
+        setEditingTratId(t.id)
+        setShowTratForm(true)
+    }
+
+    function guardarTratamiento() {
+        if (!tratForm.nombre) return
         startTransition(async () => {
-            const r = await crearTipoTratamiento({
-                nombre: newTrat.nombre, duracion_minutos: parseInt(newTrat.duracion_minutos) || 30,
-                precio_referencia: parseFloat(newTrat.precio_referencia) || undefined,
-                color: newTrat.color,
-            })
+            const dataToSave = {
+                nombre: tratForm.nombre,
+                duracion_minutos: parseInt(tratForm.duracion_minutos) || 30,
+                precio_referencia: parseFloat(tratForm.precio_referencia) || undefined,
+                color: tratForm.color,
+            }
+
+            let r;
+            if (editingTratId) {
+                r = await actualizarTipoTratamiento(editingTratId, dataToSave)
+            } else {
+                r = await crearTipoTratamiento(dataToSave)
+            }
+
             if (r.error) glassAlert.error({ title: 'Error', description: r.error })
-            else { glassAlert.success({ title: 'Tratamiento creado' }); setNewTrat({ nombre: '', duracion_minutos: '30', precio_referencia: '', color: '#3b82f6' }); setShowTratForm(false) }
+            else {
+                glassAlert.success({ title: editingTratId ? 'Tratamiento actualizado' : 'Tratamiento creado' })
+                setTratForm({ nombre: '', duracion_minutos: '30', precio_referencia: '', color: '#3b82f6' })
+                setEditingTratId(null)
+                setShowTratForm(false)
+            }
+        })
+    }
+
+    function borrarTratamiento(id: string) {
+        if (!window.confirm("¿Seguro que deseas eliminar este tratamiento? Esta acción no se puede deshacer y puede afectar la visualización de turnos históricos correspondientes.")) return;
+        startTransition(async () => {
+            const r = await eliminarTipoTratamiento(id)
+            if (r.error) glassAlert.error({ title: 'Error al eliminar', description: r.error })
+            else glassAlert.success({ title: 'Tratamiento eliminado' })
         })
     }
 
@@ -141,39 +183,67 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
             <div className="glass rounded-2xl shadow-glass p-5 space-y-3">
                 <div className="flex items-center justify-between">
                     <h3 className="text-sm font-semibold text-foreground">Tipos de tratamiento ({tiposTratamiento.length})</h3>
-                    <GlassButton size="sm" variant="glass" onClick={() => setShowTratForm(!showTratForm)}>
-                        <Plus className="h-3 w-3 mr-1" />Agregar
+                    <GlassButton size="sm" variant="glass" onClick={() => {
+                        if (showTratForm) {
+                            setShowTratForm(false)
+                            setEditingTratId(null)
+                        } else {
+                            abrirNuevoTratamiento()
+                        }
+                    }}>
+                        {showTratForm ? <X className="h-3 w-3 mr-1" /> : <Plus className="h-3 w-3 mr-1" />}
+                        {showTratForm ? 'Cancelar' : 'Agregar'}
                     </GlassButton>
                 </div>
                 {showTratForm && (
                     <div className="glass-subtle rounded-xl p-3 space-y-2">
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
-                            <Input placeholder="Nombre" value={newTrat.nombre} onChange={e => setNewTrat(f => ({ ...f, nombre: e.target.value }))} />
+                            <Input placeholder="Nombre" value={tratForm.nombre} onChange={e => setTratForm(f => ({ ...f, nombre: e.target.value }))} />
 
                             <div className="relative flex items-center">
-                                <Input type="number" className="pr-16 text-right" placeholder="Duración" value={newTrat.duracion_minutos} onChange={e => setNewTrat(f => ({ ...f, duracion_minutos: e.target.value }))} />
+                                <Input type="number" className="pr-16 text-right" placeholder="Duración" value={tratForm.duracion_minutos} onChange={e => setTratForm(f => ({ ...f, duracion_minutos: e.target.value }))} />
                                 <span className="absolute right-3 text-xs text-muted-foreground pointer-events-none">minutos</span>
                             </div>
 
                             <div className="relative flex items-center">
                                 <span className="absolute left-3 text-xs text-muted-foreground pointer-events-none">$</span>
-                                <Input type="number" className="pl-6" placeholder="Precio" value={newTrat.precio_referencia} onChange={e => setNewTrat(f => ({ ...f, precio_referencia: e.target.value }))} />
+                                <Input type="number" className="pl-6" placeholder="Precio" value={tratForm.precio_referencia} onChange={e => setTratForm(f => ({ ...f, precio_referencia: e.target.value }))} />
                             </div>
 
                             <div className="flex gap-1">
-                                <input type="color" value={newTrat.color} onChange={e => setNewTrat(f => ({ ...f, color: e.target.value }))} className="h-9 w-9 rounded cursor-pointer shrink-0" />
-                                <GlassButton size="sm" onClick={agregarTratamiento} loading={isPending} className="flex-1">Crear</GlassButton>
+                                <input type="color" value={tratForm.color} onChange={e => setTratForm(f => ({ ...f, color: e.target.value }))} className="h-9 w-9 rounded cursor-pointer shrink-0" />
+                                <GlassButton size="sm" onClick={guardarTratamiento} loading={isPending} className="flex-1">
+                                    {editingTratId ? 'Guardar' : 'Crear'}
+                                </GlassButton>
                             </div>
                         </div>
                     </div>
                 )}
                 <div className="space-y-1">
                     {tiposTratamiento.map((t: any) => (
-                        <div key={t.id} className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-muted/30 transition-colors">
+                        <div key={t.id} className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-muted/30 transition-colors group">
                             <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
                             <span className="text-sm font-medium text-foreground flex-1">{t.nombre}</span>
                             <span className="text-xs text-muted-foreground">{t.duracion_minutos}min</span>
                             {t.precio_referencia && <span className="text-xs text-muted-foreground">${Number(t.precio_referencia).toLocaleString('es-AR')}</span>}
+                            
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                                <button
+                                    onClick={() => abrirEditarTratamiento(t)}
+                                    className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
+                                    title="Modificar tratamiento"
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={() => borrarTratamiento(t.id)}
+                                    className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                    title="Eliminar tratamiento"
+                                >
+                                    <Trash className="h-4 w-4" />
+                                </button>
+                            </div>
+
                             <button onClick={() => { startTransition(async () => { await toggleTipoTratamiento(t.id, !t.activo) }) }}
                                 className={cn('text-xs px-2 py-0.5 rounded-lg cursor-pointer', t.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400')}>
                                 {t.activo ? 'Activo' : 'Inactivo'}
@@ -396,16 +466,55 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
 function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
     const [isPending, startTransition] = useTransition()
     const [showForm, setShowForm] = useState(false)
+    const [editingId, setEditingId] = useState<string | null>(null)
     const [nombre, setNombre] = useState('')
     const [codigo, setCodigo] = useState('')
     const [planes, setPlanes] = useState('')
 
-    function agregar() {
+    function abrirNueva() {
+        setNombre('')
+        setCodigo('')
+        setPlanes('')
+        setEditingId(null)
+        setShowForm(true)
+    }
+
+    function abrirEditar(os: any) {
+        setNombre(os.nombre || '')
+        setCodigo(os.codigo || '')
+        setPlanes(os.planes || '')
+        setEditingId(os.id)
+        setShowForm(true)
+    }
+
+    function guardar() {
         if (!nombre) return
         startTransition(async () => {
-            const r = await crearObraSocial({ nombre, codigo: codigo || undefined, planes: planes || undefined })
+            const dataToSave = { nombre, codigo: codigo || undefined, planes: planes || undefined }
+            let r;
+            if (editingId) {
+                r = await actualizarObraSocial(editingId, dataToSave)
+            } else {
+                r = await crearObraSocial(dataToSave)
+            }
             if (r.error) glassAlert.error({ title: 'Error', description: r.error })
-            else { glassAlert.success({ title: 'Obra social creada' }); setNombre(''); setCodigo(''); setPlanes(''); setShowForm(false) }
+            else { 
+                glassAlert.success({ title: editingId ? 'Obra social actualizada' : 'Obra social creada' })
+                setNombre('')
+                setCodigo('')
+                setPlanes('')
+                setEditingId(null)
+                setShowForm(false) 
+            }
+        })
+    }
+
+    function borrarObraSocial(id: string) {
+        if (!window.confirm("¿Seguro que deseas eliminar esta obra social? Esta acción no se puede deshacer y puede afectar pacientes asociados.")) return;
+        startTransition(async () => {
+            const r = await eliminarObraSocial(id)
+            if (r.error) glassAlert.error({ title: 'Error al eliminar', description: r.error })
+            else glassAlert.success({ title: 'Obra social eliminada' })
         })
     }
 
@@ -413,26 +522,54 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
         <div className="glass rounded-2xl shadow-glass p-5 space-y-4">
             <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-foreground">Obras Sociales ({obrasSociales.length})</h3>
-                <GlassButton size="sm" variant="glass" onClick={() => setShowForm(!showForm)}><Plus className="h-3 w-3 mr-1" />Agregar</GlassButton>
+                <GlassButton size="sm" variant="glass" onClick={() => {
+                    if (showForm) {
+                        setShowForm(false)
+                        setEditingId(null)
+                    } else {
+                        abrirNueva()
+                    }
+                }}>
+                    {showForm ? <X className="h-3 w-3 mr-1" /> : <Plus className="h-3 w-3 mr-1" />}
+                    {showForm ? 'Cancelar' : 'Agregar'}
+                </GlassButton>
             </div>
             {showForm && (
                 <div className="glass-subtle rounded-xl p-3 flex gap-2 items-end">
                     <Field label="Nombre"><Input value={nombre} onChange={e => setNombre(e.target.value)} placeholder="OSDE" /></Field>
                     <Field label="Código"><Input value={codigo} onChange={e => setCodigo(e.target.value)} placeholder="01" /></Field>
                     <Field label="Planes (Opcional)"><Input value={planes} onChange={e => setPlanes(e.target.value)} placeholder="Ej: 210, 310" /></Field>
-                    <GlassButton onClick={agregar} loading={isPending} className="shrink-0">Crear</GlassButton>
+                    <GlassButton onClick={guardar} loading={isPending} className="shrink-0">{editingId ? 'Guardar' : 'Crear'}</GlassButton>
                 </div>
             )}
             <div className="space-y-1">
                 {obrasSociales.map((os: any) => (
-                    <div key={os.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-muted/30 transition-colors">
-                        <div>
+                    <div key={os.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-muted/30 transition-colors group">
+                        <div className="flex-1">
                             <p className="text-sm font-medium text-foreground">{os.nombre}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                                 {os.codigo && <span className="text-xs font-mono text-muted-foreground bg-white/5 px-1.5 rounded">{os.codigo}</span>}
                                 {os.planes && <span className="text-[10px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-md border border-primary/20">Planes: {os.planes}</span>}
                             </div>
                         </div>
+
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mx-2">
+                            <button
+                                onClick={() => abrirEditar(os)}
+                                className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
+                                title="Modificar obra social"
+                            >
+                                <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                                onClick={() => borrarObraSocial(os.id)}
+                                className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                title="Eliminar obra social"
+                            >
+                                <Trash className="h-4 w-4" />
+                            </button>
+                        </div>
+
                         <button onClick={() => { startTransition(async () => { await toggleObraSocial(os.id, !os.activo) }) }}
                             className={cn('text-xs px-2 py-0.5 rounded-lg cursor-pointer', os.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400')}>
                             {os.activo ? 'Activa' : 'Inactiva'}
@@ -449,7 +586,29 @@ function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
     const [isPending, startTransition] = useTransition()
     const ordered = [1, 2, 3, 4, 5, 6, 0]
     const [horarios, setHorarios] = useState<any[]>(
-        ordered.map(d => initialHorarios.find((h: any) => h.dia === d) ?? { dia: d, apertura: '09:00', cierre: '18:00', activo: false })
+        ordered.map(d => {
+            const h = initialHorarios.find((x: any) => x.dia === d)
+            const base = h ?? { dia: d, apertura_manana: '09:00', cierre_manana: '13:00', apertura_tarde: '15:00', cierre_tarde: '18:00', activo: false }
+            
+            // Legacy migration
+            if (!base.apertura_manana && base.apertura) {
+                return {
+                    ...base,
+                    apertura_manana: base.apertura,
+                    cierre_manana: '13:00',
+                    apertura_tarde: '14:00',
+                    cierre_tarde: base.cierre
+                }
+            }
+            
+            return {
+                ...base,
+                apertura_manana: base.apertura_manana || '09:00',
+                cierre_manana: base.cierre_manana || '13:00',
+                apertura_tarde: base.apertura_tarde || '14:00',
+                cierre_tarde: base.cierre_tarde || '18:00'
+            }
+        })
     )
 
     function update(dia: number, field: string, value: any) {
@@ -468,16 +627,29 @@ function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
             <h3 className="text-sm font-semibold text-foreground">Horarios de atención</h3>
             <div className="space-y-2">
                 {horarios.map(h => (
-                    <div key={h.dia} className={cn('flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors', h.activo ? 'glass-subtle' : 'opacity-50')}>
-                        <button onClick={() => update(h.dia, 'activo', !h.activo)}
-                            className={cn('h-5 w-5 rounded flex items-center justify-center cursor-pointer border', h.activo ? 'bg-primary border-primary text-primary-foreground' : 'border-border')}>
-                            {h.activo && <Check className="h-3 w-3" />}
-                        </button>
-                        <span className="text-sm font-medium text-foreground w-10">{DIA_LABEL[h.dia]}</span>
-                        <div className="flex flex-1 gap-2">
-                            <Input type="time" value={h.apertura} onChange={e => update(h.dia, 'apertura', e.target.value)} className="w-[4.5rem] sm:w-28 text-xs sm:text-sm px-1.5 sm:px-3" disabled={!h.activo} />
-                            <span className="text-xs text-muted-foreground self-center">a</span>
-                            <Input type="time" value={h.cierre} onChange={e => update(h.dia, 'cierre', e.target.value)} className="w-[4.5rem] sm:w-28 text-xs sm:text-sm px-1.5 sm:px-3" disabled={!h.activo} />
+                    <div key={h.dia} className={cn('flex flex-col gap-2 py-3 px-4 rounded-xl transition-colors border', h.activo ? 'glass-subtle border-border' : 'opacity-50 border-transparent')}>
+                        <div className="flex items-center gap-3">
+                            <button onClick={() => update(h.dia, 'activo', !h.activo)}
+                                className={cn('h-5 w-5 rounded flex items-center justify-center cursor-pointer border', h.activo ? 'bg-primary border-primary text-primary-foreground' : 'border-border')}>
+                                {h.activo && <Check className="h-3 w-3" />}
+                            </button>
+                            <span className="text-sm font-semibold text-foreground">{DIA_LABEL[h.dia]}</span>
+                        </div>
+                        <div className="pl-8 grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
+                            {/* Mañana */}
+                            <div className="flex items-center gap-2 bg-background/50 p-2 rounded-lg border border-border/50">
+                                <span className="text-xs font-medium text-muted-foreground w-12">Mañana</span>
+                                <Input type="time" value={h.apertura_manana} onChange={e => update(h.dia, 'apertura_manana', e.target.value)} className="w-[4.5rem] sm:w-24 text-xs h-8 px-2" disabled={!h.activo} />
+                                <span className="text-xs text-muted-foreground">a</span>
+                                <Input type="time" value={h.cierre_manana} onChange={e => update(h.dia, 'cierre_manana', e.target.value)} className="w-[4.5rem] sm:w-24 text-xs h-8 px-2" disabled={!h.activo} />
+                            </div>
+                            {/* Tarde */}
+                            <div className="flex items-center gap-2 bg-background/50 p-2 rounded-lg border border-border/50">
+                                <span className="text-xs font-medium text-muted-foreground w-12">Tarde</span>
+                                <Input type="time" value={h.apertura_tarde} onChange={e => update(h.dia, 'apertura_tarde', e.target.value)} className="w-[4.5rem] sm:w-24 text-xs h-8 px-2" disabled={!h.activo} />
+                                <span className="text-xs text-muted-foreground">a</span>
+                                <Input type="time" value={h.cierre_tarde} onChange={e => update(h.dia, 'cierre_tarde', e.target.value)} className="w-[4.5rem] sm:w-24 text-xs h-8 px-2" disabled={!h.activo} />
+                            </div>
                         </div>
                     </div>
                 ))}
