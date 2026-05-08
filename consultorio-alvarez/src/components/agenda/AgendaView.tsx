@@ -20,6 +20,7 @@ import {
     ESTADO_TURNO_LABEL,
 } from '@/types'
 import { cn } from '@/lib/utils'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 
 // ── Apple-style staggered spring animation ─────────────────────
 const sectionVariants = {
@@ -65,6 +66,7 @@ export function AgendaView({
     const [modalOpen, setModalOpen] = useState(false)
     const [modalProfId, setModalProfId] = useState<string>('')
     const [turnoAEditar, setTurnoAEditar] = useState<any>(null)
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
     const [isPending, startTransition] = useTransition()
     const [isFullscreen, setIsFullscreen] = useState(false)
 
@@ -201,13 +203,17 @@ export function AgendaView({
     }
 
     function handleDeleteTurno(id: string) {
-        if (window.confirm('¿Estás seguro de que querés eliminar este turno? Esta acción no se puede deshacer.')) {
-            startTransition(async () => {
-                const res = await eliminarTurno(id)
-                if (res.error) glassAlert.error({ title: 'Error al eliminar', description: res.error })
-                else glassAlert.success({ title: 'Turno eliminado correctamente' })
-            })
-        }
+        setConfirmDeleteId(id)
+    }
+
+    function onConfirmDelete() {
+        if (!confirmDeleteId) return
+        startTransition(async () => {
+            const res = await eliminarTurno(confirmDeleteId)
+            setConfirmDeleteId(null)
+            if (res.error) glassAlert.error({ title: 'Error al eliminar', description: res.error })
+            else glassAlert.success({ title: 'Turno eliminado correctamente' })
+        })
     }
 
     function abrirModalConProf(profId: string) {
@@ -405,6 +411,17 @@ export function AgendaView({
                 defaultProfesionalId={modalProfId}
                 defaultFecha={format(diaSeleccionado, 'yyyy-MM-dd')}
                 turnoAEditar={turnoAEditar}
+            />
+
+            {/* Modal de confirmación de eliminación */}
+            <ConfirmModal
+                open={!!confirmDeleteId}
+                onOpenChange={(open) => !open && setConfirmDeleteId(null)}
+                title="Eliminar turno"
+                description="¿Estás seguro de que querés eliminar este turno? Esta acción no se puede deshacer."
+                onConfirm={onConfirmDelete}
+                isPending={isPending}
+                confirmText="Eliminar turno"
             />
         </div>
     )

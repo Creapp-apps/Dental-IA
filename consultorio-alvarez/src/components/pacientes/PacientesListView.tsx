@@ -10,6 +10,7 @@ import { GlassButton } from '@/components/ui/glass-button'
 import { cn } from '@/lib/utils'
 import { eliminarPaciente } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 
 // ── Apple-style staggered spring animation ─────────────────────
 const sectionVariants = {
@@ -36,6 +37,8 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     const [query, setQuery] = useState(initialQuery)
     const router = useRouter()
     const [isNavigating, startNavigation] = useTransition()
+    const [isDeleting, startDeleting] = useTransition()
+    const [deleteCandidate, setDeleteCandidate] = useState<{ id: string, nombre: string } | null>(null)
 
     function handleNuevoPaciente() {
         startNavigation(() => {
@@ -52,14 +55,20 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     async function handleEliminar(e: React.MouseEvent, id: string, nombre: string) {
         e.preventDefault()
         e.stopPropagation()
-        if (confirm(`¿Estás seguro que querés eliminar a ${nombre}? Esta acción no se puede deshacer y borrará todo su historial y turnos.`)) {
-            const res = await eliminarPaciente(id)
+        setDeleteCandidate({ id, nombre })
+    }
+
+    function onConfirmDelete() {
+        if (!deleteCandidate) return
+        startDeleting(async () => {
+            const res = await eliminarPaciente(deleteCandidate.id)
+            setDeleteCandidate(null)
             if (res.error) {
                 glassAlert.error({ title: 'Error', description: res.error })
             } else {
                 glassAlert.success({ title: 'Paciente eliminado' })
             }
-        }
+        })
     }
 
     function handleEditar(e: React.MouseEvent, id: string) {
@@ -178,6 +187,16 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                     </AnimatePresence>
                 </motion.div>
             )}
+
+            <ConfirmModal
+                open={!!deleteCandidate}
+                onOpenChange={(open) => !open && setDeleteCandidate(null)}
+                title="Eliminar paciente"
+                description={`¿Estás seguro que querés eliminar a ${deleteCandidate?.nombre}? Esta acción no se puede deshacer y borrará todo su historial y turnos.`}
+                onConfirm={onConfirmDelete}
+                isPending={isDeleting}
+                confirmText="Eliminar paciente"
+            />
         </div>
     )
 }

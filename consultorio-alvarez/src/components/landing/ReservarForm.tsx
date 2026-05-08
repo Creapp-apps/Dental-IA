@@ -5,6 +5,7 @@ import type { Tenant, Profesional, TipoTratamiento } from '@/types'
 import { Check, ChevronRight, ChevronLeft, Calendar, CalendarDays, User, Stethoscope, Clock, CheckCircle2, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { crearReservaPublica } from '@/lib/actions/reservas'
+import { glassAlert } from '@/components/ui/glass-alert'
 
 interface Props {
     tenant: Tenant
@@ -494,13 +495,13 @@ export function ReservarForm({ tenant, profesionales, tratamientos }: Props) {
             })
 
             if (result?.error) {
-                alert(result.error)
+                glassAlert.error({ title: 'Error', description: result.error })
             } else {
                 setEnviado(true)
             }
         } catch (error) {
             console.error(error)
-            alert('Error al reservar turno')
+            glassAlert.error({ title: 'Error', description: 'Error al reservar turno' })
         } finally {
             setIsSubmitting(false)
         }

@@ -25,6 +25,7 @@ import {
     CheckCircle2,
     Loader2,
 } from 'lucide-react'
+import { glassAlert } from '@/components/ui/glass-alert'
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -684,14 +685,14 @@ export function BookingForm() {
                     planSeleccionado: datos.plan,
                 })
                 if (result.error) {
-                    alert(`Error: ${result.error}`)
+                    glassAlert.error({ title: 'Error', description: result.error })
                 } else {
                     // Refresh availability so booked slot disappears
                     await refreshAvailability()
                     setSent(true)
                 }
             } catch (err) {
-                alert('Error al enviar la reserva. Intentá nuevamente.')
+                glassAlert.error({ title: 'Error', description: 'Error al enviar la reserva. Intentá nuevamente.' })
                 console.error(err)
             } finally {
                 setSubmitting(false)

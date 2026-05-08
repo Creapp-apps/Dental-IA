@@ -1,6 +1,6 @@
 'use client'
 
-import { useTransition } from 'react'
+import { useTransition, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
@@ -8,6 +8,7 @@ import { Edit2, Trash2 } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { GlassButton } from '@/components/ui/glass-button'
 import { glassAlert } from '@/components/ui/glass-alert'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 import { eliminarTurno } from '@/lib/actions/turnos'
 import { PRIORIDAD_COLOR, PRIORIDAD_LABEL, type EstadoTurno, type PrioridadTratamiento } from '@/types'
 
@@ -33,20 +34,25 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
     const prioridad = (turno.prioridad_override ?? turno.tipo_tratamiento?.prioridad ?? 'NORMAL') as PrioridadTratamiento
     const estado = turno.estado as EstadoTurno
     const [isPending, startTransition] = useTransition()
+    const [confirmOpen, setConfirmOpen] = useState(false)
     const router = useRouter()
 
     function handleDelete() {
-        if (window.confirm('¿Estás seguro de que querés eliminar este turno? Esta acción no se puede deshacer.')) {
-            startTransition(async () => {
-                const res = await eliminarTurno(turno.id)
-                if (res.error) glassAlert.error({ title: 'Error al eliminar', description: res.error })
-                else glassAlert.success({ title: 'Turno eliminado correctamente' })
-            })
-        }
+        setConfirmOpen(true)
+    }
+
+    function onConfirmDelete() {
+        startTransition(async () => {
+            const res = await eliminarTurno(turno.id)
+            setConfirmOpen(false)
+            if (res.error) glassAlert.error({ title: 'Error al eliminar', description: res.error })
+            else glassAlert.success({ title: 'Turno eliminado correctamente' })
+        })
     }
 
     return (
-        <motion.div
+        <>
+            <motion.div
             className="group flex items-start gap-3 glass rounded-xl p-3.5 shadow-glass hover:shadow-glass-lg transition-shadow cursor-default"
             style={{ borderLeft: `3px solid ${colorProf}` }}
             initial={{ opacity: 0, x: -12 }}
@@ -101,5 +107,16 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
                 </div>
             </div>
         </motion.div>
+
+        <ConfirmModal
+            open={confirmOpen}
+            onOpenChange={setConfirmOpen}
+            title="Eliminar turno"
+            description="¿Estás seguro de que querés eliminar este turno? Esta acción no se puede deshacer."
+            onConfirm={onConfirmDelete}
+            isPending={isPending}
+            confirmText="Eliminar turno"
+        />
+        </>
     )
 }

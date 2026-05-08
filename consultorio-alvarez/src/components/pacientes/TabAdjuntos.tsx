@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { uploadPacienteAdjunto, deletePacienteAdjunto } from '@/lib/actions/adjuntos'
 import { useRouter } from 'next/navigation'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 
 interface Adjunto {
     id: string
@@ -48,6 +49,8 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
     const [showUploadForm, setShowUploadForm] = useState(false)
     const [previewAdjunto, setPreviewAdjunto] = useState<Adjunto | null>(null)
     const [mounted, setMounted] = useState(false)
+    const [isDeleting, setIsDeleting] = useState(false)
+    const [deleteCandidate, setDeleteCandidate] = useState<{ id: string, url: string } | null>(null)
 
     useEffect(() => {
         setMounted(true)
@@ -107,10 +110,16 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
     }
 
     const handleDelete = async (id: string, url: string) => {
-        if (!confirm('¿Estás seguro de eliminar este archivo? Esta acción no se puede deshacer.')) return
+        setDeleteCandidate({ id, url })
+    }
+
+    const onConfirmDelete = async () => {
+        if (!deleteCandidate) return
         
+        setIsDeleting(true)
         try {
-            const res = await deletePacienteAdjunto(id, url)
+            const res = await deletePacienteAdjunto(deleteCandidate.id, deleteCandidate.url)
+            setDeleteCandidate(null)
             if (res.error) {
                 glassAlert.error({ title: 'Error al eliminar', description: res.error })
             } else {
@@ -119,6 +128,8 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
             }
         } catch (e: any) {
             glassAlert.error({ title: 'Error', description: 'No se pudo eliminar el archivo.' })
+        } finally {
+            setIsDeleting(false)
         }
     }
 
@@ -403,6 +414,16 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
                 </AnimatePresence>,
                 document.body
             )}
+
+            <ConfirmModal
+                open={!!deleteCandidate}
+                onOpenChange={(open) => !open && setDeleteCandidate(null)}
+                title="Eliminar archivo"
+                description="¿Estás seguro de eliminar este archivo? Esta acción no se puede deshacer."
+                onConfirm={onConfirmDelete}
+                isPending={isDeleting}
+                confirmText="Eliminar archivo"
+            />
         </div>
     )
 }

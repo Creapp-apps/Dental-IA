@@ -16,6 +16,7 @@ import {
     actualizarTipoTratamiento, eliminarTipoTratamiento,
 } from '@/lib/actions/config'
 import { glassAlert } from '@/components/ui/glass-alert'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 import { TabMiWeb } from '@/components/config/TabMiWeb'
 import { TabIntegraciones } from '@/components/config/TabIntegraciones'
 import type { LandingConfig } from '@/lib/types/landing'
@@ -95,6 +96,7 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
     const [tratForm, setTratForm] = useState({ nombre: '', duracion_minutos: '30', precio_referencia: '', color: '#3b82f6' })
     const [showTratForm, setShowTratForm] = useState(false)
     const [editingTratId, setEditingTratId] = useState<string | null>(null)
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
     function guardar() {
         startTransition(async () => {
@@ -148,9 +150,14 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
     }
 
     function borrarTratamiento(id: string) {
-        if (!window.confirm("¿Seguro que deseas eliminar este tratamiento? Esta acción no se puede deshacer y puede afectar la visualización de turnos históricos correspondientes.")) return;
+        setConfirmDeleteId(id)
+    }
+
+    function onConfirmDelete() {
+        if (!confirmDeleteId) return
         startTransition(async () => {
-            const r = await eliminarTipoTratamiento(id)
+            const r = await eliminarTipoTratamiento(confirmDeleteId)
+            setConfirmDeleteId(null)
             if (r.error) glassAlert.error({ title: 'Error al eliminar', description: r.error })
             else glassAlert.success({ title: 'Tratamiento eliminado' })
         })
@@ -252,6 +259,16 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
                     ))}
                 </div>
             </div>
+
+            <ConfirmModal
+                open={!!confirmDeleteId}
+                onOpenChange={(open) => !open && setConfirmDeleteId(null)}
+                title="Eliminar tratamiento"
+                description="¿Seguro que deseas eliminar este tratamiento? Esta acción no se puede deshacer y puede afectar la visualización de turnos históricos correspondientes."
+                onConfirm={onConfirmDelete}
+                isPending={isPending}
+                confirmText="Eliminar"
+            />
         </div>
     )
 }
@@ -467,6 +484,8 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
     const [isPending, startTransition] = useTransition()
     const [showForm, setShowForm] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
     const [nombre, setNombre] = useState('')
     const [codigo, setCodigo] = useState('')
     const [planes, setPlanes] = useState('')
@@ -510,9 +529,14 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
     }
 
     function borrarObraSocial(id: string) {
-        if (!window.confirm("¿Seguro que deseas eliminar esta obra social? Esta acción no se puede deshacer y puede afectar pacientes asociados.")) return;
+        setConfirmDeleteId(id)
+    }
+
+    function onConfirmDelete() {
+        if (!confirmDeleteId) return
         startTransition(async () => {
-            const r = await eliminarObraSocial(id)
+            const r = await eliminarObraSocial(confirmDeleteId)
+            setConfirmDeleteId(null)
             if (r.error) glassAlert.error({ title: 'Error al eliminar', description: r.error })
             else glassAlert.success({ title: 'Obra social eliminada' })
         })
