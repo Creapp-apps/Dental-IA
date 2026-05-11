@@ -136,9 +136,9 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                                             <p className="text-sm font-semibold text-foreground truncate">
                                                 {p.apellido}, {p.nombre}
                                             </p>
-                                            <div className="flex items-center gap-3 mt-0.5 text-xs text-muted-foreground">
-                                                {p.dni && <span>DNI {p.dni}</span>}
-                                                <span className="opacity-60">HC {p.nro_historia_clinica}</span>
+                                            <div className="flex items-center gap-3 mt-1">
+                                                {/* DNI oculto a pedido del cliente */}
+                                                <span className="text-sm font-bold text-foreground tracking-wide">HC {p.nro_historia_clinica}</span>
                                             </div>
                                         </div>
 
