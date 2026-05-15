@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { GlassButton } from '@/components/ui/glass-button'
-import { GlassDatePicker } from '@/components/ui/glass-date-picker'
 import { GlassSelect } from '@/components/ui/glass-select'
 import { GlassPhotoCapture } from '@/components/ui/glass-photo-capture'
 import { crearPaciente, actualizarPaciente } from '@/lib/actions/pacientes'
@@ -153,11 +152,11 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                     <Field label="Nº Hist. Clínica" error={errors.nro_historia_clinica?.message}>
                         <Input {...register('nro_historia_clinica')} placeholder="HC-123" />
                     </Field>
-                    <Field label="Nombre *" error={errors.nombre?.message}>
-                        <Input {...register('nombre')} placeholder="Juan" />
-                    </Field>
                     <Field label="Apellido *" error={errors.apellido?.message}>
                         <Input {...register('apellido')} placeholder="Pérez" />
+                    </Field>
+                    <Field label="Nombre *" error={errors.nombre?.message}>
+                        <Input {...register('nombre')} placeholder="Juan" />
                     </Field>
                 </div>
                 <div className="grid grid-cols-4 gap-3">
@@ -168,9 +167,25 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                         <Input {...register('cuit')} placeholder="20-12345678-9" />
                     </Field>
                     <Field label="Fecha Nac.">
-                        <GlassDatePicker
-                            fecha={watch('fecha_nacimiento') || ''}
-                            onChange={v => setValue('fecha_nacimiento', v)}
+                        <Input
+                            placeholder="DD/MM/AAAA"
+                            maxLength={10}
+                            value={watch('fecha_nacimiento') ? watch('fecha_nacimiento')!.split('-').reverse().join('/') : ''}
+                            onChange={e => {
+                                // Auto-insert slashes as user types
+                                let raw = e.target.value.replace(/\D/g, '').slice(0, 8)
+                                let formatted = raw
+                                if (raw.length > 4) formatted = raw.slice(0, 2) + '/' + raw.slice(2, 4) + '/' + raw.slice(4)
+                                else if (raw.length > 2) formatted = raw.slice(0, 2) + '/' + raw.slice(2)
+                                e.target.value = formatted
+                                // Only save when complete (DD/MM/AAAA)
+                                if (raw.length === 8) {
+                                    const iso = `${raw.slice(4)}-${raw.slice(2, 4)}-${raw.slice(0, 2)}`
+                                    setValue('fecha_nacimiento', iso)
+                                } else {
+                                    setValue('fecha_nacimiento', '')
+                                }
+                            }}
                         />
                     </Field>
                     <Field label="Género">
