@@ -22,7 +22,16 @@ const schema = z.object({
     foto_url: z.string().optional(),
     dni: z.string().optional(),
     cuit: z.string().optional(),
-    fecha_nacimiento: z.string().optional(),
+    fecha_nacimiento: z.string().optional().refine(val => {
+        if (!val) return true;
+        const regex = /^\d{2}\/\d{2}\/\d{4}$/;
+        if (!regex.test(val)) return false;
+        const [day, month, year] = val.split('/').map(Number);
+        const date = new Date(year, month - 1, day);
+        return date.getFullYear() === year && date.getMonth() === month - 1 && date.getDate() === day;
+    }, {
+        message: 'Formato inválido (DD/MM/AAAA)'
+    }),
     genero: z.string().optional(),
     telefono: z.string().optional(),
     email: z.string().email('Email inválido').optional().or(z.literal('')),
@@ -69,7 +78,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             foto_url: paciente.foto_url || '',
             dni: paciente.dni || '',
             cuit: paciente.cuit || '',
-            fecha_nacimiento: paciente.fecha_nacimiento || '',
+            fecha_nacimiento: paciente.fecha_nacimiento ? paciente.fecha_nacimiento.split('-').reverse().join('/') : '',
             genero: paciente.genero || '',
             telefono: paciente.telefono || '',
             email: paciente.email || '',
@@ -88,8 +97,22 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
 
     function onSubmit(data: FormData) {
         startTransition(async () => {
+            // Convert date to YYYY-MM-DD for storage
+            let fechaIso = null
+            if (data.fecha_nacimiento) {
+                const parts = data.fecha_nacimiento.split('/')
+                if (parts.length === 3) {
+                    fechaIso = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+                }
+            }
+
+            const payload = {
+                ...data,
+                fecha_nacimiento: fechaIso || null,
+            }
+
             if (paciente) {
-                const result = await actualizarPaciente(paciente.id, data)
+                const result = await actualizarPaciente(paciente.id, payload)
                 if (result.error) {
                     glassAlert.error({ title: 'Error al actualizar paciente', description: result.error })
                 } else {
@@ -97,7 +120,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                     router.push(`/pacientes/${paciente.id}`)
                 }
             } else {
-                const result = await crearPaciente(data)
+                const result = await crearPaciente(payload)
                 if (result.error) {
                     glassAlert.error({ title: 'Error al crear paciente', description: result.error })
                 } else {
@@ -166,11 +189,11 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                     <Field label="CUIT / CUIL">
                         <Input {...register('cuit')} placeholder="20-12345678-9" />
                     </Field>
-                    <Field label="Fecha Nac.">
+                    <Field label="Fecha Nac." error={errors.fecha_nacimiento?.message}>
                         <Input
                             placeholder="DD/MM/AAAA"
                             maxLength={10}
-                            value={watch('fecha_nacimiento') ? watch('fecha_nacimiento')!.split('-').reverse().join('/') : ''}
+                            {...register('fecha_nacimiento')}
                             onChange={e => {
                                 // Auto-insert slashes as user types
                                 let raw = e.target.value.replace(/\D/g, '').slice(0, 8)
@@ -178,13 +201,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                                 if (raw.length > 4) formatted = raw.slice(0, 2) + '/' + raw.slice(2, 4) + '/' + raw.slice(4)
                                 else if (raw.length > 2) formatted = raw.slice(0, 2) + '/' + raw.slice(2)
                                 e.target.value = formatted
-                                // Only save when complete (DD/MM/AAAA)
-                                if (raw.length === 8) {
-                                    const iso = `${raw.slice(4)}-${raw.slice(2, 4)}-${raw.slice(0, 2)}`
-                                    setValue('fecha_nacimiento', iso)
-                                } else {
-                                    setValue('fecha_nacimiento', '')
-                                }
+                                setValue('fecha_nacimiento', formatted, { shouldValidate: true })
                             }}
                         />
                     </Field>
