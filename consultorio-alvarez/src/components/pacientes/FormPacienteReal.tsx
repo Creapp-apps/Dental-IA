@@ -98,7 +98,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     function onSubmit(data: FormData) {
         startTransition(async () => {
             // Convert date to YYYY-MM-DD for storage
-            let fechaIso = null
+            let fechaIso = ''
             if (data.fecha_nacimiento) {
                 const parts = data.fecha_nacimiento.split('/')
                 if (parts.length === 3) {
@@ -108,7 +108,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
 
             const payload = {
                 ...data,
-                fecha_nacimiento: fechaIso || null,
+                fecha_nacimiento: fechaIso,
             }
 
             if (paciente) {
