@@ -84,7 +84,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             email: paciente.email || '',
             direccion: paciente.direccion || '',
             ciudad: paciente.ciudad || '',
-            obra_social_id: paciente.obra_social_id || '',
+            obra_social_id: paciente.obra_social?.nombre || paciente.obra_social_id || '',
             plan_obra_social: paciente.plan_obra_social || '',
             n_afiliado: paciente.n_afiliado || '',
             motivo_consulta: paciente.motivo_consulta || '',
@@ -131,8 +131,11 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
         })
     }
 
-    const selectedObraId = watch('obra_social_id')
-    const selectedObra = obrasSociales.find(os => os.id === selectedObraId)
+    const selectedObraNameOrId = watch('obra_social_id')
+    const selectedObra = obrasSociales.find(os => 
+        os.id === selectedObraNameOrId || 
+        os.nombre.toLowerCase() === selectedObraNameOrId?.toLowerCase()
+    )
     
     // Parse the comma-separated string into an array
     const rawPlanes = selectedObra?.planes || ''
@@ -258,23 +261,32 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                 <h3 className="text-sm font-semibold text-foreground">Obra Social</h3>
                 <div className="grid grid-cols-3 gap-3">
                     <Field label="Obra Social">
-                        <GlassSelect
-                            value={watch('obra_social_id') || ''}
-                            onChange={v => {
-                                setValue('obra_social_id', v)
-                                setValue('plan_obra_social', '')
-                            }}
-                            options={obrasSociales.map((os: any) => ({ value: os.id, label: os.nombre }))}
-                            placeholder="Particular"
+                        <Input
+                            {...register('obra_social_id', {
+                                onChange: () => {
+                                    setValue('plan_obra_social', '')
+                                }
+                            })}
+                            placeholder="Particular, OSDE, Swiss Medical..."
+                            list="obras-sociales-list"
                         />
+                        <datalist id="obras-sociales-list">
+                            {obrasSociales.map((os: any) => (
+                                <option key={os.id} value={os.nombre} />
+                            ))}
+                        </datalist>
                     </Field>
                     <Field label="Plan">
-                        <GlassSelect
-                            value={watch('plan_obra_social') || ''}
-                            onChange={v => setValue('plan_obra_social', v)}
-                            options={planesDisponibles.map((plan: string) => ({ value: plan, label: plan }))}
-                            placeholder={planesDisponibles.length > 0 ? "Seleccionar plan" : "—"}
+                        <Input
+                            {...register('plan_obra_social')}
+                            placeholder="Ej: 210, 310..."
+                            list="planes-list"
                         />
+                        <datalist id="planes-list">
+                            {planesDisponibles.map((plan: string) => (
+                                <option key={plan} value={plan} />
+                            ))}
+                        </datalist>
                     </Field>
                     <Field label="N° Afiliado">
                         <Input {...register('n_afiliado')} placeholder="Número de afiliado" />

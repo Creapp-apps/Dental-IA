@@ -38,6 +38,40 @@ export async function crearPaciente(formData: {
     const tenantId = await getTenantId()
     if (!tenantId) return { error: 'Tenant no encontrado' }
 
+    let finalObraSocialId = formData.obra_social_id || null
+
+    if (finalObraSocialId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalObraSocialId)) {
+        const customName = finalObraSocialId.trim()
+        
+        // Buscar si ya existe una con ese nombre (case-insensitive) para este tenant
+        const { data: existing } = await supabase
+            .from('obras_sociales')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .ilike('nombre', customName)
+            .maybeSingle()
+
+        if (existing) {
+            finalObraSocialId = existing.id
+        } else {
+            // Crear una nueva obra social con ese nombre
+            const { data: created, error: createError } = await supabase
+                .from('obras_sociales')
+                .insert({
+                    tenant_id: tenantId,
+                    nombre: customName,
+                    activo: true
+                })
+                .select('id')
+                .single()
+            
+            if (createError) {
+                return { error: `Error al crear obra social: ${createError.message}` }
+            }
+            finalObraSocialId = created.id
+        }
+    }
+
     const { data, error } = await supabase
         .from('pacientes')
         .insert({
@@ -54,7 +88,7 @@ export async function crearPaciente(formData: {
             email: formData.email || null,
             direccion: formData.direccion || null,
             ciudad: formData.ciudad || null,
-            obra_social_id: formData.obra_social_id || null,
+            obra_social_id: finalObraSocialId,
             plan_obra_social: formData.plan_obra_social || null,
             n_afiliado: formData.n_afiliado || null,
             alergias: formData.alergias || null,
@@ -93,10 +127,51 @@ export async function actualizarPaciente(id: string, formData: {
     notas_internas?: string
 }) {
     const supabase = await createClient()
+    const tenantId = await getTenantId()
+    if (!tenantId) return { error: 'Tenant no encontrado' }
+
+    let finalObraSocialId = formData.obra_social_id || null
+
+    if (finalObraSocialId && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(finalObraSocialId)) {
+        const customName = finalObraSocialId.trim()
+        
+        // Buscar si ya existe una con ese nombre (case-insensitive) para este tenant
+        const { data: existing } = await supabase
+            .from('obras_sociales')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .ilike('nombre', customName)
+            .maybeSingle()
+
+        if (existing) {
+            finalObraSocialId = existing.id
+        } else {
+            // Crear una nueva obra social con ese nombre
+            const { data: created, error: createError } = await supabase
+                .from('obras_sociales')
+                .insert({
+                    tenant_id: tenantId,
+                    nombre: customName,
+                    activo: true
+                })
+                .select('id')
+                .single()
+            
+            if (createError) {
+                return { error: `Error al crear obra social: ${createError.message}` }
+            }
+            finalObraSocialId = created.id
+        }
+    }
+
+    const payload = {
+        ...formData,
+        obra_social_id: finalObraSocialId
+    }
 
     // Clean form data — remove empty strings
     const cleanData = Object.fromEntries(
-        Object.entries(formData).map(([k, v]) => [k, v === '' ? null : v])
+        Object.entries(payload).map(([k, v]) => [k, v === '' ? null : v])
     )
 
     const { error } = await supabase

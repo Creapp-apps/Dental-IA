@@ -601,6 +601,16 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
                     </div>
                 ))}
             </div>
+
+            <ConfirmModal
+                open={!!confirmDeleteId}
+                onOpenChange={(open) => !open && setConfirmDeleteId(null)}
+                title="Eliminar obra social"
+                description="¿Seguro que deseas eliminar esta obra social? Esta acción no se puede deshacer y puede afectar la información de los pacientes que la utilicen."
+                onConfirm={onConfirmDelete}
+                isPending={isPending}
+                confirmText="Eliminar"
+            />
         </div>
     )
 }
