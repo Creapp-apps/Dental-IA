@@ -33,6 +33,7 @@ export async function crearPaciente(formData: {
     medicacion_actual?: string
     antecedentes?: string
     notas_internas?: string
+    registro_completo?: boolean
 }) {
     const supabase = await createClient()
     const tenantId = await getTenantId()
@@ -72,11 +73,13 @@ export async function crearPaciente(formData: {
         }
     }
 
+    const nextHC = formData.nro_historia_clinica?.trim() || await getNextNroHistoriaClinica(tenantId, supabase)
+
     const { data, error } = await supabase
         .from('pacientes')
         .insert({
             tenant_id: tenantId,
-            nro_historia_clinica: formData.nro_historia_clinica || null,
+            nro_historia_clinica: nextHC,
             nombre: formData.nombre,
             apellido: formData.apellido,
             foto_url: formData.foto_url || null,
@@ -95,6 +98,7 @@ export async function crearPaciente(formData: {
             medicacion_actual: formData.medicacion_actual || null,
             antecedentes: formData.antecedentes || null,
             notas_internas: formData.notas_internas || null,
+            registro_completo: formData.registro_completo !== undefined ? formData.registro_completo : true,
         })
         .select()
         .single()
@@ -125,6 +129,7 @@ export async function actualizarPaciente(id: string, formData: {
     medicacion_actual?: string
     antecedentes?: string
     notas_internas?: string
+    registro_completo?: boolean
 }) {
     const supabase = await createClient()
     const tenantId = await getTenantId()
@@ -235,4 +240,30 @@ export async function getOdontogramaPaciente(pacienteId: string) {
 
     if (error) { console.error('getOdontograma:', error); return [] }
     return data ?? []
+}
+
+export async function getNextNroHistoriaClinica(tenantId: string, supabase: any): Promise<string> {
+    const { data, error } = await supabase
+        .from('pacientes')
+        .select('nro_historia_clinica')
+        .eq('tenant_id', tenantId)
+
+    if (error || !data || data.length === 0) {
+        return '1000'
+    }
+
+    let maxNum = 0
+    for (const p of data) {
+        if (!p.nro_historia_clinica) continue
+        const clean = p.nro_historia_clinica.replace(/\D/g, '')
+        if (clean) {
+            const num = parseInt(clean, 10)
+            if (!isNaN(num) && num > maxNum) {
+                maxNum = num
+            }
+        }
+    }
+
+    const nextNum = maxNum + 1
+    return nextNum.toString().padStart(4, '0')
 }

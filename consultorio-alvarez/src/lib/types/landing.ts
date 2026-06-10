@@ -17,7 +17,9 @@ export interface LandingConfig {
     hero_titulo: string
     hero_subtitulo: string
     servicios_titulo: string
+    servicios_subtitulo?: string
     equipo_titulo: string
+    equipo_subtitulo?: string
     booking_titulo: string
     booking_subtitulo: string
     servicios: { icono: string; titulo: string; descripcion: string }[]
@@ -36,6 +38,7 @@ export interface LandingConfig {
     footer_phone: string | null
     footer_email: string | null
     footer_hours: string | null
+    coberturas_subtitulo?: string
 }
 
 export const DEFAULT_LANDING_CONFIG: Omit<LandingConfig, 'id' | 'tenant_id'> = {
@@ -43,7 +46,9 @@ export const DEFAULT_LANDING_CONFIG: Omit<LandingConfig, 'id' | 'tenant_id'> = {
     hero_titulo: 'Agenda tu visita',
     hero_subtitulo: 'Seleccioná día, horario y profesional. Te confirmaremos a la brevedad.',
     servicios_titulo: 'Nuestros Servicios',
+    servicios_subtitulo: 'Cada tratamiento combina precisión clínica con la más alta estética dental.',
     equipo_titulo: 'Nuestro Equipo',
+    equipo_subtitulo: 'Un equipo multidisciplinario con más de 15 años de experiencia.',
     booking_titulo: 'Agenda tu visita',
     booking_subtitulo: 'Seleccioná día, horario y profesional. Te confirmaremos a la brevedad.',
     servicios: [
@@ -66,5 +71,6 @@ export const DEFAULT_LANDING_CONFIG: Omit<LandingConfig, 'id' | 'tenant_id'> = {
     footer_phone: null,
     footer_email: null,
     footer_hours: null,
+    coberturas_subtitulo: 'Trabajamos con las principales coberturas del país para brindarte la mejor atención médica sin preocupaciones.',
 }
 

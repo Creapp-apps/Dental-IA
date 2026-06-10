@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { getNextNroHistoriaClinica } from './pacientes'
 
 async function getTenantBySlug(slug: string) {
     const supabase = createAdminClient()
@@ -106,7 +107,7 @@ export async function getTurnosDisponibles(tenantSlug: string) {
 
     function generarSlotsParaDia(horario: any): string[] {
         if (!horario || !horario.activo) return [];
-        const slots: string[] = [];
+        const slotsSet = new Set<string>();
         
         const addSlots = (apertura: string, cierre: string) => {
             if (!apertura || !cierre) return;
@@ -123,7 +124,7 @@ export async function getTurnosDisponibles(tenantSlug: string) {
                 
                 if (endH > ciH || (endH === ciH && rEndM > ciM)) break;
                 
-                slots.push(`${currH.toString().padStart(2, '0')}:${currM.toString().padStart(2, '0')}`);
+                slotsSet.add(`${currH.toString().padStart(2, '0')}:${currM.toString().padStart(2, '0')}`);
                 
                 currM += 20;
                 if (currM >= 60) {
@@ -140,7 +141,7 @@ export async function getTurnosDisponibles(tenantSlug: string) {
             addSlots(horario.apertura, horario.cierre);
         }
         
-        return slots;
+        return Array.from(slotsSet).sort();
     }
 
     const diasConfig = new Map<number, any>()
@@ -195,6 +196,8 @@ export async function crearReservaPublica(data: {
     notas?: string
     obraSocialId?: string | null
     planSeleccionado?: string | null
+    dni?: string | null
+    pacienteExistenteId?: string | null
 }) {
     const supabase = createAdminClient()
     const tenant = await getTenantBySlug(data.tenantSlug)
@@ -221,61 +224,62 @@ export async function crearReservaPublica(data: {
     if (!profesionalId) return { error: 'No hay profesionales disponibles' }
 
     // Get default treatment type (Revisión de Rutina for online bookings)
-    const { data: defaultTratamiento } = await supabase
+    let { data: defaultTratamiento } = await supabase
         .from('tipos_tratamiento')
         .select('id')
-        .ilike('nombre', '%Revisión%')
+        .eq('tenant_id', tenant.id)
+        .ilike('nombre', '%revis%')
         .limit(1)
-        .single()
+        .maybeSingle()
 
-    if (!defaultTratamiento) {
-        // Fallback: get any treatment type
+    let tipoTratamientoId = defaultTratamiento?.id
+
+    if (!tipoTratamientoId) {
+        // Fallback: get any treatment type for this tenant
         const { data: anyTratamiento } = await supabase
             .from('tipos_tratamiento')
             .select('id')
+            .eq('tenant_id', tenant.id)
             .limit(1)
-            .single()
+            .maybeSingle()
         if (!anyTratamiento) return { error: 'No hay tipos de tratamiento configurados' }
-        defaultTratamiento && Object.assign(defaultTratamiento, anyTratamiento)
+        tipoTratamientoId = anyTratamiento.id
     }
 
-    const tipoTratamientoId = defaultTratamiento?.id
+    // Try to find existing patient by ID or DNI (with or without dots)
+    let pacienteId: string | null = data.pacienteExistenteId || null
+    const cleanDni = data.dni ? data.dni.replace(/\D/g, '') : null
 
-    // Try to find existing patient by telefono
-    let pacienteId: string | null = null
-    if (data.telefono) {
+    if (!pacienteId && cleanDni) {
+        const dotsDni = formatDniWithDots(cleanDni)
         const { data: existing } = await supabase
             .from('pacientes')
             .select('id')
             .eq('tenant_id', tenant.id)
-            .eq('telefono', data.telefono)
-            .single()
+            .or(`dni.eq.${cleanDni},dni.eq.${dotsDni}`)
+            .maybeSingle()
         pacienteId = existing?.id ?? null
     }
 
     // Create patient if new
     if (!pacienteId) {
+        const nextHC = await getNextNroHistoriaClinica(tenant.id, supabase)
         const { data: newPat } = await supabase
             .from('pacientes')
             .insert({
                 tenant_id: tenant.id,
-                nro_historia_clinica: null,
+                nro_historia_clinica: nextHC,
                 nombre: data.nombre,
                 apellido: data.apellido,
                 telefono: data.telefono,
                 email: data.email || null,
+                dni: cleanDni || null,
                 obra_social_id: data.obraSocialId || null,
             })
             .select('id')
             .single()
 
         pacienteId = newPat?.id ?? null
-    } else if (data.obraSocialId) {
-        // Update existing patient's obra social if provided
-        await supabase
-            .from('pacientes')
-            .update({ obra_social_id: data.obraSocialId })
-            .eq('id', pacienteId)
     }
 
     // Build notes with plan info
@@ -373,5 +377,152 @@ export async function crearReservaPublica(data: {
     console.log("=== FIN WA DEBUG ===")
 
     revalidatePath('/agenda')
+    return { success: true }
+}
+
+function formatDniWithDots(dni: string): string {
+    const clean = dni.replace(/\D/g, '')
+    if (clean.length === 7) {
+        return `${clean.slice(0, 1)}.${clean.slice(1, 4)}.${clean.slice(4)}`
+    } else if (clean.length === 8) {
+        return `${clean.slice(0, 2)}.${clean.slice(2, 5)}.${clean.slice(5)}`
+    }
+    return clean
+}
+
+export async function getPacientePorDni(tenantSlug: string, dni: string) {
+    const supabase = createAdminClient()
+    const tenant = await getTenantBySlug(tenantSlug)
+    if (!tenant) return { error: 'Consultorio no encontrado' }
+
+    const cleanDni = dni.replace(/\D/g, '')
+    if (!cleanDni) return { error: 'DNI inválido' }
+
+    const dotsDni = formatDniWithDots(cleanDni)
+
+    const { data, error } = await supabase
+        .from('pacientes')
+        .select(`
+            id,
+            nombre,
+            apellido,
+            telefono,
+            email,
+            obra_social_id
+        `)
+        .eq('tenant_id', tenant.id)
+        .or(`dni.eq.${cleanDni},dni.eq.${dotsDni}`)
+        .maybeSingle()
+
+    if (error) {
+        return { error: 'Error al buscar paciente: ' + error.message }
+    }
+
+    return { data }
+}
+
+export async function notificarDemoraTurno(turnoId: string, demora: number, mensaje: string, metodo: 'MANUAL' | 'OFICIAL') {
+    const supabase = createAdminClient()
+    
+    // Obtener información del turno y paciente
+    const { data: turno, error: turnoError } = await supabase
+        .from('turnos')
+        .select(`
+            id,
+            tenant_id,
+            fecha_inicio,
+            paciente:pacientes (
+                id,
+                nombre,
+                apellido,
+                telefono
+            )
+        `)
+        .eq('id', turnoId)
+        .single()
+
+    if (turnoError || !turno) {
+        return { success: false, error: 'Turno no encontrado: ' + (turnoError?.message || '') }
+    }
+
+    const paciente = turno.paciente as any
+    if (!paciente) {
+        return { success: false, error: 'Paciente no encontrado para este turno' }
+    }
+
+    // Insertar log de notificación en la DB
+    await supabase.from('notificaciones').insert({
+        tenant_id: turno.tenant_id,
+        titulo: '⚠️ Notificación de Demora',
+        mensaje: `Se notificó a ${paciente.nombre} ${paciente.apellido} de una demora de ${demora} min (${metodo}).`,
+        tipo: 'recordatorio',
+        referencia_id: turno.id,
+    })
+
+    if (metodo === 'OFICIAL') {
+        if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
+            return { success: false, error: 'La API Oficial de WhatsApp no está configurada en las variables de entorno' }
+        }
+
+        if (!paciente.telefono) {
+            return { success: false, error: 'El paciente no tiene un número de teléfono registrado' }
+        }
+
+        try {
+            let cleanPhone = paciente.telefono.replace(/\D/g, '')
+            if (cleanPhone.startsWith('11') || cleanPhone.length === 10) {
+                cleanPhone = `54${cleanPhone}`
+            } else if (cleanPhone.startsWith('549')) {
+                cleanPhone = cleanPhone.replace(/^549/, '54')
+            }
+
+            const formatTime = (isoString: string) => {
+                const date = new Date(isoString)
+                return date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
+            }
+
+            const horaOriginal = formatTime(turno.fecha_inicio)
+            const nuevaHora = formatTime(new Date(new Date(turno.fecha_inicio).getTime() + demora * 60000).toISOString())
+
+            const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    to: cleanPhone,
+                    type: 'template',
+                    template: {
+                        name: 'demora_turno', // Nombre de la plantilla oficial esperada
+                        language: { code: 'es_AR' },
+                        components: [
+                            {
+                                type: 'body',
+                                parameters: [
+                                    { type: 'text', text: paciente.nombre },
+                                    { type: 'text', text: String(demora) },
+                                    { type: 'text', text: horaOriginal },
+                                    { type: 'text', text: nuevaHora }
+                                ]
+                            }
+                        ]
+                    }
+                })
+            })
+
+            const wpResult = await wpResponse.json()
+            if (!wpResponse.ok) {
+                console.error('❌ Error Meta WhatsApp API Demora:', JSON.stringify(wpResult, null, 2))
+                return { success: false, error: wpResult?.error?.message || 'Error al invocar API Oficial' }
+            }
+            return { success: true }
+        } catch (e: any) {
+            console.error("❌ Excepción Meta WhatsApp API Demora:", e)
+            return { success: false, error: e?.message || 'Excepción al invocar API Oficial' }
+        }
+    }
+
     return { success: true }
 }

@@ -40,7 +40,7 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                         transition={{ delay: 0.2 }}
                         className="mt-4 text-lg leading-8 text-white/60"
                     >
-                        Trabajamos con las principales coberturas del país para brindarte la mejor atención médica sin preocupaciones.
+                        {config.coberturas_subtitulo || 'Trabajamos con las principales coberturas del país para brindarte la mejor atención médica sin preocupaciones.'}
                     </motion.p>
                 </div>
 

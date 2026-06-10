@@ -109,6 +109,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             const payload = {
                 ...data,
                 fecha_nacimiento: fechaIso,
+                registro_completo: true,
             }
 
             if (paciente) {

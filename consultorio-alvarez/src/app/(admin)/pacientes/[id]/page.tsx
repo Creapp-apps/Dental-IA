@@ -82,6 +82,26 @@ export default async function FichaPacientePage({
                 </div>
             </div>
 
+            {/* Registro Incompleto Alert */}
+            {p.registro_completo === false && (
+                <div className="glass rounded-xl p-4 border-l-4 border-red-500 shadow-glass bg-red-500/5 dark:bg-red-500/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-pulse">
+                    <div className="flex items-start gap-2.5">
+                        <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                        <div>
+                            <h4 className="text-sm font-semibold text-red-700 dark:text-red-300">Falta completar información del paciente</h4>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                Este paciente fue registrado mediante reserva rápida de turno. Completá sus datos de contacto y cobertura para habilitar su ficha completa.
+                            </p>
+                        </div>
+                    </div>
+                    <Link href={`/pacientes/${p.id}/editar`} className="inline-flex shrink-0">
+                        <GlassButton size="sm" className="bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25">
+                            Completar información
+                        </GlassButton>
+                    </Link>
+                </div>
+            )}
+
             {/* Clinical alerts */}
             {(p.alergias || p.medicacion_actual || p.antecedentes) && (
                 <div className="glass rounded-xl p-3.5 border-l-4 border-amber-500 shadow-glass">

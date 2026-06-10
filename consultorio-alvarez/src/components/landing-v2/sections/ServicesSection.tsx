@@ -16,7 +16,7 @@ const ICON_MAP: Record<string, React.ReactNode> = {
     heart: <Heart className="h-5 w-5" />,
 }
 
-export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'servicios' | 'servicios_titulo' | 'color_primary' | 'color_accent'> }) {
+export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'servicios' | 'servicios_titulo' | 'servicios_subtitulo' | 'color_primary' | 'color_accent'> }) {
     const sectionRef = useRef<HTMLDivElement>(null)
     const cardsRef = useRef<HTMLDivElement>(null)
     const titleRef = useRef<HTMLHeadingElement>(null)
@@ -137,12 +137,12 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                     >
                         {config?.servicios_titulo ?? 'Nuestros servicios'}
                     </span>
-                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-gray-900 leading-tight">
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-tight">
                         Tecnología de
                         <span className="text-gradient-landing"> vanguardia</span>
                     </h2>
-                    <p className="mt-4 text-gray-600 font-medium max-w-lg mx-auto text-base">
-                        Cada tratamiento combina precisión clínica con la más alta estética dental.
+                    <p className="mt-4 text-white/80 font-medium max-w-lg mx-auto text-base">
+                        {config?.servicios_subtitulo || 'Cada tratamiento combina precisión clínica con la más alta estética dental.'}
                     </p>
                 </div>
 
@@ -161,8 +161,8 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                                         {ICON_MAP[service.icono] ?? <Star className="h-5 w-5" />}
                                     </div>
                                     <div className="flex-1 text-left">
-                                        <h3 className="text-lg font-bold text-gray-900 mb-1">{service.titulo}</h3>
-                                        <p className="text-sm text-gray-600 font-medium leading-relaxed">{service.descripcion}</p>
+                                        <h3 className="text-lg font-bold text-white mb-1">{service.titulo}</h3>
+                                        <p className="text-sm text-white/80 font-medium leading-relaxed">{service.descripcion}</p>
                                     </div>
                                 </div>
                             </div>
@@ -175,9 +175,9 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                                         {service.icon}
                                     </div>
                                     <div className="flex-1 text-left">
-                                        <h3 className="text-lg font-bold text-gray-900 mb-1">{service.title}</h3>
-                                        <p className="text-xs font-semibold text-teal-600 mb-3">{service.subtitle}</p>
-                                        <p className="text-sm text-gray-600 font-medium leading-relaxed">{service.description}</p>
+                                        <h3 className="text-lg font-bold text-white mb-1">{service.title}</h3>
+                                        <p className="text-xs font-semibold text-teal-400 mb-3">{service.subtitle}</p>
+                                        <p className="text-sm text-white/80 font-medium leading-relaxed">{service.description}</p>
                                     </div>
                                 </div>
                             </div>

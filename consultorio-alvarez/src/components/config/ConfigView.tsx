@@ -615,6 +615,35 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
     )
 }
 
+/* ──────────── Helper Component: TimeSelect ──────────── */
+function TimeSelect({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
+    const options = Array.from({ length: 96 }, (_, i) => {
+        const h = Math.floor(i / 4).toString().padStart(2, '0')
+        const m = ((i % 4) * 15).toString().padStart(2, '0')
+        return `${h}:${m}`
+    })
+    
+    if (value && !options.includes(value)) {
+        options.push(value)
+        options.sort()
+    }
+
+    return (
+        <select
+            value={value}
+            onChange={e => onChange(e.target.value)}
+            disabled={disabled}
+            className="bg-transparent text-foreground rounded-lg px-1.5 py-1 text-xs h-8 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 w-[5rem] sm:w-24 font-mono cursor-pointer border border-border/50 hover:bg-background/20 transition-colors"
+        >
+            {options.map(opt => (
+                <option key={opt} value={opt} className="bg-background text-foreground">
+                    {opt} hs
+                </option>
+            ))}
+        </select>
+    )
+}
+
 /* ──────────── Tab: Horarios ──────────── */
 function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
     const [isPending, startTransition] = useTransition()
@@ -624,7 +653,6 @@ function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
             const h = initialHorarios.find((x: any) => x.dia === d)
             const base = h ?? { dia: d, apertura_manana: '09:00', cierre_manana: '13:00', apertura_tarde: '15:00', cierre_tarde: '18:00', activo: false }
             
-            // Legacy migration
             if (!base.apertura_manana && base.apertura) {
                 return {
                     ...base,
@@ -650,6 +678,46 @@ function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
     }
 
     function guardar() {
+        for (const h of horarios) {
+            if (!h.activo) continue;
+            
+            const [apMH, apMM] = h.apertura_manana.split(':').map(Number)
+            const [ciMH, ciMM] = h.cierre_manana.split(':').map(Number)
+            const [apTH, apTM] = h.apertura_tarde.split(':').map(Number)
+            const [ciTH, ciTM] = h.cierre_tarde.split(':').map(Number)
+            
+            const minM = apMH * 60 + apMM
+            const maxM = ciMH * 60 + ciMM
+            const minT = apTH * 60 + apTM
+            const maxT = ciTH * 60 + ciTM
+            
+            const labelDia = DIA_LABEL[h.dia]
+            
+            if (maxM <= minM) {
+                glassAlert.error({
+                    title: 'Error de Horarios',
+                    description: `En el día ${labelDia}, el horario de cierre de la mañana (${h.cierre_manana}) debe ser posterior a la apertura (${h.apertura_manana}).`
+                })
+                return
+            }
+            
+            if (maxT <= minT) {
+                glassAlert.error({
+                    title: 'Error de Horarios',
+                    description: `En el día ${labelDia}, el horario de cierre de la tarde (${h.cierre_tarde}) debe ser posterior a la apertura (${h.apertura_tarde}).`
+                })
+                return
+            }
+            
+            if (minT < maxM) {
+                glassAlert.error({
+                    title: 'Error de Horarios',
+                    description: `En el día ${labelDia}, el horario de inicio de la tarde (${h.apertura_tarde}) no puede ser anterior o superponerse con el cierre de la mañana (${h.cierre_manana}).`
+                })
+                return
+            }
+        }
+
         startTransition(async () => {
             const r = await actualizarHorarios(horarios)
             r.error ? glassAlert.error({ title: 'Error', description: r.error }) : glassAlert.success({ title: 'Horarios actualizados' })
@@ -671,18 +739,18 @@ function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
                         </div>
                         <div className="pl-8 grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
                             {/* Mañana */}
-                            <div className="flex items-center gap-2 bg-background/50 p-2 rounded-lg border border-border/50">
+                            <div className="flex items-center gap-2 bg-background/50 p-2 rounded-lg border border-border/50 justify-between sm:justify-start">
                                 <span className="text-xs font-medium text-muted-foreground w-12">Mañana</span>
-                                <Input type="time" value={h.apertura_manana} onChange={e => update(h.dia, 'apertura_manana', e.target.value)} className="w-[4.5rem] sm:w-24 text-xs h-8 px-2" disabled={!h.activo} />
+                                <TimeSelect value={h.apertura_manana} onChange={val => update(h.dia, 'apertura_manana', val)} disabled={!h.activo} />
                                 <span className="text-xs text-muted-foreground">a</span>
-                                <Input type="time" value={h.cierre_manana} onChange={e => update(h.dia, 'cierre_manana', e.target.value)} className="w-[4.5rem] sm:w-24 text-xs h-8 px-2" disabled={!h.activo} />
+                                <TimeSelect value={h.cierre_manana} onChange={val => update(h.dia, 'cierre_manana', val)} disabled={!h.activo} />
                             </div>
                             {/* Tarde */}
-                            <div className="flex items-center gap-2 bg-background/50 p-2 rounded-lg border border-border/50">
+                            <div className="flex items-center gap-2 bg-background/50 p-2 rounded-lg border border-border/50 justify-between sm:justify-start">
                                 <span className="text-xs font-medium text-muted-foreground w-12">Tarde</span>
-                                <Input type="time" value={h.apertura_tarde} onChange={e => update(h.dia, 'apertura_tarde', e.target.value)} className="w-[4.5rem] sm:w-24 text-xs h-8 px-2" disabled={!h.activo} />
+                                <TimeSelect value={h.apertura_tarde} onChange={val => update(h.dia, 'apertura_tarde', val)} disabled={!h.activo} />
                                 <span className="text-xs text-muted-foreground">a</span>
-                                <Input type="time" value={h.cierre_tarde} onChange={e => update(h.dia, 'cierre_tarde', e.target.value)} className="w-[4.5rem] sm:w-24 text-xs h-8 px-2" disabled={!h.activo} />
+                                <TimeSelect value={h.cierre_tarde} onChange={val => update(h.dia, 'cierre_tarde', val)} disabled={!h.activo} />
                             </div>
                         </div>
                     </div>

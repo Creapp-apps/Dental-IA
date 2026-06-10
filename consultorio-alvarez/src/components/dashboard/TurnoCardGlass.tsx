@@ -4,11 +4,12 @@ import { useTransition, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { motion } from 'framer-motion'
-import { Edit2, Trash2 } from 'lucide-react'
+import { Edit2, Trash2, MessageSquare } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { GlassButton } from '@/components/ui/glass-button'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
+import { NotificarDemoraModal } from '@/components/agenda/NotificarDemoraModal'
 import { eliminarTurno } from '@/lib/actions/turnos'
 import { PRIORIDAD_COLOR, PRIORIDAD_LABEL, type EstadoTurno, type PrioridadTratamiento } from '@/types'
 
@@ -19,7 +20,7 @@ interface TurnoCardGlassProps {
         estado: string
         prioridad_override: string | null
         notas: string | null
-        paciente?: { nombre: string; apellido: string } | null
+        paciente?: { nombre: string; apellido: string; telefono?: string | null } | null
         tipo_tratamiento?: {
             nombre: string
             duracion_minutos: number
@@ -35,6 +36,7 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
     const estado = turno.estado as EstadoTurno
     const [isPending, startTransition] = useTransition()
     const [confirmOpen, setConfirmOpen] = useState(false)
+    const [demoraOpen, setDemoraOpen] = useState(false)
     const router = useRouter()
 
     function handleDelete() {
@@ -95,10 +97,17 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
             {/* Badge & Actions */}
             <div className="shrink-0 flex flex-col items-end gap-2">
                 <StatusBadge status={estado} />
-                <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                <div className="flex items-center gap-1.5">
+                    {turno.paciente?.telefono && (
+                        <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-400"
+                            onClick={() => setDemoraOpen(true)} disabled={isPending} title="Notificar Demora">
+                            <MessageSquare className="h-3 w-3" />
+                        </GlassButton>
+                    )}
+                    <GlassButton size="sm" variant="glass" className="h-6 text-xs px-2 text-primary border-primary/20 hover:border-primary/50"
                         onClick={() => router.push(`/agenda?edit=${turno.id}`)} disabled={isPending} title="Editar">
-                        <Edit2 className="h-3 w-3" />
+                        <Edit2 className="h-3 w-3 mr-1" />
+                        Editar
                     </GlassButton>
                     <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-500/10"
                         onClick={handleDelete} disabled={isPending} title="Eliminar">
@@ -116,6 +125,12 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
             onConfirm={onConfirmDelete}
             isPending={isPending}
             confirmText="Eliminar turno"
+        />
+
+        <NotificarDemoraModal
+            open={demoraOpen}
+            onOpenChange={setDemoraOpen}
+            turno={turno}
         />
         </>
     )

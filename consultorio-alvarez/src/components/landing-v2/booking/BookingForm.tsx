@@ -14,6 +14,7 @@ import {
     getTurnosDisponibles,
     crearReservaPublica,
     getObrasSocialesPublicas,
+    getPacientePorDni,
 } from '@/lib/actions/reservas'
 import {
     Check,
@@ -409,7 +410,8 @@ function PremiumSelect({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -8, scale: 0.96 }}
                         transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-                        className="absolute z-50 mt-1.5 w-full rounded-xl border border-gray-100 bg-white shadow-xl shadow-black/8 overflow-hidden"
+                        className="absolute z-50 mt-1.5 w-full rounded-xl border border-gray-100 bg-white shadow-xl shadow-black/8 overflow-y-auto max-h-[220px]"
+                        data-lenis-prevent
                     >
                         {options.map((option) => {
                             const isActive = option.value === value
@@ -460,6 +462,8 @@ interface PatientFormData {
     notas: string
     obraSocialId: string
     plan: string
+    dni: string
+    pacienteExistenteId: string
 }
 
 function StepPatientData({
@@ -471,87 +475,245 @@ function StepPatientData({
     obrasSociales: any[]
     onChange: (key: keyof PatientFormData, val: string) => void
 }) {
+    const [buscando, setBuscando] = useState(false)
+    const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null)
+    const [pacienteEncontrado, setPacienteEncontrado] = useState<any | null>(null)
+
     const inputClass =
         'w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:shadow-sm'
-    // For inputs, we add focus styles dynamically using regular style (onFocus would be needed for true dynamic focus, 
-    // but we can use CSS variables in globals.css or just keep it simple). 
-    // Wait, global CSS var --landing-primary is already defined, so we can just use tailwind arbitrary values correctly if we want, 
-    // but to avoid string interpolation issues with arbitrary variants, we'll use a style prop on the div wrapper or just leave the border as neutral focus for now.
-    // Actually, adding a style block to inject focus styles dynamically:
     const focusStyle = { '--tw-ring-color': 'var(--landing-primary, #0d9488)40', '--tw-ring-shadow': 'var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color)' } as React.CSSProperties
+
+    async function handleBuscarDni() {
+        const cleanDni = datos.dni.replace(/\D/g, '')
+        if (!cleanDni) {
+            setErrorBusqueda('Por favor, ingresá un DNI válido')
+            return
+        }
+
+        setBuscando(true)
+        setErrorBusqueda(null)
+        setPacienteEncontrado(null)
+        onChange('pacienteExistenteId', '')
+
+        try {
+            const res = await getPacientePorDni('alvarez', cleanDni)
+            if (res.error) {
+                setErrorBusqueda(res.error)
+            } else if (res.data) {
+                setPacienteEncontrado(res.data)
+                // Populate the required fields in parent state for confirmation / WhatsApp redirect
+                onChange('pacienteExistenteId', res.data.id)
+                onChange('nombre', res.data.nombre)
+                onChange('apellido', res.data.apellido)
+                onChange('telefono', res.data.telefono || '')
+                onChange('email', res.data.email || '')
+                onChange('obraSocialId', res.data.obra_social_id || '')
+            } else {
+                setErrorBusqueda('DNI no encontrado, por favor contacte a administración')
+            }
+        } catch (err) {
+            setErrorBusqueda('Ocurrió un error al buscar el DNI. Reintentá.')
+        } finally {
+            setBuscando(false)
+        }
+    }
+
+    const selectedObra = obrasSociales.find(o => o.id === datos.obraSocialId)
 
     return (
         <div>
             <h2 className="text-base font-semibold text-gray-800 mb-4">Tus datos</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={focusStyle}>
-                <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre *</label>
-                    <input type="text" className={`${inputClass} focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} placeholder="Tu nombre" value={datos.nombre} onChange={(e) => onChange('nombre', e.target.value)} />
-                </div>
-                <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Apellido *</label>
-                    <input type="text" className={`${inputClass} focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} placeholder="Tu apellido" value={datos.apellido} onChange={(e) => onChange('apellido', e.target.value)} />
-                </div>
-                <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Teléfono *</label>
-                    <input type="tel" className={`${inputClass} focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} placeholder="11 4567-8901" value={datos.telefono} onChange={(e) => onChange('telefono', e.target.value)} />
-                </div>
-                <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Email</label>
-                    <input type="email" className={`${inputClass} focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} placeholder="correo@ejemplo.com" value={datos.email} onChange={(e) => onChange('email', e.target.value)} />
-                </div>
-                <div>
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">¿Es paciente nuevo?</label>
-                    <PremiumSelect
-                        value={datos.es_nuevo}
-                        options={[
-                            { value: 'si', label: 'Sí, es mi primera vez' },
-                            { value: 'no', label: 'No, ya me atendí aquí' },
-                        ]}
-                        onChange={(val) => onChange('es_nuevo', val)}
-                    />
-                </div>
-                
-                <div className="sm:col-span-1">
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Prepaga / Obra Social *</label>
-                    <PremiumSelect
-                        value={datos.obraSocialId || ''}
-                        options={[
-                            ...obrasSociales.map(o => ({ value: o.id, label: o.nombre })),
-                            { value: 'particular', label: 'No tengo / Particular' }
-                        ]}
-                        onChange={(val) => {
-                            onChange('obraSocialId', val)
-                            onChange('plan', '') // reset plan
-                        }}
-                    />
-                </div>
+            
+            {/* 1. Selector de tipo de paciente */}
+            <div className="mb-5">
+                <label className="block text-xs font-medium text-gray-600 mb-1.5">¿Es paciente nuevo?</label>
+                <PremiumSelect
+                    value={datos.es_nuevo}
+                    options={[
+                        { value: 'si', label: 'Sí, es mi primera vez' },
+                        { value: 'no', label: 'No, ya me atendí aquí' },
+                    ]}
+                    onChange={(val) => {
+                        onChange('es_nuevo', val)
+                        setPacienteEncontrado(null)
+                        setErrorBusqueda(null)
+                        
+                        // Reset parent fields
+                        onChange('nombre', '')
+                        onChange('apellido', '')
+                        onChange('telefono', '')
+                        onChange('email', '')
+                        onChange('dni', '')
+                        onChange('obraSocialId', '')
+                        onChange('plan', '')
+                        onChange('pacienteExistenteId', '')
+                    }}
+                />
+            </div>
 
-                {datos.obraSocialId && datos.obraSocialId !== 'particular' && (() => {
-                    const selectedObra = obrasSociales.find(o => o.id === datos.obraSocialId)
-                    const opcionesPlanes = selectedObra?.planes 
-                        ? selectedObra.planes.split(',').map((p: string) => ({ value: p.trim(), label: p.trim() })) 
-                        : []
-                    
-                    if (opcionesPlanes.length > 0) {
-                        return (
-                            <div className="sm:col-span-1">
-                                <label className="block text-xs font-medium text-gray-600 mb-1.5">Plan *</label>
-                                <PremiumSelect
-                                    value={datos.plan || ''}
-                                    options={opcionesPlanes}
-                                    onChange={(val) => onChange('plan', val)}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4" style={focusStyle}>
+                
+                {/* FLUJO PACIENTE NUEVO */}
+                {datos.es_nuevo === 'si' && (
+                    <>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">DNI *</label>
+                            <input type="text" className={`${inputClass} focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} placeholder="Tu número de DNI" value={datos.dni} onChange={(e) => onChange('dni', e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">Teléfono *</label>
+                            <input type="tel" className={`${inputClass} focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} placeholder="11 4567-8901" value={datos.telefono} onChange={(e) => onChange('telefono', e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">Nombre *</label>
+                            <input type="text" className={`${inputClass} focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} placeholder="Tu nombre" value={datos.nombre} onChange={(e) => onChange('nombre', e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">Apellido *</label>
+                            <input type="text" className={`${inputClass} focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} placeholder="Tu apellido" value={datos.apellido} onChange={(e) => onChange('apellido', e.target.value)} />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">Email</label>
+                            <input type="email" className={`${inputClass} focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} placeholder="correo@ejemplo.com" value={datos.email} onChange={(e) => onChange('email', e.target.value)} />
+                        </div>
+                        
+                        <div className="sm:col-span-1">
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">Prepaga / Obra Social *</label>
+                            <PremiumSelect
+                                value={datos.obraSocialId || ''}
+                                options={[
+                                    ...obrasSociales.map(o => ({ value: o.id, label: o.nombre })),
+                                    { value: 'particular', label: 'No tengo / Particular' }
+                                ]}
+                                onChange={(val) => {
+                                    onChange('obraSocialId', val)
+                                    onChange('plan', '')
+                                }}
+                            />
+                        </div>
+
+                        {datos.obraSocialId && datos.obraSocialId !== 'particular' && (() => {
+                            const opcionesPlanes = selectedObra?.planes 
+                                ? selectedObra.planes.split(',').map((p: string) => ({ value: p.trim(), label: p.trim() })) 
+                                : []
+                            
+                            if (opcionesPlanes.length > 0) {
+                                return (
+                                    <div className="sm:col-span-1">
+                                        <label className="block text-xs font-medium text-gray-600 mb-1.5">Plan *</label>
+                                        <PremiumSelect
+                                            value={datos.plan || ''}
+                                            options={opcionesPlanes}
+                                            onChange={(val) => onChange('plan', val)}
+                                        />
+                                    </div>
+                                )
+                            }
+                            return null
+                        })()}
+
+                        <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-gray-600 mb-1.5">Motivo (opcional)</label>
+                            <textarea className={`${inputClass} resize-none focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} rows={3} placeholder="Contanos brevemente el motivo de tu consulta..." value={datos.notas} onChange={(e) => onChange('notas', e.target.value)} />
+                        </div>
+                    </>
+                )}
+
+                {/* FLUJO PACIENTE EXISTENTE */}
+                {datos.es_nuevo === 'no' && (
+                    <div className="sm:col-span-2 flex flex-col gap-4">
+                        {/* Input DNI y Botón de búsqueda */}
+                        <div className="flex flex-col sm:flex-row gap-3 items-end">
+                            <div className="flex-1 w-full">
+                                <label className="block text-xs font-medium text-gray-600 mb-1.5">DNI *</label>
+                                <input
+                                    type="text"
+                                    className={`${inputClass} focus:ring-2`}
+                                    style={{ outlineColor: 'var(--landing-primary, #0d9488)' }}
+                                    placeholder="Ingresa tu número de DNI completo"
+                                    value={datos.dni}
+                                    onChange={(e) => onChange('dni', e.target.value)}
+                                    disabled={buscando}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault()
+                                            handleBuscarDni()
+                                        }
+                                    }}
                                 />
                             </div>
-                        )
-                    }
-                    return null
-                })()}
+                            <button
+                                type="button"
+                                onClick={handleBuscarDni}
+                                disabled={buscando || !datos.dni.trim()}
+                                className="w-full sm:w-auto px-6 py-2.5 rounded-lg text-sm font-semibold text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 transition-all hover:brightness-105 active:scale-[0.98]"
+                                style={{ backgroundColor: 'var(--landing-primary, #0d9488)' }}
+                            >
+                                {buscando ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                        Buscando...
+                                    </>
+                                ) : (
+                                    'Ingresar DNI'
+                                )}
+                            </button>
+                        </div>
 
-                <div className="sm:col-span-2">
-                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Motivo (opcional)</label>
-                    <textarea className={`${inputClass} resize-none focus:ring-2`} style={{ outlineColor: 'var(--landing-primary, #0d9488)' }} rows={3} placeholder="Contanos brevemente el motivo de tu consulta..." value={datos.notas} onChange={(e) => onChange('notas', e.target.value)} />
-                </div>
+                        {/* Error de Búsqueda */}
+                        {errorBusqueda && (
+                            <div className="p-4 rounded-xl border border-red-100 bg-red-50/50 text-red-700 text-sm font-medium animate-fadeIn">
+                                {errorBusqueda}
+                            </div>
+                        )}
+
+                        {/* Paciente Encontrado (Solo Lectura) */}
+                        {pacienteEncontrado && (
+                            <div className="p-5 rounded-2xl border border-teal-100 bg-teal-50/50 text-teal-800 text-sm animate-fadeIn">
+                                <p className="font-semibold text-teal-950 mb-3.5 flex items-center gap-1.5">
+                                    <Check className="h-4 w-4 text-teal-600" strokeWidth={3} />
+                                    Paciente verificado con éxito
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                                    <div>
+                                        <span className="font-semibold block text-teal-800/60 uppercase tracking-wider text-[9px] mb-0.5">Nombre Completo</span>
+                                        <span className="text-sm font-semibold text-teal-900">{pacienteEncontrado.nombre} {pacienteEncontrado.apellido}</span>
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold block text-teal-800/60 uppercase tracking-wider text-[9px] mb-0.5">Teléfono</span>
+                                        <span className="text-sm font-semibold text-teal-900">{pacienteEncontrado.telefono || 'No registrado'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold block text-teal-800/60 uppercase tracking-wider text-[9px] mb-0.5">Email</span>
+                                        <span className="text-sm font-semibold text-teal-900">{pacienteEncontrado.email || 'No registrado'}</span>
+                                    </div>
+                                    <div>
+                                        <span className="font-semibold block text-teal-800/60 uppercase tracking-wider text-[9px] mb-0.5">Obra Social / Prepaga</span>
+                                        <span className="text-sm font-semibold text-teal-900">
+                                            {selectedObra?.nombre || 'Particular (Sin obra social)'}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Motivo de Consulta */}
+                        {pacienteEncontrado && (
+                            <div className="mt-2 animate-fadeIn">
+                                <label className="block text-xs font-medium text-gray-600 mb-1.5">Motivo (opcional)</label>
+                                <textarea
+                                    className={`${inputClass} resize-none focus:ring-2`}
+                                    style={{ outlineColor: 'var(--landing-primary, #0d9488)' }}
+                                    rows={3}
+                                    placeholder="Contanos brevemente el motivo de tu consulta..."
+                                    value={datos.notas}
+                                    onChange={(e) => onChange('notas', e.target.value)}
+                                />
+                            </div>
+                        )}
+                    </div>
+                )}
+
             </div>
         </div>
     )
@@ -598,6 +760,8 @@ export function BookingForm() {
         notas: '',
         obraSocialId: '',
         plan: '',
+        dni: '',
+        pacienteExistenteId: '',
     })
 
     // Real data from Supabase
@@ -637,7 +801,9 @@ export function BookingForm() {
     const canNext = [
         selectedDate !== null && selectedTime !== null && selectedTime !== '',
         professionalId !== null,
-        datos.nombre.trim() !== '' && datos.apellido.trim() !== '' && datos.telefono.trim() !== '',
+        datos.es_nuevo === 'si'
+            ? datos.nombre.trim() !== '' && datos.apellido.trim() !== '' && datos.telefono.trim() !== '' && datos.dni.trim() !== ''
+            : datos.pacienteExistenteId !== '' && datos.pacienteExistenteId !== null,
     ]
 
     async function handleNext() {
@@ -683,6 +849,8 @@ export function BookingForm() {
                     notas: datos.notas,
                     obraSocialId: datos.obraSocialId !== 'particular' ? datos.obraSocialId : null,
                     planSeleccionado: datos.plan,
+                    dni: datos.dni,
+                    pacienteExistenteId: datos.es_nuevo === 'no' ? datos.pacienteExistenteId : null,
                 })
                 if (result.error) {
                     glassAlert.error({ title: 'Error', description: result.error })

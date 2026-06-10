@@ -74,7 +74,9 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
         hero_titulo: config.hero_titulo,
         hero_subtitulo: config.hero_subtitulo,
         servicios_titulo: config.servicios_titulo,
+        servicios_subtitulo: config.servicios_subtitulo ?? '',
         equipo_titulo: config.equipo_titulo,
+        equipo_subtitulo: config.equipo_subtitulo ?? '',
         booking_titulo: config.booking_titulo,
         booking_subtitulo: config.booking_subtitulo,
         meta_title: config.meta_title ?? '',
@@ -83,6 +85,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
         footer_phone: config.footer_phone ?? '',
         footer_email: config.footer_email ?? '',
         footer_hours: config.footer_hours ?? '',
+        coberturas_subtitulo: config.coberturas_subtitulo ?? '',
     })
 
     // Colores
@@ -396,6 +399,17 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                             <Input value={textos.equipo_titulo} onChange={e => setTextos(t => ({ ...t, equipo_titulo: e.target.value }))} />
                         </Field>
                     </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <Field label="Subtítulo sección Servicios">
+                            <Input value={textos.servicios_subtitulo} onChange={e => setTextos(t => ({ ...t, servicios_subtitulo: e.target.value }))} placeholder="Cada tratamiento combina precisión clínica..." />
+                        </Field>
+                        <Field label="Subtítulo sección Equipo">
+                            <Input value={textos.equipo_subtitulo} onChange={e => setTextos(t => ({ ...t, equipo_subtitulo: e.target.value }))} placeholder="Un equipo multidisciplinario con..." />
+                        </Field>
+                    </div>
+                    <Field label="Subtítulo sección Coberturas / Obras Sociales">
+                        <Input value={textos.coberturas_subtitulo} onChange={e => setTextos(t => ({ ...t, coberturas_subtitulo: e.target.value }))} placeholder="Trabajamos con las principales coberturas del país..." />
+                    </Field>
                     <div className="border-t border-border/40 pt-3">
                         <p className="text-xs font-medium text-muted-foreground mb-2">SEO (para Google)</p>
                         <div className="space-y-2">

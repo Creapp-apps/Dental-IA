@@ -8,7 +8,7 @@ import type { LandingConfig } from '@/lib/types/landing'
 
 gsap.registerPlugin(ScrollTrigger)
 
-export function TeamSection({ config, professionals = [] }: { config?: Pick<LandingConfig, 'equipo_titulo'>, professionals?: any[] }) {
+export function TeamSection({ config, professionals = [] }: { config?: Pick<LandingConfig, 'equipo_titulo' | 'equipo_subtitulo'>, professionals?: any[] }) {
     const sectionRef = useRef<HTMLDivElement>(null)
     const cardsRef = useRef<HTMLDivElement>(null)
     const titleRef = useRef<HTMLDivElement>(null)
@@ -71,12 +71,12 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                     >
                         {config?.equipo_titulo ?? 'Nuestro equipo'}
                     </span>
-                    <h2 className="text-4xl sm:text-5xl font-extrabold text-gray-900 leading-tight">
+                    <h2 className="text-4xl sm:text-5xl font-extrabold text-white leading-tight">
                         Profesionales de
                         <span className="text-gradient-landing"> confianza</span>
                     </h2>
-                    <p className="mt-4 text-gray-600 font-medium max-w-lg mx-auto text-base">
-                        Un equipo multidisciplinario con más de 15 años de experiencia.
+                    <p className="mt-4 text-white/80 font-medium max-w-lg mx-auto text-base">
+                        {config?.equipo_subtitulo || 'Un equipo multidisciplinario con más de 15 años de experiencia.'}
                     </p>
                 </div>
 
@@ -98,7 +98,7 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                                         initials
                                     )}
                                 </div>
-                                <h3 className="text-lg font-bold text-gray-900 drop-shadow-sm">
+                                <h3 className="text-lg font-bold text-white drop-shadow-sm">
                                     Dr/a. {prof.nombre} {prof.apellido}
                                 </h3>
                                 <p
@@ -106,7 +106,7 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                                     style={{ color: 'var(--landing-primary, #0d9488)' }}
                                 >{prof.especialidad || 'Odontología General'}</p>
                                 {prof.matricula && (
-                                    <p className="text-xs text-gray-600 mt-3 font-medium tracking-wide drop-shadow-sm">{prof.matricula}</p>
+                                    <p className="text-xs text-white/60 mt-3 font-medium tracking-wide drop-shadow-sm">{prof.matricula}</p>
                                 )}
                             </div>
                         )

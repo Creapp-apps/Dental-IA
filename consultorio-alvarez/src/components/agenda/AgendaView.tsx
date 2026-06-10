@@ -1,14 +1,14 @@
 'use client'
 
 import { useState, useTransition, useMemo, useEffect } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import {
     format, startOfWeek, endOfWeek, addWeeks, subWeeks,
     addDays, subDays, addMonths, subMonths, isSameDay, parseISO, isToday,
     startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -21,6 +21,7 @@ import {
 } from '@/types'
 import { cn } from '@/lib/utils'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
+import { NotificarDemoraModal } from '@/components/agenda/NotificarDemoraModal'
 
 // ── Apple-style staggered spring animation ─────────────────────
 const sectionVariants = {
@@ -60,6 +61,7 @@ export function AgendaView({
     turnosIniciales,
     pacientes,
 }: AgendaViewProps) {
+    const router = useRouter()
     const [vistaActiva, setVistaActiva] = useState<ViewMode>('semana')
     const [baseDate, setBaseDate] = useState(new Date())
     const [diaSeleccionado, setDiaSeleccionado] = useState(new Date())
@@ -67,6 +69,7 @@ export function AgendaView({
     const [modalProfId, setModalProfId] = useState<string>('')
     const [turnoAEditar, setTurnoAEditar] = useState<any>(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+    const [turnoADemorar, setTurnoADemorar] = useState<any>(null)
     const [isPending, startTransition] = useTransition()
     const [isFullscreen, setIsFullscreen] = useState(false)
 
@@ -121,8 +124,13 @@ export function AgendaView({
             setTurnoAEditar(turno)
             setModalProfId(turno.profesional_id)
             setModalOpen(true)
+            
+            // Clean up the URL query parameter so it doesn't reopen on subsequent renders/state-changes
+            const url = new URL(window.location.href)
+            url.searchParams.delete('edit')
+            router.replace(url.pathname + url.search, { scroll: false })
         }
-    }, [editTurnoId, turnosIniciales])
+    }, [editTurnoId, turnosIniciales, router])
 
 
     // ── Compute visible days based on view mode ────────────────
@@ -287,7 +295,9 @@ export function AgendaView({
                     )}
                 >
                     {diasVisibles.map((dia) => {
-                        const totalDia = turnosIniciales.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), dia)).length
+                        const turnosDelDia = turnosIniciales.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), dia))
+                        const totalDia = turnosDelDia.length
+                        const pendientesDia = turnosDelDia.filter((t: any) => t.estado === 'PENDIENTE').length
                         const esHoy = isToday(dia)
                         const isSelected = isSameDay(dia, diaSeleccionado)
                         return (
@@ -295,45 +305,71 @@ export function AgendaView({
                                 key={dia.toISOString()}
                                 onClick={() => setDiaSeleccionado(dia)}
                                 className={cn(
-                                    'relative rounded-xl p-2.5 text-center transition-all cursor-pointer border shrink-0',
+                                    'relative rounded-xl p-2.5 text-center transition-all cursor-pointer border shrink-0 flex flex-col items-center justify-between',
                                     vistaActiva !== 'semana' && 'min-w-[4.5rem]',
                                     isSelected
                                         ? 'bg-primary border-primary text-primary-foreground shadow-glass-lg'
                                         : esHoy
                                             ? 'glass border-primary/50 text-primary font-semibold'
-                                            : 'glass-subtle border-transparent hover:border-white/20 text-muted-foreground hover:text-foreground'
+                                            : pendientesDia > 0
+                                                ? 'glass border-amber-500/40 text-muted-foreground hover:text-foreground shadow-[0_0_12px_rgba(245,158,11,0.1)] hover:border-amber-500/60'
+                                                : 'glass-subtle border-transparent hover:border-white/20 text-muted-foreground hover:text-foreground'
                                 )}
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                             >
                                 {/* Dot indicator for days with turnos */}
                                 {totalDia > 0 && (
-                                    <span className={cn(
-                                        'absolute top-1.5 right-1.5 flex h-2 w-2',
-                                    )}>
-                                        <span className={cn(
-                                            'absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping',
-                                            isSelected ? 'bg-white/60' : 'bg-emerald-400'
-                                        )} />
-                                        <span className={cn(
-                                            'relative inline-flex rounded-full h-2 w-2',
-                                            isSelected ? 'bg-white' : 'bg-emerald-500'
-                                        )} />
+                                    <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                                        {pendientesDia > 0 ? (
+                                            <>
+                                                <span className={cn(
+                                                    'absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping bg-amber-400'
+                                                )} />
+                                                <span className={cn(
+                                                    'relative inline-flex rounded-full h-2 w-2',
+                                                    isSelected ? 'bg-amber-300' : 'bg-amber-500'
+                                                )} />
+                                            </>
+                                        ) : (
+                                            <>
+                                                <span className={cn(
+                                                    'absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping',
+                                                    isSelected ? 'bg-white/60' : 'bg-emerald-400'
+                                                )} />
+                                                <span className={cn(
+                                                    'relative inline-flex rounded-full h-2 w-2',
+                                                    isSelected ? 'bg-white' : 'bg-emerald-500'
+                                                )} />
+                                            </>
+                                        )}
                                     </span>
                                 )}
                                 <p className={cn("text-xs uppercase tracking-wide", isSelected ? "opacity-90" : "opacity-70")}>
                                     {format(dia, 'EEE', { locale: es })}
                                 </p>
-                                <p className="text-xl font-bold leading-tight">{format(dia, 'd')}</p>
+                                <p className="text-xl font-bold leading-tight my-0.5">{format(dia, 'd')}</p>
                                 {totalDia > 0 && (
-                                    <p className={cn(
-                                        "text-[10px] mt-1 font-semibold rounded-full px-1.5 py-0.5 mx-auto w-fit",
-                                        isSelected
-                                            ? 'bg-white/20 text-white'
-                                            : 'bg-primary/10 text-primary'
-                                    )}>
-                                        {totalDia} turno{totalDia > 1 ? 's' : ''}
-                                    </p>
+                                    <div className="flex flex-col gap-1 items-center w-full">
+                                        <p className={cn(
+                                            "text-[10px] font-semibold rounded-full px-1.5 py-0.5 mx-auto w-fit",
+                                            isSelected
+                                                ? 'bg-white/20 text-white'
+                                                : 'bg-primary/10 text-primary'
+                                        )}>
+                                            {totalDia} turno{totalDia > 1 ? 's' : ''}
+                                        </p>
+                                        {pendientesDia > 0 && (
+                                            <span className={cn(
+                                                "text-[9px] font-extrabold rounded-md px-1 py-0.5 w-fit text-center animate-pulse",
+                                                isSelected
+                                                    ? 'bg-amber-400 text-black shadow-[0_0_8px_rgba(245,158,11,0.4)]'
+                                                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                            )}>
+                                                {pendientesDia} sin conf.
+                                            </span>
+                                        )}
+                                    </div>
                                 )}
                             </motion.button>
                         )
@@ -386,6 +422,7 @@ export function AgendaView({
                                                     onCambiarEstado={handleCambiarEstado}
                                                     onEdit={handleEditTurno}
                                                     onDelete={handleDeleteTurno}
+                                                    onNotifyDelay={(t) => setTurnoADemorar(t)}
                                                     isPending={isPending}
                                                 />
                                             </div>
@@ -423,6 +460,13 @@ export function AgendaView({
                 isPending={isPending}
                 confirmText="Eliminar turno"
             />
+
+            {/* Modal de Notificar Demora */}
+            <NotificarDemoraModal
+                open={!!turnoADemorar}
+                onOpenChange={(open) => !open && setTurnoADemorar(null)}
+                turno={turnoADemorar}
+            />
         </div>
     )
 }
@@ -436,6 +480,7 @@ function TurnoAgendaCard({
     onCambiarEstado,
     onEdit,
     onDelete,
+    onNotifyDelay,
     isPending,
 }: {
     turno: any
@@ -444,6 +489,7 @@ function TurnoAgendaCard({
     onCambiarEstado: (id: string, estado: EstadoTurno) => void
     onEdit: (turno: any) => void
     onDelete: (id: string) => void
+    onNotifyDelay: (turno: any) => void
     isPending: boolean
 }) {
     const estado = turno.estado as EstadoTurno
@@ -519,14 +565,23 @@ function TurnoAgendaCard({
                         Revertir a pendiente
                     </GlassButton>
                 )}
+                {turno.paciente?.telefono && (
+                    <GlassButton size="sm" variant="glass" className="h-6 text-xs px-2 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-400"
+                        onClick={() => onNotifyDelay(turno)} disabled={isPending} title="Avisar Demora">
+                        <MessageSquare className="h-3 w-3 mr-1" />
+                        Demora
+                    </GlassButton>
+                )}
                 <div className="flex-1"></div>
-                <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                <GlassButton size="sm" variant="glass" className="h-6 text-xs px-2 text-primary border-primary/20 hover:border-primary/50"
                     onClick={() => onEdit(turno)} disabled={isPending} title="Editar">
-                    <Edit2 className="h-3 w-3" />
+                    <Edit2 className="h-3 w-3 mr-1" />
+                    Editar
                 </GlassButton>
                 <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-500/10"
                     onClick={() => onDelete(turno.id)} disabled={isPending} title="Eliminar">
                     <Trash2 className="h-3 w-3" />
+                    Eliminar
                 </GlassButton>
             </div>
         </motion.div>
