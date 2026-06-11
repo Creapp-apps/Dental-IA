@@ -32,6 +32,10 @@ const spaceGrotesk = Space_Grotesk({
 export const metadata: Metadata = {
   title: 'Consultorio Alvarez - Clinica Virtual',
   description: 'Plataforma integral de gestión para consultorios odontológicos',
+  icons: {
+    icon: '/favicon.ico',
+    apple: '/LOGO-NOTIF.png',
+  }
 }
 
 export default function RootLayout({
