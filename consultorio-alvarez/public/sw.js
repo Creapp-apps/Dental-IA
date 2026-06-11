@@ -10,10 +10,10 @@ self.addEventListener('push', function (event) {
 
     try {
         const payload = event.data.json();
-        const title = payload.title || 'Consultorio Álvarez';
+        const title = payload.title || 'Consultorio Alvarez';
         const options = {
             body: payload.body || '',
-            icon: payload.icon || '/LOGO-ALVAREZ.png',
+            icon: payload.icon || '/LOGO-NOTIF.png',
             badge: payload.badge || '/favicon.ico',
             data: {
                 url: payload.url || '/agenda'
@@ -30,9 +30,9 @@ self.addEventListener('push', function (event) {
         // Fallback to plain text if JSON parsing fails
         const text = event.data.text();
         event.waitUntil(
-            self.registration.showNotification('Consultorio Álvarez', {
+            self.registration.showNotification('Consultorio Alvarez', {
                 body: text,
-                icon: '/LOGO-ALVAREZ.png',
+                icon: '/LOGO-NOTIF.png',
                 data: { url: '/agenda' }
             })
         );

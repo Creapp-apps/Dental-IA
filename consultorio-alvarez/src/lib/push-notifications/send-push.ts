@@ -26,7 +26,8 @@ export async function sendPushNotification(
     const payload = JSON.stringify({
         title,
         body,
-        url
+        url,
+        icon: '/LOGO-NOTIF.png'
     })
 
     try {

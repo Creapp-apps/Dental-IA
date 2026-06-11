@@ -30,7 +30,7 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata: Metadata = {
-  title: 'Dental-IA — Plataforma de Gestión Odontológica',
+  title: 'Consultorio Alvarez - Clinica Virtual',
   description: 'Plataforma integral de gestión para consultorios odontológicos',
 }
 
