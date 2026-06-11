@@ -93,7 +93,7 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
         direccion: tenant.direccion || '', ciudad: tenant.ciudad || '',
         provincia: tenant.provincia || '', cuit: tenant.cuit || '',
     })
-    const [tratForm, setTratForm] = useState({ nombre: '', duracion_minutos: '30', precio_referencia: '', color: '#3b82f6' })
+    const [tratForm, setTratForm] = useState({ nombre: '', duracion_minutos: '30', color: '#3b82f6' })
     const [showTratForm, setShowTratForm] = useState(false)
     const [editingTratId, setEditingTratId] = useState<string | null>(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -106,7 +106,7 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
     }
 
     function abrirNuevoTratamiento() {
-        setTratForm({ nombre: '', duracion_minutos: '30', precio_referencia: '', color: '#3b82f6' })
+        setTratForm({ nombre: '', duracion_minutos: '30', color: '#3b82f6' })
         setEditingTratId(null)
         setShowTratForm(true)
     }
@@ -115,7 +115,6 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
         setTratForm({
             nombre: t.nombre,
             duracion_minutos: String(t.duracion_minutos || 30),
-            precio_referencia: t.precio_referencia ? String(t.precio_referencia) : '',
             color: t.color || '#3b82f6'
         })
         setEditingTratId(t.id)
@@ -128,7 +127,6 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
             const dataToSave = {
                 nombre: tratForm.nombre,
                 duracion_minutos: parseInt(tratForm.duracion_minutos) || 30,
-                precio_referencia: parseFloat(tratForm.precio_referencia) || undefined,
                 color: tratForm.color,
             }
 
@@ -142,7 +140,7 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
             if (r.error) glassAlert.error({ title: 'Error', description: r.error })
             else {
                 glassAlert.success({ title: editingTratId ? 'Tratamiento actualizado' : 'Tratamiento creado' })
-                setTratForm({ nombre: '', duracion_minutos: '30', precio_referencia: '', color: '#3b82f6' })
+                setTratForm({ nombre: '', duracion_minutos: '30', color: '#3b82f6' })
                 setEditingTratId(null)
                 setShowTratForm(false)
             }
@@ -204,17 +202,12 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
                 </div>
                 {showTratForm && (
                     <div className="glass-subtle rounded-xl p-3 space-y-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
                             <Input placeholder="Nombre" value={tratForm.nombre} onChange={e => setTratForm(f => ({ ...f, nombre: e.target.value }))} />
 
                             <div className="relative flex items-center">
                                 <Input type="number" className="pr-16 text-right" placeholder="Duración" value={tratForm.duracion_minutos} onChange={e => setTratForm(f => ({ ...f, duracion_minutos: e.target.value }))} />
                                 <span className="absolute right-3 text-xs text-muted-foreground pointer-events-none">minutos</span>
-                            </div>
-
-                            <div className="relative flex items-center">
-                                <span className="absolute left-3 text-xs text-muted-foreground pointer-events-none">$</span>
-                                <Input type="number" className="pl-6" placeholder="Precio" value={tratForm.precio_referencia} onChange={e => setTratForm(f => ({ ...f, precio_referencia: e.target.value }))} />
                             </div>
 
                             <div className="flex gap-1">
@@ -232,7 +225,6 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
                             <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
                             <span className="text-sm font-medium text-foreground flex-1">{t.nombre}</span>
                             <span className="text-xs text-muted-foreground">{t.duracion_minutos}min</span>
-                            {t.precio_referencia && <span className="text-xs text-muted-foreground">${Number(t.precio_referencia).toLocaleString('es-AR')}</span>}
                             
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                                 <button
