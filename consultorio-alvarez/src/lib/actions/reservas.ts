@@ -325,6 +325,20 @@ export async function crearReservaPublica(data: {
         referencia_id: turnoData?.id,
     })
 
+    // --- DISPARAR NOTIFICACION PUSH A ADMINISTRACIÓN / SECRETARIAS ---
+    try {
+        const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+        const pushTitle = '🌟 Nueva Solicitud de Turno'
+        const pushBody = `${data.nombre} ${data.apellido} solicitó un turno el ${data.fecha} a las ${data.hora}.`
+        
+        await Promise.all([
+            sendPushToRole('admin', tenant.id, pushTitle, pushBody, '/agenda'),
+            sendPushToRole('secretaria', tenant.id, pushTitle, pushBody, '/agenda')
+        ])
+    } catch (pushErr) {
+        console.error('Error al enviar push a administradores en crearReservaPublica:', pushErr)
+    }
+
     // --- DISPARAR META WHATSAPP CLOUD API ---
     console.log("=== WA DEBUG ===")
     console.log("Token:", !!process.env.META_WA_ACCESS_TOKEN, "PhoneID:", !!process.env.META_WA_PHONE_NUMBER_ID, "Tel:", data.telefono)

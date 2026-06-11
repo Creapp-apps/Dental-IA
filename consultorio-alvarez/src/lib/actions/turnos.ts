@@ -52,6 +52,43 @@ export async function crearTurno(formData: {
 
     if (error) return { error: error.message }
 
+    // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
+    try {
+        const { createAdminClient } = await import('@/lib/supabase/admin')
+        const admin = createAdminClient()
+        const { data: usuarioProf } = await admin
+            .from('usuarios')
+            .select('id')
+            .eq('profesional_id', formData.profesional_id)
+            .eq('activo', true)
+            .maybeSingle()
+
+        if (usuarioProf?.id) {
+            const [pacienteRes, tratamientoRes] = await Promise.all([
+                admin.from('pacientes').select('nombre, apellido').eq('id', formData.paciente_id).single(),
+                admin.from('tipos_tratamiento').select('nombre').eq('id', formData.tipo_tratamiento_id).single()
+            ])
+
+            const pct = pacienteRes.data
+            const trat = tratamientoRes.data?.nombre || 'Consulta'
+
+            const { format } = await import('date-fns')
+            const { es } = await import('date-fns/locale')
+            const fechaObj = new Date(formData.fecha_inicio)
+            const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
+
+            const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
+            await sendPushToUser(
+                usuarioProf.id,
+                '📅 Nuevo Turno Asignado',
+                `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} (${fechaStr})`,
+                '/agenda'
+            )
+        }
+    } catch (pushErr) {
+        console.error('Error al enviar push al profesional en crearTurno:', pushErr)
+    }
+
     // --- INTEGRACIÓN RESEND ---
     if (process.env.RESEND_API_KEY) {
         try {
@@ -109,6 +146,63 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
         .eq('id', turnoId)
 
     if (error) return { error: error.message }
+
+    // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
+    try {
+        const { createAdminClient } = await import('@/lib/supabase/admin')
+        const admin = createAdminClient()
+
+        const { data: turno } = await admin
+            .from('turnos')
+            .select(`
+                fecha_inicio,
+                profesional_id,
+                paciente:pacientes(nombre, apellido),
+                tipo_tratamiento:tipos_tratamiento(nombre)
+            `)
+            .eq('id', turnoId)
+            .single()
+
+        if (turno) {
+            const { data: usuarioProf } = await admin
+                .from('usuarios')
+                .select('id')
+                .eq('profesional_id', turno.profesional_id)
+                .eq('activo', true)
+                .maybeSingle()
+
+            if (usuarioProf?.id) {
+                const pct = turno.paciente as any
+                const trat = (turno.tipo_tratamiento as any)?.nombre || 'Consulta'
+
+                const { format } = await import('date-fns')
+                const { es } = await import('date-fns/locale')
+                const fechaObj = new Date(turno.fecha_inicio)
+                const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
+
+                let title = ''
+                let body = ''
+
+                if (nuevoEstado === 'CONFIRMADO') {
+                    title = '📅 Turno Confirmado'
+                    body = `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} (${fechaStr})`
+                } else if (nuevoEstado === 'CANCELADO') {
+                    title = '❌ Turno Cancelado'
+                    body = `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} (${fechaStr})`
+                } else if (nuevoEstado === 'EN_SALA') {
+                    title = '🔔 Paciente en Sala'
+                    body = `${pct?.nombre} ${pct?.apellido} ingresó a la sala de espera para ${trat}`
+                }
+
+                if (title && body) {
+                    const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
+                    await sendPushToUser(usuarioProf.id, title, body, '/agenda')
+                }
+            }
+        }
+    } catch (pushErr) {
+        console.error('Error al enviar push en cambiarEstadoTurno:', pushErr)
+    }
 
     revalidatePath('/agenda')
     revalidatePath('/admin')
@@ -198,6 +292,46 @@ export async function editarTurno(turnoId: string, formData: {
         .single()
 
     if (error) return { error: error.message }
+
+    // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
+    try {
+        const { createAdminClient } = await import('@/lib/supabase/admin')
+        const admin = createAdminClient()
+        const { data: usuarioProf } = await admin
+            .from('usuarios')
+            .select('id')
+            .eq('profesional_id', formData.profesional_id)
+            .eq('activo', true)
+            .maybeSingle()
+
+        if (usuarioProf?.id) {
+            const pacienteId = formData.paciente_id
+            if (pacienteId) {
+                const [pacienteRes, tratamientoRes] = await Promise.all([
+                    admin.from('pacientes').select('nombre, apellido').eq('id', pacienteId).single(),
+                    admin.from('tipos_tratamiento').select('nombre').eq('id', formData.tipo_tratamiento_id).single()
+                ])
+
+                const pct = pacienteRes.data
+                const trat = tratamientoRes.data?.nombre || 'Consulta'
+
+                const { format } = await import('date-fns')
+                const { es } = await import('date-fns/locale')
+                const fechaObj = new Date(formData.fecha_inicio)
+                const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
+
+                const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
+                await sendPushToUser(
+                    usuarioProf.id,
+                    '✏️ Turno Modificado',
+                    `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} (${fechaStr})`,
+                    '/agenda'
+                )
+            }
+        }
+    } catch (pushErr) {
+        console.error('Error al enviar push de modificación al profesional:', pushErr)
+    }
 
     revalidatePath('/agenda')
     revalidatePath('/admin')

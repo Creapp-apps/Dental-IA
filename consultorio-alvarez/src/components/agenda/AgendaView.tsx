@@ -581,7 +581,6 @@ function TurnoAgendaCard({
                 <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-500/10"
                     onClick={() => onDelete(turno.id)} disabled={isPending} title="Eliminar">
                     <Trash2 className="h-3 w-3" />
-                    Eliminar
                 </GlassButton>
             </div>
         </motion.div>

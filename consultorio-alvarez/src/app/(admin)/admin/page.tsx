@@ -1,16 +1,17 @@
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Calendar, Clock, Users, AlertCircle, DollarSign, Stethoscope } from 'lucide-react'
-import { getDashboardStats, getTurnosDelDia, getProfesionales } from '@/lib/supabase/queries'
+import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario } from '@/lib/supabase/queries'
 import { DashboardKPI } from '@/components/dashboard/DashboardKPI'
 import { TurnoCardGlass } from '@/components/dashboard/TurnoCardGlass'
 
 export default async function DashboardPage() {
     const hoy = new Date()
-    const [stats, turnos, profesionales] = await Promise.all([
+    const [stats, turnos, profesionales, usuario] = await Promise.all([
         getDashboardStats(),
         getTurnosDelDia(hoy),
         getProfesionales(),
+        getCurrentUsuario(),
     ])
 
     const turnosPendientes = turnos.filter((t: any) => t.estado === 'PENDIENTE')
@@ -24,16 +25,22 @@ export default async function DashboardPage() {
     const formattedDate = format(hoy, "EEEE d 'de' MMMM", { locale: es })
         .replace(/^\w/, (c) => c.toUpperCase())
 
+    const nombreUsuario = usuario
+        ? `${usuario.nombre || ''} ${usuario.apellido || ''}`.trim() || usuario.email
+        : 'Usuario'
+
+    const rolTexto = usuario?.rol === 'admin' ? 'Administración' : 'Profesional'
+
     return (
         <div className="space-y-6">
             {/* Header */}
             <div className="flex items-start justify-between">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">
-                        {formattedDate}
+                        ¡Bienvenido, {nombreUsuario}!
                     </h1>
                     <p className="text-sm text-muted-foreground mt-0.5">
-                        Vista del día — panel principal
+                        {formattedDate} — panel de {rolTexto.toLowerCase()}
                     </p>
                 </div>
             </div>

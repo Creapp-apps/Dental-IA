@@ -26,6 +26,21 @@ async function getTenantId(): Promise<string | null> {
     return data?.tenant_id ?? null
 }
 
+export async function getCurrentUsuario() {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
+    const admin = getAdmin()
+    const { data } = await admin
+        .from('usuarios')
+        .select('*')
+        .eq('id', user.id)
+        .single()
+
+    return data ?? null
+}
+
 // ---- PROFESIONALES ----
 
 export async function getProfesionales(onlyActive: boolean = true) {
@@ -33,7 +48,7 @@ export async function getProfesionales(onlyActive: boolean = true) {
     const tenantId = await getTenantId()
     if (!tenantId) return []
 
-    let query = supabase.from('profesionales').select('*').eq('tenant_id', tenantId).order('nombre')
+    let query = supabase.from('profesionales').select('*, usuarios(id)').eq('tenant_id', tenantId).order('nombre')
     if (onlyActive) query = query.eq('activo', true)
     const { data, error } = await query
     if (error) { console.error('getProfesionales:', error); return [] }

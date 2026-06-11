@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     MessageCircle, CreditCard, Receipt, AlertCircle, Save,
-    CheckCircle2, ExternalLink
+    CheckCircle2, ExternalLink, BellRing
 } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
@@ -17,10 +17,21 @@ interface TabIntegracionesProps {
     integrations: any[]
 }
 
-type Provider = 'whatsapp' | 'mercadopago' | 'arca'
+type Provider = 'whatsapp' | 'mercadopago' | 'arca' | 'push_notifications'
 
 export function TabIntegraciones({ integrations }: TabIntegracionesProps) {
     const [selectedProvider, setSelectedProvider] = useState<Provider | null>(null)
+    const [pushActive, setPushActive] = useState(false)
+
+    useEffect(() => {
+        if (typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+            import('@/lib/push-notifications/push-subscription').then(({ getActiveSubscription }) => {
+                getActiveSubscription().then(sub => {
+                    setPushActive(!!sub)
+                })
+            })
+        }
+    }, [selectedProvider])
 
     const whatsapp = integrations.find(i => i.provider === 'whatsapp')
     const mp = integrations.find(i => i.provider === 'mercadopago')
@@ -51,6 +62,13 @@ export function TabIntegraciones({ integrations }: TabIntegracionesProps) {
                         isActive={arca?.is_active}
                         onClick={() => setSelectedProvider('arca')}
                     />
+                    <IntegrationCard
+                        title="Notificaciones Push"
+                        description="Activá o desactivá las alertas push en este navegador."
+                        icon={BellRing}
+                        isActive={pushActive}
+                        onClick={() => setSelectedProvider('push_notifications')}
+                    />
                 </div>
             ) : (
                 <div className="space-y-4">
@@ -71,6 +89,7 @@ export function TabIntegraciones({ integrations }: TabIntegracionesProps) {
                             {selectedProvider === 'whatsapp' && <WizardWhatsApp currentConfig={whatsapp} />}
                             {selectedProvider === 'mercadopago' && <WizardMercadoPago currentConfig={mp} />}
                             {selectedProvider === 'arca' && <WizardArca currentConfig={arca} />}
+                            {selectedProvider === 'push_notifications' && <WizardPushNotifications />}
                         </motion.div>
                     </AnimatePresence>
                 </div>
@@ -270,6 +289,167 @@ function WizardArca({ currentConfig }: { currentConfig: any }) {
             <GlassButton disabled>
                 Próximamente
             </GlassButton>
+        </div>
+    )
+}
+
+function WizardPushNotifications() {
+    const [isPending, startTransition] = useTransition()
+    const [isSubscribed, setIsSubscribed] = useState(false)
+    const [permissionState, setPermissionState] = useState<NotificationPermission | 'unsupported'>('default')
+    const [checking, setChecking] = useState(true)
+
+    useEffect(() => {
+        async function checkStatus() {
+            if (typeof window === 'undefined') return
+            if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+                setPermissionState('unsupported')
+                setChecking(false)
+                return
+            }
+            setPermissionState(Notification.permission)
+            try {
+                const { getActiveSubscription, registerServiceWorker } = await import('@/lib/push-notifications/push-subscription')
+                // Asegurar registro del SW primero
+                await registerServiceWorker()
+                const sub = await getActiveSubscription()
+                setIsSubscribed(!!sub)
+            } catch (err) {
+                console.error('Error al inicializar notificaciones push en UI:', err)
+            } finally {
+                setChecking(false)
+            }
+        }
+        checkStatus()
+    }, [])
+
+    function togglePush() {
+        startTransition(async () => {
+            const { 
+                subscribeToPushNotifications, 
+                unsubscribeFromPushNotifications, 
+                getActiveSubscription 
+            } = await import('@/lib/push-notifications/push-subscription')
+            
+            const { registrarSuscripcionPush, removerSuscripcionPush } = await import('@/lib/actions/push')
+
+            if (isSubscribed) {
+                // Desactivar
+                const sub = await getActiveSubscription()
+                if (sub) {
+                    const res = await removerSuscripcionPush(sub.endpoint)
+                    if (res.error) {
+                        glassAlert.error({ title: 'Error', description: res.error })
+                        return
+                    }
+                }
+                const success = await unsubscribeFromPushNotifications()
+                if (success) {
+                    setIsSubscribed(false)
+                    glassAlert.success({ title: 'Notificaciones desactivadas', description: 'Se desactivaron las alertas en este dispositivo.' })
+                } else {
+                    glassAlert.error({ title: 'Error', description: 'No se pudo dar de baja la suscripción push.' })
+                }
+            } else {
+                // Activar
+                try {
+                    const sub = await subscribeToPushNotifications()
+                    if (sub) {
+                        const res = await registrarSuscripcionPush(sub.toJSON())
+                        if (res.error) {
+                            glassAlert.error({ title: 'Error al registrar', description: res.error })
+                            return
+                        }
+                        setIsSubscribed(true)
+                        setPermissionState(Notification.permission)
+                        glassAlert.success({ title: '¡Notificaciones activadas!', description: 'Este dispositivo recibirá alertas del consultorio.' })
+                    }
+                } catch (err: any) {
+                    setPermissionState(Notification.permission)
+                    glassAlert.error({ title: 'Error de activación', description: err.message || 'No se pudieron activar las notificaciones.' })
+                }
+            }
+        })
+    }
+
+    if (checking) {
+        return (
+            <div className="glass rounded-2xl p-6 shadow-glass flex items-center justify-center min-h-[200px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+            </div>
+        )
+    }
+
+    const unsupported = permissionState === 'unsupported'
+    const denied = permissionState === 'denied'
+
+    return (
+        <div className="glass rounded-2xl p-6 shadow-glass space-y-6 max-w-2xl">
+            <div className="flex items-center gap-3 border-b border-border/50 pb-4">
+                <div className="p-2.5 bg-blue-100 dark:bg-blue-950/50 rounded-xl">
+                    <BellRing className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div>
+                    <h2 className="text-lg font-bold text-foreground">Notificaciones Push del Personal</h2>
+                    <p className="text-sm text-muted-foreground">Recibí alertas en tiempo real de nuevos turnos en este navegador.</p>
+                </div>
+            </div>
+
+            <div className="bg-muted/30 rounded-xl p-4 space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <span className="bg-primary text-white h-5 w-5 rounded-full flex items-center justify-center text-xs">i</span>
+                    ¿Cómo funcionan las alertas push?
+                </h3>
+                <ul className="text-sm text-muted-foreground space-y-2 ml-7 list-disc">
+                    <li>Te permiten recibir alertas instantáneas incluso si tenés el navegador cerrado o en segundo plano.</li>
+                    <li>La configuración es individual y afecta únicamente al navegador y dispositivo que estás usando actualmente.</li>
+                    <li>Podés activarlo en tu computadora de recepción y en tu celular personal para estar siempre al tanto.</li>
+                </ul>
+            </div>
+
+            {unsupported && (
+                <div className="bg-destructive/10 text-destructive dark:bg-destructive/20 p-4 rounded-xl text-sm flex gap-3">
+                    <AlertCircle className="h-5 w-5 shrink-0" />
+                    <div>
+                        <p className="font-semibold">Navegador no compatible</p>
+                        <p className="mt-1 text-xs opacity-90">Este navegador no soporta la API de Web Push nativa. Si estás en iOS, asegurate de agregar esta web a tu pantalla de inicio (PWA) usando Safari.</p>
+                    </div>
+                </div>
+            )}
+
+            {denied && (
+                <div className="bg-destructive/10 text-destructive dark:bg-destructive/20 p-4 rounded-xl text-sm flex gap-3">
+                    <AlertCircle className="h-5 w-5 shrink-0" />
+                    <div>
+                        <p className="font-semibold">Permisos bloqueados</p>
+                        <p className="mt-1 text-xs opacity-90">Bloqueaste los permisos de notificación para este sitio. Habilitá las notificaciones en la barra de direcciones (ícono de candado/configuración del navegador) y recargá la página.</p>
+                    </div>
+                </div>
+            )}
+
+            <div className="flex items-center justify-between p-4 glass-subtle rounded-xl">
+                <div className="space-y-0.5">
+                    <p className="text-sm font-medium text-foreground">Notificaciones en este navegador</p>
+                    <p className="text-xs text-muted-foreground">
+                        {isSubscribed ? 'Las notificaciones push están activas.' : 'Las notificaciones push están desactivadas.'}
+                    </p>
+                </div>
+                <button
+                    onClick={togglePush}
+                    disabled={unsupported || denied || isPending}
+                    className={cn(
+                        "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed",
+                        isSubscribed ? "bg-primary" : "bg-muted-foreground/30"
+                    )}
+                >
+                    <span
+                        className={cn(
+                            "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
+                            isSubscribed ? "translate-x-5" : "translate-x-0"
+                        )}
+                    />
+                </button>
+            </div>
         </div>
     )
 }

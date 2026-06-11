@@ -11,7 +11,7 @@ export async function guardarIntegracion(provider: 'whatsapp' | 'mercadopago' | 
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { error: 'No autorizado' }
 
-        const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user.id).single()
+        const { data: profile } = await supabase.from('usuarios').select('tenant_id').eq('id', user.id).single()
         if (!profile?.tenant_id) return { error: 'Tenant no encontrado' }
 
         // 2. Upsert the integration

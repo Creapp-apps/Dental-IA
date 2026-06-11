@@ -8,7 +8,7 @@ export default async function ConfiguracionPage() {
     // Para simplificar la inyección de integraciones, las traemos directamente usando la session del usuario
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
-    const { data: profile } = await supabase.from('profiles').select('tenant_id').eq('id', user?.id).single()
+    const { data: profile } = await supabase.from('usuarios').select('tenant_id').eq('id', user?.id).single()
     const tenantId = profile?.tenant_id
 
     const [tenant, profesionales, obrasSociales, tiposTratamiento, landingConfig, { data: integrations }] = await Promise.all([

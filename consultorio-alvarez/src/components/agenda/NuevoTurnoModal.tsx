@@ -312,12 +312,12 @@ export function NuevoTurnoModal({
 
     return (
         <GlassDialog open={open} onOpenChange={onOpenChange}>
-            <GlassDialogContent className="max-w-md">
-                <GlassDialogHeader>
+            <GlassDialogContent className="max-w-md max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden">
+                <GlassDialogHeader className="p-6 pr-12 pb-4 border-b border-border/50">
                     <GlassDialogTitle>{turnoAEditar ? 'Editar turno' : (esSobreturno ? '⚡ Sobreturno rápido' : 'Nuevo turno')}</GlassDialogTitle>
                 </GlassDialogHeader>
 
-                <div className="space-y-4 py-2">
+                <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
                     {/* Sobreturno Toggle */}
                     <button
                         type="button"
@@ -612,7 +612,7 @@ export function NuevoTurnoModal({
                     </div>
                 </div>
 
-                <GlassDialogFooter>
+                <GlassDialogFooter className="p-6 pt-4 border-t border-border/50 bg-black/5 dark:bg-black/20">
                     <GlassButton variant="ghost" onClick={() => onOpenChange(false)}>
                         Cancelar
                     </GlassButton>

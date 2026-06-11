@@ -3,14 +3,14 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash } from 'lucide-react'
+import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import {
     actualizarTenant, actualizarHorarios,
-    crearProfesional, actualizarProfesional, toggleProfesionalEstado,
+    crearProfesional, actualizarProfesional, toggleProfesionalEstado, eliminarProfesional,
     crearObraSocial, toggleObraSocial, actualizarObraSocial, eliminarObraSocial,
     crearTipoTratamiento, toggleTipoTratamiento,
     actualizarTipoTratamiento, eliminarTipoTratamiento,
@@ -278,7 +278,8 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
     const [isPending, startTransition] = useTransition()
     const [showForm, setShowForm] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
-    const [form, setForm] = useState({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', color_agenda: '#2563eb', avatar_url: '' })
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+    const [form, setForm] = useState({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '' })
 
     // Avatar states
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -286,7 +287,7 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
     const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
     function abrirNuevo() {
-        setForm({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', color_agenda: '#2563eb', avatar_url: '' })
+        setForm({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '' })
         setAvatarPreview(null)
         setEditingId(null)
         setShowForm(true)
@@ -299,6 +300,7 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
             especialidad: p.especialidad || '',
             matricula: p.matricula || '',
             email: p.email || '',
+            password: '',
             color_agenda: p.color_agenda || '#2563eb',
             avatar_url: p.avatar_url || ''
         })
@@ -310,6 +312,23 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
     function cerrarForm() {
         setShowForm(false)
         setEditingId(null)
+    }
+
+    function borrarProfesional(id: string) {
+        setConfirmDeleteId(id)
+    }
+
+    function onConfirmDelete() {
+        if (!confirmDeleteId) return
+        startTransition(async () => {
+            const r = await eliminarProfesional(confirmDeleteId)
+            setConfirmDeleteId(null)
+            if (r.error) glassAlert.error({ title: 'Error al eliminar', description: r.error })
+            else {
+                glassAlert.success({ title: 'Profesional eliminado' })
+                router.refresh()
+            }
+        })
     }
 
     const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -349,10 +368,15 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
 
     function guardar() {
         if (!form.nombre || !form.apellido || !form.email) { glassAlert.warning({ title: 'Completá nombre, apellido y email' }); return }
+        if (!editingId && form.password && form.password.length < 6) {
+            glassAlert.warning({ title: 'La contraseña debe tener al menos 6 caracteres' })
+            return
+        }
         startTransition(async () => {
             let r;
             if (editingId) {
-                r = await actualizarProfesional(editingId, form)
+                const { password, ...updateData } = form
+                r = await actualizarProfesional(editingId, updateData)
             } else {
                 r = await crearProfesional(form)
             }
@@ -415,6 +439,11 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                         <Field label="Matrícula"><Input value={form.matricula} onChange={e => setForm(f => ({ ...f, matricula: e.target.value }))} /></Field>
                         <Field label="Email *"><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></Field>
                     </div>
+                    {!editingId && (
+                        <div className="grid grid-cols-1 gap-3">
+                            <Field label="Contraseña de acceso inicial"><Input type="text" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} placeholder="Mínimo 6 caracteres (Por defecto: Alvarez2026!)" /></Field>
+                        </div>
+                    )}
                     <div className="flex items-center gap-3">
                         <Field label="Color agenda"><input type="color" value={form.color_agenda} onChange={e => setForm(f => ({ ...f, color_agenda: e.target.value }))} className="h-9 w-9 rounded cursor-pointer" /></Field>
                         <GlassButton onClick={guardar} loading={isPending} className="ml-auto">
@@ -434,7 +463,18 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                             )}
                         </div>
                         <div className={cn("flex-1 min-w-0 transition-opacity", !p.activo && "opacity-50")}>
-                            <p className="text-sm font-semibold text-foreground">Dr. {p.nombre} {p.apellido}</p>
+                            <div className="flex items-center gap-2 flex-wrap">
+                                <p className="text-sm font-semibold text-foreground">Dr. {p.nombre} {p.apellido}</p>
+                                {p.usuarios && p.usuarios.length > 0 ? (
+                                    <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-medium flex items-center gap-1" title="Tiene cuenta de acceso vinculada">
+                                        <Key className="h-2.5 w-2.5" /> Cuenta activa
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-medium flex items-center gap-1" title="Sin cuenta de acceso individual">
+                                        Sin cuenta
+                                    </span>
+                                )}
+                            </div>
                             <p className="text-xs text-muted-foreground">{p.especialidad ?? 'Sin especialidad'} · {p.email}</p>
                         </div>
 
@@ -448,6 +488,13 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                                     title="Modificar profesional"
                                 >
                                     <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={() => borrarProfesional(p.id)}
+                                    className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                    title="Eliminar profesional"
+                                >
+                                    <Trash className="h-4 w-4" />
                                 </button>
                             </div>
 
@@ -474,6 +521,15 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                 onOpenChange={setCropperOpen}
                 imageSrc={selectedImage}
                 onCropCompleteAction={handleCropComplete}
+            />
+            <ConfirmModal
+                open={!!confirmDeleteId}
+                onOpenChange={(open) => !open && setConfirmDeleteId(null)}
+                title="Eliminar profesional"
+                description="¿Seguro que deseas eliminar este profesional? Esta acción no se puede deshacer y eliminará su cuenta de acceso individual vinculada en caso de tener una."
+                onConfirm={onConfirmDelete}
+                isPending={isPending}
+                confirmText="Eliminar"
             />
         </div>
     )
