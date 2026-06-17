@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 
 async function getTenantId() {
     const supabase = await createClient()
@@ -105,7 +106,9 @@ export async function crearPaciente(formData: {
 
     if (error) return { error: error.message }
 
-    revalidatePath('/pacientes')
+    after(() => {
+        revalidatePath('/pacientes')
+    })
     return { data }
 }
 
@@ -186,8 +189,10 @@ export async function actualizarPaciente(id: string, formData: {
 
     if (error) return { error: error.message }
 
-    revalidatePath('/pacientes')
-    revalidatePath(`/pacientes/${id}`)
+    after(() => {
+        revalidatePath('/pacientes')
+        revalidatePath(`/pacientes/${id}`)
+    })
     return { success: true }
 }
 
@@ -201,7 +206,9 @@ export async function eliminarPaciente(id: string) {
 
     if (error) return { error: error.message }
 
-    revalidatePath('/pacientes')
+    after(() => {
+        revalidatePath('/pacientes')
+    })
     return { success: true }
 }
 
@@ -226,7 +233,9 @@ export async function guardarOdontograma(pacienteId: string, pieza: string, esta
 
     if (error) return { error: error.message }
 
-    revalidatePath(`/pacientes/${pacienteId}`)
+    after(() => {
+        revalidatePath(`/pacientes/${pacienteId}`)
+    })
     return { success: true }
 }
 

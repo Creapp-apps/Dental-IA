@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { cache } from 'react'
 
 // ============================================================
 // QUERIES — Server-side data fetching
@@ -10,8 +11,8 @@ function getAdmin() {
     return createAdminClient()
 }
 
-// Obtiene el tenant_id del usuario logueado desde public.usuarios
-async function getTenantId(): Promise<string | null> {
+// Obtiene el tenant_id del usuario logueado desde public.usuarios (caching por request)
+const getTenantId = cache(async (): Promise<string | null> => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
@@ -24,9 +25,9 @@ async function getTenantId(): Promise<string | null> {
         .single()
 
     return data?.tenant_id ?? null
-}
+})
 
-export async function getCurrentUsuario() {
+export const getCurrentUsuario = cache(async () => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
@@ -39,7 +40,7 @@ export async function getCurrentUsuario() {
         .single()
 
     return data ?? null
-}
+})
 
 // ---- PROFESIONALES ----
 

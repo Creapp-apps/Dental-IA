@@ -91,7 +91,9 @@ interface NuevoTurnoModalProps {
     pacientes: any[]
     defaultProfesionalId?: string
     defaultFecha?: string
+    defaultHora?: string
     turnoAEditar?: any
+    onSuccess?: (turnoRaw: any, isEdit: boolean, nuevoPaciente?: any) => void
 }
 
 export function NuevoTurnoModal({
@@ -102,7 +104,9 @@ export function NuevoTurnoModal({
     pacientes,
     defaultProfesionalId = '',
     defaultFecha,
+    defaultHora = '09:00',
     turnoAEditar,
+    onSuccess,
 }: NuevoTurnoModalProps) {
     const [isPending, startTransition] = useTransition()
     const [pacienteId, setPacienteId] = useState('')
@@ -110,7 +114,7 @@ export function NuevoTurnoModal({
     const [profId, setProfId] = useState(defaultProfesionalId || (profesionales[0]?.id ?? ''))
     const [tratId, setTratId] = useState('')
     const [fecha, setFecha] = useState(defaultFecha || format(new Date(), 'yyyy-MM-dd'))
-    const [hora, setHora] = useState('09:00')
+    const [hora, setHora] = useState(defaultHora || '09:00')
     const [notas, setNotas] = useState('')
     const [prioridad, setPrioridad] = useState('')
     const [showResults, setShowResults] = useState(false)
@@ -148,13 +152,13 @@ export function NuevoTurnoModal({
                 setPacienteId('')
                 setPacienteSearch('')
                 setTratId('')
-                setHora('09:00')
+                setHora(defaultHora || '09:00')
                 setNotas('')
                 setPrioridad('')
                 setEsSobreturno(false)
             }
         }
-    }, [open, defaultProfesionalId, defaultFecha, profesionales, turnoAEditar])
+    }, [open, defaultProfesionalId, defaultFecha, defaultHora, profesionales, turnoAEditar])
 
     useEffect(() => {
         if (open && profId && fecha) {
@@ -312,6 +316,9 @@ export function NuevoTurnoModal({
                     glassAlert.error({ title: 'Error al editar turno', description: result.error })
                 } else {
                     glassAlert.success({ title: 'Turno editado', description: `${format(parseISO(fecha), 'dd/MM/yyyy')} a las ${horaFormateada}` })
+                    if (onSuccess && result.data) {
+                        onSuccess(result.data, true)
+                    }
                     onOpenChange(false)
                 }
             } else {
@@ -330,6 +337,16 @@ export function NuevoTurnoModal({
                     glassAlert.error({ title: 'Error al crear turno', description: result.error })
                 } else {
                     glassAlert.success({ title: 'Turno creado', description: `${format(parseISO(fecha), 'dd/MM/yyyy')} a las ${horaFormateada}` })
+                    if (onSuccess && result.data) {
+                        const newPatientObj = modoNuevoPaciente ? {
+                            id: finalPacienteId,
+                            nombre: nuevoNombre.trim(),
+                            apellido: nuevoApellido.trim(),
+                            telefono: nuevoTelefono.trim(),
+                            dni: nuevoDni.trim()
+                        } : undefined;
+                        onSuccess(result.data, false, newPatientObj)
+                    }
                     onOpenChange(false)
                 }
             }
