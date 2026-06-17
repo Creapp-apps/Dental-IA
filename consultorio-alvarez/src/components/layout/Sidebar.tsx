@@ -13,7 +13,6 @@ import {
     Menu,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { ThemeToggle } from '@/components/ui/theme-toggle'
 import { logoutAction } from '@/lib/actions/auth'
 import { TenantLogo } from '@/components/ui/tenant-logo'
 import { NotificationBell } from '@/components/layout/NotificationBell'
@@ -97,11 +96,10 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
                 <div className="flex items-center justify-between px-3">
                     <NotificationBell themeColor={themeColor} />
                     {userEmail ? (
-                        <p className="text-xs font-medium text-sidebar-foreground/70 truncate flex-1 ml-3 mr-3" title={userEmail}>
+                        <p className="text-xs font-medium text-sidebar-foreground/70 truncate flex-1 ml-3" title={userEmail}>
                             {userEmail}
                         </p>
                     ) : <span className="flex-1" />}
-                    <ThemeToggle />
                 </div>
 
                 <button
