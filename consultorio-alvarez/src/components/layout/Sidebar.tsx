@@ -11,12 +11,15 @@ import {
     Settings,
     LogOut,
     Menu,
+    Sun,
+    Moon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/lib/actions/auth'
 import { TenantLogo } from '@/components/ui/tenant-logo'
 import { NotificationBell } from '@/components/layout/NotificationBell'
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet'
+import { useTheme } from 'next-themes'
 
 const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -34,11 +37,14 @@ interface SidebarProps {
 
 export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
     const pathname = usePathname()
+    const { theme, setTheme } = useTheme()
+    const [mounted, setMounted] = useState(false)
     const [pendingPath, setPendingPath] = useState<string | null>(null)
     const [isPending, startTransition] = useTransition()
     const [isOpen, setIsOpen] = useState(false)
 
     useEffect(() => {
+        setMounted(true)
         setPendingPath(null)
         setIsOpen(false)
     }, [pathname])
@@ -101,6 +107,28 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
                         </p>
                     ) : <span className="flex-1" />}
                 </div>
+
+                <button
+                    onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                    className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors cursor-pointer"
+                >
+                    {!mounted ? (
+                        <>
+                            <div className="h-4 w-4 rounded-full bg-sidebar-foreground/20 animate-pulse shrink-0" />
+                            <div className="h-4 w-20 rounded bg-sidebar-foreground/20 animate-pulse" />
+                        </>
+                    ) : theme === 'dark' ? (
+                        <>
+                            <Sun className="h-4 w-4 shrink-0 text-amber-500 animate-[spin_4s_linear_infinite]" />
+                            <span>Modo claro</span>
+                        </>
+                    ) : (
+                        <>
+                            <Moon className="h-4 w-4 shrink-0 text-indigo-400 animate-[pulse_2s_infinite]" />
+                            <span>Modo oscuro</span>
+                        </>
+                    )}
+                </button>
 
                 <button
                     onClick={handleLogout}

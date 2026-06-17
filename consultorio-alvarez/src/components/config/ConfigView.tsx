@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key } from 'lucide-react'
@@ -70,7 +70,7 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
                     {tab === 'consultorio' && <TabConsultorio tenant={tenant} tiposTratamiento={tiposTratamiento} />}
                     {tab === 'profesionales' && <TabProfesionales tenantId={tenant.id} profesionales={profesionales} router={router} />}
                     {tab === 'obras_sociales' && <TabObrasSociales obrasSociales={obrasSociales} />}
-                    {tab === 'horarios' && <TabHorarios horarios={tenant.horarios} />}
+                    {tab === 'horarios' && <TabHorarios horarios={tenant.horarios} profesionales={profesionales} />}
                     {tab === 'mi_web' && landingConfig && <TabMiWeb config={landingConfig} slug={slug} />}
                     {tab === 'mi_web' && !landingConfig && (
                         <div className="glass rounded-2xl p-8 text-center text-muted-foreground text-sm">
@@ -693,12 +693,25 @@ function TimeSelect({ value, onChange, disabled }: { value: string; onChange: (v
 }
 
 /* ──────────── Tab: Horarios ──────────── */
-function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
+function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: any[]; profesionales: any[] }) {
     const [isPending, startTransition] = useTransition()
+    const [selectedProfId, setSelectedProfId] = useState<string | null>(null)
     const ordered = [1, 2, 3, 4, 5, 6, 0]
-    const [horarios, setHorarios] = useState<any[]>(
-        ordered.map(d => {
-            const h = initialHorarios.find((x: any) => x.dia === d)
+
+    const getHorariosFor = (profId: string | null) => {
+        const filtered = initialHorarios ? initialHorarios.filter((x: any) => profId ? x.profesional_id === profId : !x.profesional_id) : []
+        
+        return ordered.map(d => {
+            let h = filtered.find((x: any) => x.dia === d)
+            
+            // If professional schedule doesn't exist yet, fallback to general clinic schedule as a template
+            if (!h && profId) {
+                const generalH = initialHorarios ? initialHorarios.find((x: any) => !x.profesional_id && x.dia === d) : null
+                if (generalH) {
+                    h = { ...generalH, profesional_id: profId }
+                }
+            }
+
             const base = h ?? { dia: d, apertura_manana: '09:00', cierre_manana: '13:00', apertura_tarde: '15:00', cierre_tarde: '18:00', activo: false }
             
             if (!base.apertura_manana && base.apertura) {
@@ -707,7 +720,8 @@ function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
                     apertura_manana: base.apertura,
                     cierre_manana: '13:00',
                     apertura_tarde: '14:00',
-                    cierre_tarde: base.cierre
+                    cierre_tarde: base.cierre,
+                    profesional_id: profId || undefined
                 }
             }
             
@@ -716,10 +730,17 @@ function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
                 apertura_manana: base.apertura_manana || '09:00',
                 cierre_manana: base.cierre_manana || '13:00',
                 apertura_tarde: base.apertura_tarde || '14:00',
-                cierre_tarde: base.cierre_tarde || '18:00'
+                cierre_tarde: base.cierre_tarde || '18:00',
+                profesional_id: profId || undefined
             }
         })
-    )
+    }
+
+    const [horarios, setHorarios] = useState<any[]>(() => getHorariosFor(null))
+
+    useEffect(() => {
+        setHorarios(getHorariosFor(selectedProfId))
+    }, [selectedProfId, initialHorarios])
 
     function update(dia: number, field: string, value: any) {
         setHorarios(h => h.map(item => item.dia === dia ? { ...item, [field]: value } : item))
@@ -767,14 +788,43 @@ function TabHorarios({ horarios: initialHorarios }: { horarios: any[] }) {
         }
 
         startTransition(async () => {
-            const r = await actualizarHorarios(horarios)
+            const otherHorarios = initialHorarios ? initialHorarios.filter((x: any) => selectedProfId ? x.profesional_id !== selectedProfId : !!x.profesional_id) : []
+            const updatedHorarios = horarios.map(h => ({
+                ...h,
+                profesional_id: selectedProfId || undefined
+            }))
+            const finalHorarios = [...otherHorarios, ...updatedHorarios]
+
+            const r = await actualizarHorarios(finalHorarios)
             r.error ? glassAlert.error({ title: 'Error', description: r.error }) : glassAlert.success({ title: 'Horarios actualizados' })
         })
     }
 
     return (
         <div className="glass rounded-2xl shadow-glass p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-foreground">Horarios de atención</h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
+                <div>
+                    <h3 className="text-sm font-semibold text-foreground">Horarios de atención</h3>
+                    <p className="text-xs text-muted-foreground">Configurá la disponibilidad semanal general de la clínica o de un profesional en particular.</p>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Label htmlFor="target-select" className="text-xs shrink-0 text-foreground">Configurar para:</Label>
+                    <select
+                        id="target-select"
+                        value={selectedProfId || 'general'}
+                        onChange={(e) => {
+                            const val = e.target.value
+                            setSelectedProfId(val === 'general' ? null : val)
+                        }}
+                        className="bg-background/50 border border-border rounded-lg text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary w-48 text-foreground"
+                    >
+                        <option value="general" className="text-foreground bg-background">General (Consultorio)</option>
+                        {profesionales.filter(p => p.activo).map(p => (
+                            <option key={p.id} value={p.id} className="text-foreground bg-background">Dr/a. {p.nombre} {p.apellido}</option>
+                        ))}
+                    </select>
+                </div>
+            </div>
             <div className="space-y-2">
                 {horarios.map(h => (
                     <div key={h.dia} className={cn('flex flex-col gap-2 py-3 px-4 rounded-xl transition-colors border', h.activo ? 'glass-subtle border-border' : 'opacity-50 border-transparent')}>

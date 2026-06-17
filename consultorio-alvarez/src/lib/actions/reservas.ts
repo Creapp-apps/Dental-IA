@@ -64,7 +64,7 @@ export async function getObrasSocialesPublicas(tenantSlug: string) {
     return obras || []
 }
 
-export async function getTurnosDisponibles(tenantSlug: string) {
+export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: string | null) {
     const supabase = createAdminClient()
     const tenant = await getTenantBySlug(tenantSlug)
     if (!tenant) return []
@@ -78,22 +78,28 @@ export async function getTurnosDisponibles(tenantSlug: string) {
 
     const totalProfs = profCount ?? 1
 
-    // Get existing booked slots for the next 21 days
+    // Get current local date and time in Argentina to do filtering
+    const localNow = new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
+    const [todayStr, currentLocalTime] = localNow.split(' ')
+    const currentHHMM = currentLocalTime.slice(0, 5)
+
+    // Get existing booked slots for the next 21 days (starting from start of today in Argentina)
     const now = new Date()
+    const startOfTodayArgentina = new Date(`${todayStr}T00:00:00-03:00`)
     const endDate = new Date(now)
     endDate.setDate(endDate.getDate() + 21)
 
     const { data: turnosOcupados } = await supabase
         .from('turnos')
-        .select('fecha_inicio')
+        .select('fecha_inicio, profesional_id')
         .eq('tenant_id', tenant.id)
-        .gte('fecha_inicio', now.toISOString())
+        .gte('fecha_inicio', startOfTodayArgentina.toISOString())
         .lte('fecha_inicio', endDate.toISOString())
         .in('estado', ['CONFIRMADO', 'PENDIENTE', 'EN_SALA'])
 
     // Count how many bookings exist per local time slot
     // DB stores UTC — Argentina is UTC-3
-    const slotBookingCount = new Map<string, number>()
+    const slotBookedProfs = new Map<string, Set<string>>()
     for (const t of turnosOcupados ?? []) {
         // Parse the UTC timestamp and convert to local Argentina time string
         const utcDate = new Date(t.fecha_inicio)
@@ -102,7 +108,13 @@ export async function getTurnosDisponibles(tenantSlug: string) {
         // sv-SE gives "YYYY-MM-DD HH:MM:SS" format
         const [datePart, timePart] = localStr.split(' ')
         const slotKey = `${datePart}|${timePart.slice(0, 5)}` // "2026-04-04|10:00"
-        slotBookingCount.set(slotKey, (slotBookingCount.get(slotKey) ?? 0) + 1)
+        
+        if (!slotBookedProfs.has(slotKey)) {
+            slotBookedProfs.set(slotKey, new Set())
+        }
+        if (t.profesional_id) {
+            slotBookedProfs.get(slotKey)!.add(t.profesional_id)
+        }
     }
 
     function generarSlotsParaDia(horario: any): string[] {
@@ -144,37 +156,81 @@ export async function getTurnosDisponibles(tenantSlug: string) {
         return Array.from(slotsSet).sort();
     }
 
+    // Determine which schedules to use
+    const allSchedules = (tenant.horarios || []) as Array<{
+        dia: number;
+        profesional_id?: string | null;
+        activo: boolean;
+        apertura_manana?: string;
+        cierre_manana?: string;
+        apertura_tarde?: string;
+        cierre_tarde?: string;
+        apertura?: string;
+        cierre?: string;
+    }>
+
+    let schedules = allSchedules
+    if (profesionalId && profesionalId !== 'sin-preferencia') {
+        const profSchedules = allSchedules.filter(h => h.profesional_id === profesionalId)
+        if (profSchedules.length > 0) {
+            schedules = profSchedules
+        } else {
+            // Fallback: general clinic schedules (without profesional_id)
+            schedules = allSchedules.filter(h => !h.profesional_id)
+        }
+    } else {
+        schedules = allSchedules.filter(h => !h.profesional_id)
+    }
+
     const diasConfig = new Map<number, any>()
-    for (const h of tenant.horarios || []) {
+    for (const h of schedules) {
         diasConfig.set(h.dia, h)
     }
 
     const days: { date: string; dayOfWeek: number; dayNum: number; month: number; slots: string[] }[] = []
 
-    for (let i = 1; i <= 21; i++) {
+    for (let i = 0; i <= 21; i++) {
         const d = new Date(now)
         d.setDate(now.getDate() + i)
-        const dow = d.getDay()
+
+        const localStr = d.toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
+        const [dateStr] = localStr.split(' ')
+
+        const [year, month, dayNum] = dateStr.split('-').map(Number)
+        const localD = new Date(year, month - 1, dayNum)
+        const dow = localD.getDay()
+        const monthIndex = month - 1
 
         const configDia = diasConfig.get(dow)
         if (!configDia || !configDia.activo) continue
 
-        const dateStr = d.toISOString().split('T')[0]
         const slotsForDay = generarSlotsParaDia(configDia)
 
-        // A slot is fully occupied only when ALL professionals are booked for it
-        const available = slotsForDay.filter(slot => {
+        // Filter available slots
+        let available = slotsForDay.filter(slot => {
             const key = `${dateStr}|${slot}`
-            const booked = slotBookingCount.get(key) ?? 0
-            return booked < totalProfs
+            const bookedProfs = slotBookedProfs.get(key)
+            if (profesionalId && profesionalId !== 'sin-preferencia') {
+                // Available if the selected professional is not booked at this slot
+                return !(bookedProfs?.has(profesionalId) ?? false)
+            } else {
+                // Available if booked count is less than total active professionals
+                const bookedCount = bookedProfs?.size ?? 0
+                return bookedCount < totalProfs
+            }
         })
+
+        // If today, filter out slots that are in the past
+        if (dateStr === todayStr) {
+            available = available.filter(slot => slot > currentHHMM)
+        }
 
         if (available.length > 0) {
             days.push({
                 date: dateStr,
                 dayOfWeek: dow,
-                dayNum: d.getDate(),
-                month: d.getMonth(),
+                dayNum: dayNum,
+                month: monthIndex,
                 slots: available,
             })
         }

@@ -48,7 +48,7 @@ interface Professional {
 
 // ── Step indicator ────────────────────────────────────────────────
 
-const STEP_LABELS = ['Fecha', 'Profesional', 'Tus datos']
+const STEP_LABELS = ['Profesional', 'Fecha y hora', 'Tus datos']
 
 function StepIndicator({ current }: { current: number }) {
     return (
@@ -768,39 +768,60 @@ export function BookingForm() {
     const [professionals, setProfessionals] = useState<Professional[]>([])
     const [availableDays, setAvailableDays] = useState<AvailableDay[]>([])
     const [obrasSociales, setObrasSociales] = useState<any[]>([])
-    const [loadingDays, setLoadingDays] = useState(true)
+    const [loadingDays, setLoadingDays] = useState(false)
     const [loadingProfs, setLoadingProfs] = useState(true)
 
+    // Load initial data (professionals and health insurances)
     useEffect(() => {
         async function loadData() {
             try {
-                const [profs, days, obras] = await Promise.all([
+                const [profs, obras] = await Promise.all([
                     getProfesionalesPublicos('alvarez'),
-                    getTurnosDisponibles('alvarez'),
                     getObrasSocialesPublicas('alvarez')
                 ])
                 setProfessionals(profs as Professional[])
-                setAvailableDays(days)
                 setObrasSociales(obras)
             } catch (err) {
                 console.error('Error loading booking data:', err)
             } finally {
-                setLoadingDays(false)
                 setLoadingProfs(false)
             }
         }
         loadData()
     }, [])
 
+    // Fetch availability reactively when professional is selected
+    useEffect(() => {
+        if (!professionalId) {
+            setAvailableDays([])
+            return
+        }
+
+        async function loadAvailability() {
+            setLoadingDays(true)
+            try {
+                const days = await getTurnosDisponibles('alvarez', professionalId)
+                setAvailableDays(days)
+            } catch (err) {
+                console.error('Error loading availability:', err)
+            } finally {
+                setLoadingDays(false)
+            }
+        }
+        loadAvailability()
+    }, [professionalId])
+
     // Reusable refresh for availability (called after booking)
     async function refreshAvailability() {
-        const days = await getTurnosDisponibles('alvarez')
-        setAvailableDays(days)
+        if (professionalId) {
+            const days = await getTurnosDisponibles('alvarez', professionalId)
+            setAvailableDays(days)
+        }
     }
 
     const canNext = [
-        selectedDate !== null && selectedTime !== null && selectedTime !== '',
         professionalId !== null,
+        selectedDate !== null && selectedTime !== null && selectedTime !== '',
         datos.es_nuevo === 'si'
             ? datos.nombre.trim() !== '' && datos.apellido.trim() !== '' && datos.telefono.trim() !== '' && datos.dni.trim() !== ''
             : datos.pacienteExistenteId !== '' && datos.pacienteExistenteId !== null,
@@ -808,19 +829,6 @@ export function BookingForm() {
 
     async function handleNext() {
         if (step < 2) {
-            // When going from Step 0 → Step 1, reload professionals for selected slot
-            if (step === 0 && selectedDate && selectedTime) {
-                setLoadingProfs(true)
-                setProfessionalId(null)
-                try {
-                    const profs = await getProfesionalesPublicos('alvarez', selectedDate, selectedTime)
-                    setProfessionals(profs as Professional[])
-                } catch (err) {
-                    console.error('Error loading available professionals:', err)
-                } finally {
-                    setLoadingProfs(false)
-                }
-            }
             setDirection(1)
             setStep((s) => s + 1)
         } else {
@@ -898,6 +906,19 @@ export function BookingForm() {
                         transition={{ type: 'spring', stiffness: 350, damping: 35 }}
                     >
                         {step === 0 && (
+                            <StepProfessional
+                                selected={professionalId}
+                                onSelect={(id) => {
+                                    setProfessionalId(id)
+                                    // Reset date and time if professional changes
+                                    setSelectedDate(null)
+                                    setSelectedTime(null)
+                                }}
+                                professionals={professionals}
+                                loading={loadingProfs}
+                            />
+                        )}
+                        {step === 1 && (
                             <StepDate
                                 selectedDate={selectedDate}
                                 selectedTime={selectedTime}
@@ -905,14 +926,6 @@ export function BookingForm() {
                                 onSelectTime={setSelectedTime}
                                 availableDays={availableDays}
                                 loading={loadingDays}
-                            />
-                        )}
-                        {step === 1 && (
-                            <StepProfessional
-                                selected={professionalId}
-                                onSelect={setProfessionalId}
-                                professionals={professionals}
-                                loading={loadingProfs}
                             />
                         )}
                         {step === 2 && (

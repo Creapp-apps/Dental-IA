@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, CalendarIcon, Clock, Zap } from 'lucide-react'
+import { ChevronDown, CalendarIcon, Clock, Zap, UserPlus } from 'lucide-react'
 import {
     GlassDialog,
     GlassDialogContent,
@@ -206,12 +206,20 @@ export function NuevoTurnoModal({
         }
     }
 
+    const cleanSearch = pacienteSearch.toLowerCase().replace(/\./g, '')
     const filteredPacientes = pacienteSearch.length >= 2
-        ? pacientes.filter((p: any) =>
-            p.nombre.toLowerCase().includes(pacienteSearch.toLowerCase()) ||
-            p.apellido.toLowerCase().includes(pacienteSearch.toLowerCase()) ||
-            (p.dni && p.dni.includes(pacienteSearch))
-        ).slice(0, 6)
+        ? pacientes.filter((p: any) => {
+            const nombre = p.nombre.toLowerCase()
+            const apellido = p.apellido.toLowerCase()
+            const dni = (p.dni ?? '').toLowerCase()
+            const dniWithoutDots = dni.replace(/\./g, '')
+            return (
+                nombre.includes(pacienteSearch.toLowerCase()) ||
+                apellido.includes(pacienteSearch.toLowerCase()) ||
+                dni.includes(pacienteSearch) ||
+                dniWithoutDots.includes(cleanSearch)
+            )
+        }).slice(0, 6)
         : []
 
     async function handleGuardar() {
@@ -368,9 +376,10 @@ export function NuevoTurnoModal({
                                         setNuevoDni('')
                                         setNuevoTelefono('')
                                     }}
-                                    className="text-xs text-primary font-medium hover:underline flex items-center gap-0.5"
+                                    className="text-[11px] font-semibold text-primary hover:text-primary-foreground border border-primary/30 hover:border-primary bg-primary/5 hover:bg-primary/90 rounded-lg px-2.5 py-1.5 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-primary/20 active:scale-95 cursor-pointer"
                                 >
-                                    <span>+ Registro rápido (Invitado)</span>
+                                    <UserPlus className="h-3 w-3" />
+                                    <span>Registro rápido (Invitado)</span>
                                 </button>
                             )}
                         </div>
