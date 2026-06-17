@@ -53,6 +53,7 @@ interface AgendaViewProps {
     tiposTratamiento: any[]
     turnosIniciales: any[]
     pacientes: any[]
+    fechaInicial?: string
 }
 
 export function AgendaView({
@@ -60,11 +61,12 @@ export function AgendaView({
     tiposTratamiento,
     turnosIniciales,
     pacientes,
+    fechaInicial,
 }: AgendaViewProps) {
     const router = useRouter()
     const [vistaActiva, setVistaActiva] = useState<ViewMode>('semana')
-    const [baseDate, setBaseDate] = useState(new Date())
-    const [diaSeleccionado, setDiaSeleccionado] = useState(new Date())
+    const [baseDate, setBaseDate] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
+    const [diaSeleccionado, setDiaSeleccionado] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
     const [modalOpen, setModalOpen] = useState(false)
     const [modalProfId, setModalProfId] = useState<string>('')
     const [turnoAEditar, setTurnoAEditar] = useState<any>(null)
@@ -72,6 +74,25 @@ export function AgendaView({
     const [turnoADemorar, setTurnoADemorar] = useState<any>(null)
     const [isPending, startTransition] = useTransition()
     const [isFullscreen, setIsFullscreen] = useState(false)
+
+    // Sync fechaInicial prop to local state
+    useEffect(() => {
+        if (fechaInicial) {
+            const date = parseISO(fechaInicial)
+            setBaseDate(date)
+            setDiaSeleccionado(date)
+        }
+    }, [fechaInicial])
+
+    // Sync local baseDate back to the URL parameters
+    useEffect(() => {
+        const formattedDate = format(baseDate, 'yyyy-MM-dd')
+        const currentParams = new URLSearchParams(window.location.search)
+        if (currentParams.get('fecha') !== formattedDate) {
+            currentParams.set('fecha', formattedDate)
+            router.replace(`/agenda?${currentParams.toString()}`, { scroll: false })
+        }
+    }, [baseDate, router])
 
     useEffect(() => {
         const handleFullscreenChange = () => {

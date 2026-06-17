@@ -824,16 +824,6 @@ export function BookingForm() {
             setDirection(1)
             setStep((s) => s + 1)
         } else {
-            const isParticular = datos.obraSocialId === 'particular' || !datos.obraSocialId;
-            if (isParticular) {
-                // Redirigir a WhatsApp
-                const prof = professionals.find(p => p.id === professionalId) || professionals[0]
-                const msj = `Hola, quería solicitar un turno particular para el día ${selectedDate} a las ${selectedTime} hs con el Dr/a. ${prof?.nombre} ${prof?.apellido}. Mis datos son: ${datos.nombre} ${datos.apellido}, Tel: ${datos.telefono}.`
-                const url = `https://wa.me/${CLINIC.phone.replace(/\D/g, '')}?text=${encodeURIComponent(msj)}`
-                window.open(url, '_blank')
-                return
-            }
-
             setSubmitting(true)
             try {
                 const result = await crearReservaPublica({
@@ -951,12 +941,12 @@ export function BookingForm() {
                 <StaggerButton
                     onClick={handleNext}
                     disabled={!canNext[step] || submitting}
-                    text={step === 2 ? (submitting ? 'Enviando...' : (datos.obraSocialId === 'particular' || !datos.obraSocialId) ? 'Solicitar por WhatsApp' : 'Confirmar turno') : 'Continuar'}
+                    text={step === 2 ? (submitting ? 'Enviando...' : 'Confirmar turno') : 'Continuar'}
                     direction="up"
                     className="rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer h-auto border-0"
                     style={{ backgroundColor: 'var(--landing-primary, #0d9488)' }}
                 >
-                    {step === 2 ? (submitting ? 'Enviando...' : (datos.obraSocialId === 'particular' || !datos.obraSocialId) ? 'Solicitar por WhatsApp' : 'Confirmar turno') : 'Continuar'}
+                    {step === 2 ? (submitting ? 'Enviando...' : 'Confirmar turno') : 'Continuar'}
                 </StaggerButton>
             </div>
         </div>

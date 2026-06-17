@@ -6,6 +6,7 @@ import { Notificacion } from '@/types'
 import { motion, AnimatePresence } from 'framer-motion'
 import { BellRing, CalendarClock, X } from 'lucide-react'
 import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
 
 interface NotificationContextProps {
     notifications: Notificacion[]
@@ -26,6 +27,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const [activeAlert, setActiveAlert] = useState<Notificacion | null>(null)
     const [mounted, setMounted] = useState(false)
     const supabase = createClient()
+    const router = useRouter()
 
     useEffect(() => {
         setMounted(true)
@@ -140,6 +142,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                                         onClick={() => {
                                             setActiveAlert(null)
                                             markAsRead(activeAlert.id)
+                                            if (activeAlert.referencia_id) {
+                                                router.push(`/agenda?turno=${activeAlert.referencia_id}`)
+                                            }
                                         }}
                                         className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all"
                                     >

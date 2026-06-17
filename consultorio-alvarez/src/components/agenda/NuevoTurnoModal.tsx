@@ -193,9 +193,12 @@ export function NuevoTurnoModal({
         setEsSobreturno(next)
         if (next) {
             const chequeo = tiposTratamiento.find((t: any) =>
-                t.nombre.toLowerCase().includes('chequeo') || t.nombre.toLowerCase().includes('control')
+                t.nombre.toLowerCase().includes('chequeo') || 
+                t.nombre.toLowerCase().includes('control') ||
+                t.nombre.toLowerCase().includes('revis')
             )
-            if (chequeo) setTratId(chequeo.id)
+            const selectedTrat = chequeo || tiposTratamiento[0]
+            if (selectedTrat) setTratId(selectedTrat.id)
             setPrioridad('BAJA')
         } else {
             setTratId('')
@@ -212,17 +215,32 @@ export function NuevoTurnoModal({
         : []
 
     async function handleGuardar() {
+        const isPatientInvalid = !modoNuevoPaciente ? !pacienteId : (!nuevoNombre.trim() || !nuevoApellido.trim() || !nuevoDni.trim() || !nuevoTelefono.trim())
         if (
-            (!modoNuevoPaciente && !pacienteId) ||
-            (modoNuevoPaciente && (!nuevoNombre.trim() || !nuevoApellido.trim() || !nuevoDni.trim() || !nuevoTelefono.trim())) ||
+            isPatientInvalid ||
             !profId ||
             !tratId ||
             !fecha ||
             !hora
         ) {
+            let desc = ''
+            if (isPatientInvalid) {
+                desc = modoNuevoPaciente 
+                    ? 'Por favor completa Nombre, Apellido, DNI y Teléfono del paciente.' 
+                    : 'Por favor selecciona un paciente.'
+            } else if (!profId) {
+                desc = 'Por favor selecciona un profesional.'
+            } else if (!tratId) {
+                desc = 'Por favor selecciona un tratamiento.'
+            } else if (!fecha) {
+                desc = 'Por favor selecciona una fecha.'
+            } else if (!hora) {
+                desc = 'Por favor ingresa una hora.'
+            }
+
             glassAlert.warning({ 
                 title: 'Completá los campos obligatorios',
-                description: modoNuevoPaciente ? 'Nombre, Apellido, DNI y Teléfono son requeridos.' : undefined
+                description: desc || undefined
             })
             return
         }
@@ -498,7 +516,9 @@ export function NuevoTurnoModal({
                             {esSobreturno ? (
                                 <div className="flex items-center gap-2 rounded-lg border border-amber-500/30 px-3 py-2 text-sm bg-amber-500/5">
                                     <Zap className="h-3.5 w-3.5 text-amber-500" />
-                                    <span className="text-foreground">Chequeo de rutina (15 min)</span>
+                                    <span className="text-foreground">
+                                        {tiposTratamiento.find(t => String(t.id) === String(tratId))?.nombre || 'Chequeo de rutina'} (15 min)
+                                    </span>
                                 </div>
                             ) : (
                                 <GlassSelect

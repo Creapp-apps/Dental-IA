@@ -203,8 +203,8 @@ export async function crearReservaPublica(data: {
     const tenant = await getTenantBySlug(data.tenantSlug)
     if (!tenant) return { error: 'Consultorio no encontrado' }
 
-    // Build the turno datetime
-    const fechaInicio = new Date(`${data.fecha}T${data.hora}:00`)
+    // Build the turno datetime (Argentina = UTC-3)
+    const fechaInicio = new Date(`${data.fecha}T${data.hora}:00-03:00`)
     const fechaFin = new Date(fechaInicio)
     fechaFin.setMinutes(fechaFin.getMinutes() + 20) // 20 min default
 
@@ -492,7 +492,12 @@ export async function notificarDemoraTurno(turnoId: string, demora: number, mens
 
             const formatTime = (isoString: string) => {
                 const date = new Date(isoString)
-                return date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hour12: false })
+                return date.toLocaleTimeString('es-AR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                    timeZone: 'America/Argentina/Buenos_Aires'
+                })
             }
 
             const horaOriginal = formatTime(turno.fecha_inicio)
