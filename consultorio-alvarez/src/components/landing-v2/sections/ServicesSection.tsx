@@ -1,11 +1,11 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { SERVICES } from '@/lib/landing-constants'
 import type { LandingConfig } from '@/lib/types/landing'
-import { Shield, Clock, Star, Heart } from 'lucide-react'
+import { Shield, Clock, Star, Heart, ChevronLeft, ChevronRight } from 'lucide-react'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -14,6 +14,126 @@ const ICON_MAP: Record<string, React.ReactNode> = {
     clock: <Clock className="h-5 w-5" />,
     star: <Star className="h-5 w-5" />,
     heart: <Heart className="h-5 w-5" />,
+}
+
+interface ServiceTooltipData {
+    title: string;
+    expandedDescription: string;
+    images: string[];
+}
+
+const TOOLTIP_DATA: Record<string, ServiceTooltipData> = {
+    'estética dental': {
+        title: 'Estética Dental Premium',
+        expandedDescription: 'Tratamientos personalizados de diseño de sonrisa. Combinamos carillas ultrafinas de porcelana inyectada, blanqueamiento láser y coronas de zirconio de alta traslúcida para lograr una armonía natural y duradera.',
+        images: ['/estetica_1.jpeg', '/estetica_2.jpeg']
+    },
+    'odontología digital': {
+        title: 'Odontología Digital 3D',
+        expandedDescription: 'Escaneo intraoral de alta precisión que reemplaza las pastas de impresión tradicionales. Diseñamos restauraciones mediante tecnología CAD/CAM y simulamos tu sonrisa antes de comenzar.',
+        images: ['/landing_slide1.png', '/landing_slide2.png']
+    },
+    'implantologia': {
+        title: 'Implantes Guiados por Computadora',
+        expandedDescription: 'Colocación precisa de implantes de titanio utilizando guías quirúrgicas impresas en 3D. Minimiza el tiempo de cirugía, el dolor postoperatorio y acelera el proceso de oseointegración.',
+        images: ['/landing_slide2.png', '/landing_slide3.png']
+    },
+    'endodoncia mecanizada': {
+        title: 'Endodoncia Rotatoria Automatizada',
+        expandedDescription: 'Tratamiento de conducto eficiente y confortable en una sola sesión. Utilizamos motores inteligentes y localizadores de ápice digitales para asegurar la desinfección total de la pieza.',
+        images: ['/landing_slide3.png', '/landing_slide1.png']
+    },
+    'turnos puntuales': {
+        title: 'Agenda de Turnos Optimizada',
+        expandedDescription: 'Sistema inteligente de reservas que calcula el tiempo real necesario para cada procedimiento. Sin sobreturnos, garantizando puntualidad y una experiencia de espera relajada y exclusiva.',
+        images: ['/landing_slide1.png', '/landing_slide3.png']
+    }
+};
+
+const getTooltipData = (title: string): ServiceTooltipData | null => {
+    const t = title.toLowerCase();
+    if (t.includes('estética') || t.includes('estetica')) return TOOLTIP_DATA['estética dental'];
+    if (t.includes('digital') || t.includes('tecnología') || t.includes('odontología digital') || t.includes('tecnologia')) return TOOLTIP_DATA['odontología digital'];
+    if (t.includes('implante') || t.includes('implantología') || t.includes('implantologia')) return TOOLTIP_DATA['implantologia'];
+    if (t.includes('endodoncia')) return TOOLTIP_DATA['endodoncia mecanizada'];
+    if (t.includes('turno') || t.includes('agenda') || t.includes('puntuales')) return TOOLTIP_DATA['turnos puntuales'];
+    return null;
+};
+
+function CardTooltip({ tooltip }: { tooltip: ServiceTooltipData }) {
+    const [index, setIndex] = useState(0)
+
+    useEffect(() => {
+        const timer = setInterval(() => {
+            setIndex((prev) => (prev + 1) % tooltip.images.length)
+        }, 4000)
+        return () => clearInterval(timer)
+    }, [tooltip.images.length])
+
+    const next = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        setIndex((prev) => (prev + 1) % tooltip.images.length)
+    }
+
+    const prev = (e: React.MouseEvent) => {
+        e.stopPropagation()
+        setIndex((prev) => (prev - 1 + tooltip.images.length) % tooltip.images.length)
+    }
+
+    return (
+        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-[280px] sm:w-[340px] md:w-[380px] bg-white/95 border border-white/80 rounded-3xl p-4 shadow-2xl backdrop-blur-md z-50 transition-all duration-300 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto scale-95 group-hover:scale-100 origin-bottom flex flex-col gap-3">
+            {/* Carousel */}
+            <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-slate-100 group/carousel">
+                <img 
+                    src={tooltip.images[index]} 
+                    alt={tooltip.title}
+                    className="h-full w-full object-cover transition-transform duration-500 hover:scale-105"
+                />
+                
+                {tooltip.images.length > 1 && (
+                    <>
+                        <button 
+                            onClick={prev}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-opacity opacity-0 group-hover/carousel:opacity-100 cursor-pointer"
+                        >
+                            <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <button 
+                            onClick={next}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/40 hover:bg-black/60 text-white flex items-center justify-center transition-opacity opacity-0 group-hover/carousel:opacity-100 cursor-pointer"
+                        >
+                            <ChevronRight className="h-4 w-4" />
+                        </button>
+                        
+                        {/* Dots */}
+                        <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+                            {tooltip.images.map((_, i) => (
+                                <button
+                                    key={i}
+                                    onClick={(e) => {
+                                        e.stopPropagation()
+                                        setIndex(i)
+                                    }}
+                                    className={`h-1.5 rounded-full transition-all ${
+                                        index === i ? 'w-3.5 bg-white' : 'w-1.5 bg-white/50'
+                                    }`}
+                                />
+                            ))}
+                        </div>
+                    </>
+                )}
+            </div>
+
+            {/* Content */}
+            <div className="text-left">
+                <h4 className="text-sm font-bold text-slate-900 mb-1">{tooltip.title}</h4>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed">{tooltip.expandedDescription}</p>
+            </div>
+            
+            {/* Small triangle arrow at the bottom */}
+            <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 w-3 h-3 bg-white/95 border-r border-b border-white/80 rotate-45" />
+        </div>
+    )
 }
 
 export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'servicios' | 'servicios_titulo' | 'servicios_subtitulo' | 'color_primary' | 'color_accent'> }) {
@@ -137,51 +257,70 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                     >
                         {config?.servicios_titulo ?? 'Nuestros servicios'}
                     </span>
-                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-white leading-tight">
+                    <h2 className="text-4xl sm:text-5xl lg:text-6xl font-extrabold text-slate-900 leading-tight">
                         Tecnología de
                         <span className="text-gradient-landing"> vanguardia</span>
                     </h2>
-                    <p className="mt-4 text-white/80 font-medium max-w-lg mx-auto text-base">
+                    <p className="mt-4 text-slate-600 font-medium max-w-lg mx-auto text-base">
                         {config?.servicios_subtitulo || 'Cada tratamiento combina precisión clínica con la más alta estética dental.'}
                     </p>
                 </div>
 
                 <div ref={cardsRef} className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {config?.servicios ? (
-                        config.servicios.map((service, idx) => (
-                            <div key={idx} className="service-card glass rounded-3xl p-7 hover:bg-white/10 transition-all duration-500 group cursor-default">
-                                <div className="flex items-start gap-4">
-                                    <div
-                                        className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 transition-all"
-                                        style={{
-                                            backgroundColor: `${config?.color_primary ?? '#0d9488'}26`,
-                                            color: config?.color_primary ?? '#0d9488',
-                                        }}
-                                    >
-                                        {ICON_MAP[service.icono] ?? <Star className="h-5 w-5" />}
+                        config.servicios.map((service, idx) => {
+                            const tooltipData = getTooltipData(service.titulo);
+                            return (
+                                <div key={idx} className="service-card relative glass-light rounded-3xl p-7 hover:bg-white/95 hover:shadow-xl hover:shadow-slate-200/40 transition-premium group cursor-default">
+                                    <div className="flex items-start gap-4">
+                                        <div
+                                            className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300"
+                                            style={{
+                                                backgroundColor: `${config?.color_primary ?? '#0d9488'}26`,
+                                                color: config?.color_primary ?? '#0d9488',
+                                            }}
+                                        >
+                                            {ICON_MAP[service.icono] ?? <Star className="h-5 w-5" />}
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <h3 className="text-lg font-bold text-slate-800 mb-1">{service.titulo}</h3>
+                                            <p className="text-sm text-slate-600 font-medium leading-relaxed">{service.descripcion}</p>
+                                        </div>
                                     </div>
-                                    <div className="flex-1 text-left">
-                                        <h3 className="text-lg font-bold text-white mb-1">{service.titulo}</h3>
-                                        <p className="text-sm text-white/80 font-medium leading-relaxed">{service.descripcion}</p>
-                                    </div>
+                                    {tooltipData && <CardTooltip tooltip={tooltipData} />}
                                 </div>
-                            </div>
-                        ))
+                            );
+                        })
                     ) : (
-                        SERVICES.map((service) => (
-                            <div key={service.id} className="service-card glass rounded-3xl p-7 hover:bg-white/10 transition-all duration-500 group cursor-default">
-                                <div className="flex items-start gap-4">
-                                    <div className="h-12 w-12 rounded-2xl bg-teal-500/15 flex items-center justify-center text-xl text-teal-400 shrink-0 group-hover:bg-teal-500/25 transition-colors">
-                                        {service.icon}
+                        SERVICES.map((service) => {
+                            const tooltipData = getTooltipData(service.title);
+                            return (
+                                <div key={service.id} className="service-card relative glass-light rounded-3xl p-7 hover:bg-white/95 hover:shadow-xl hover:shadow-slate-200/40 transition-premium group cursor-default">
+                                    <div className="flex items-start gap-4">
+                                        <div 
+                                            className="h-12 w-12 rounded-2xl flex items-center justify-center text-xl shrink-0 group-hover:bg-teal-500/20 transition-colors duration-300"
+                                            style={{
+                                                backgroundColor: `${config?.color_primary ?? '#0d9488'}15`,
+                                                color: config?.color_primary ?? '#0d9488',
+                                            }}
+                                        >
+                                            {service.icon}
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <h3 className="text-lg font-bold text-slate-800 mb-1">{service.title}</h3>
+                                            <p 
+                                                className="text-xs font-semibold mb-3"
+                                                style={{ color: config?.color_primary ?? '#0d9488' }}
+                                            >
+                                                {service.subtitle}
+                                            </p>
+                                            <p className="text-sm text-slate-600 font-medium leading-relaxed">{service.description}</p>
+                                        </div>
                                     </div>
-                                    <div className="flex-1 text-left">
-                                        <h3 className="text-lg font-bold text-white mb-1">{service.title}</h3>
-                                        <p className="text-xs font-semibold text-teal-400 mb-3">{service.subtitle}</p>
-                                        <p className="text-sm text-white/80 font-medium leading-relaxed">{service.description}</p>
-                                    </div>
+                                    {tooltipData && <CardTooltip tooltip={tooltipData} />}
                                 </div>
-                            </div>
-                        ))
+                            );
+                        })
                     )}
                 </div>
             </div>

@@ -1,249 +1,262 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
+import { useRef, useEffect, useState } from 'react'
 import { gsap } from 'gsap'
 import { CLINIC } from '@/lib/landing-constants'
-import { MapPin, Phone, ChevronDown } from 'lucide-react'
-import { StaggerButton } from '@/components/landing-v2/ui/stagger-button'
+import { MapPin, Phone, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { LandingConfig } from '@/lib/types/landing'
 import { TenantLogo } from '@/components/ui/tenant-logo'
+import { motion, AnimatePresence } from 'framer-motion'
+
+const SLIDES = [
+    {
+        image: '/landing_slide1.png',
+        title: 'Instalaciones Premium',
+        description: 'Tecnología de última generación y máximo confort en Olivos.'
+    },
+    {
+        image: '/landing_slide2.png',
+        title: 'Ortodoncia Invisible',
+        description: 'Alineadores estéticos y cómodos diseñados a tu medida.'
+    },
+    {
+        image: '/landing_slide3.png',
+        title: 'Estética Dental',
+        description: 'Diseño de sonrisa y blanqueamiento con resultados naturales.'
+    }
+]
 
 interface Props {
     onBookingClick: () => void
-    config?: Pick<LandingConfig, 'hero_badge' | 'hero_titulo' | 'hero_subtitulo' | 'color_primary' | 'color_accent' | 'footer_address' | 'footer_phone'>
+    config?: Pick<LandingConfig, 'hero_badge' | 'hero_titulo' | 'hero_subtitulo' | 'color_primary' | 'color_accent' | 'footer_address' | 'footer_phone' | 'logo_config'>
 }
 
 export function HeroSection({ onBookingClick, config }: Props) {
-    const heroBadgeRef = useRef<HTMLDivElement>(null)
     const titleRef = useRef<HTMLHeadingElement>(null)
     const subtitleRef = useRef<HTMLParagraphElement>(null)
     const ctaRef = useRef<HTMLDivElement>(null)
-    const chipsRef = useRef<HTMLDivElement>(null)
-    const badge1Ref = useRef<HTMLDivElement>(null)
-    const badge2Ref = useRef<HTMLDivElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
 
+    const [currentSlide, setCurrentSlide] = useState(0)
+    const [isHovered, setIsHovered] = useState(false)
+    const [progress, setProgress] = useState(0)
+
+    // Autoplay & progress bar effect
     useEffect(() => {
-        if (!containerRef.current) return
+        if (isHovered) return
 
-        // Simple, safe stagger — animate the two lines as blocks (no DOM manipulation)
+        const slideInterval = 5000 // 5 seconds per slide
+        const stepTime = 50 // step every 50ms for smooth bar progress
+        const steps = slideInterval / stepTime
+        let currentStep = 0
+
+        const interval = setInterval(() => {
+            currentStep++
+            setProgress((currentStep / steps) * 100)
+
+            if (currentStep >= steps) {
+                setCurrentSlide((prev) => (prev + 1) % SLIDES.length)
+                currentStep = 0
+                setProgress(0)
+            }
+        }, stepTime)
+
+        return () => clearInterval(interval)
+    }, [currentSlide, isHovered])
+
+    const nextSlide = () => {
+        setCurrentSlide((prev) => (prev + 1) % SLIDES.length)
+        setProgress(0)
+    }
+
+    const prevSlide = () => {
+        setCurrentSlide((prev) => (prev - 1 + SLIDES.length) % SLIDES.length)
+        setProgress(0)
+    }
+
+    // GSAP animations for slide content changes
+    useEffect(() => {
+        if (!titleRef.current || !subtitleRef.current || !ctaRef.current) return
+
         const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
-
-        if (heroBadgeRef.current) {
-            tl.fromTo(
-                heroBadgeRef.current,
-                { opacity: 0, y: 30 },
-                { opacity: 1, y: 0, duration: 0.6 },
-                0.1
-            )
-        }
-
+        
         tl.fromTo(
-            titleRef.current,
-            { opacity: 0, y: 50 },
-            { opacity: 1, y: 0, duration: 0.7 },
-            0.2
-        )
-        tl.fromTo(
-            subtitleRef.current,
-            { opacity: 0, y: 30 },
-            { opacity: 1, y: 0, duration: 0.6 },
-            0.45
+            [titleRef.current, subtitleRef.current],
+            { opacity: 0, y: 15 },
+            { opacity: 1, y: 0, duration: 0.5, stagger: 0.1 }
         )
         tl.fromTo(
             ctaRef.current,
-            { opacity: 0, y: 20 },
-            { opacity: 1, y: 0, duration: 0.5 },
-            0.65
+            { opacity: 0, scale: 0.95 },
+            { opacity: 1, scale: 1, duration: 0.4 },
+            '-=0.2'
         )
-        tl.fromTo(
-            chipsRef.current,
-            { opacity: 0, y: 15 },
-            { opacity: 1, y: 0, duration: 0.5 },
-            0.8
-        )
-        tl.fromTo(
-            badge1Ref.current,
-            { opacity: 0, scale: 0.85, x: 20 },
-            { opacity: 1, scale: 1, x: 0, duration: 0.6, ease: 'back.out(1.7)' },
-            0.95
-        )
-        tl.fromTo(
-            badge2Ref.current,
-            { opacity: 0, scale: 0.85, x: -20 },
-            { opacity: 1, scale: 1, x: 0, duration: 0.6, ease: 'back.out(1.7)' },
-            1.1
-        )
-        tl.fromTo(
-            badge1Ref.current,
-            { opacity: 0, scale: 0.85, x: 20 },
-            { opacity: 1, scale: 1, x: 0, duration: 0.6, ease: 'back.out(1.7)' },
-            1.15
-        )
-        tl.fromTo(
-            badge2Ref.current,
-            { opacity: 0, scale: 0.85, x: -20 },
-            { opacity: 1, scale: 1, x: 0, duration: 0.6, ease: 'back.out(1.7)' },
-            1.3
-        )
-
-        // Floating badges loop
-        gsap.to(badge1Ref.current, {
-            y: -10,
-            duration: 2.5,
-            repeat: -1,
-            yoyo: true,
-            ease: 'sine.inOut',
-            delay: 1.8,
-        })
-        gsap.to(badge2Ref.current, {
-            y: -8,
-            x: 3,
-            duration: 3,
-            repeat: -1,
-            yoyo: true,
-            ease: 'sine.inOut',
-            delay: 2.1,
-        })
 
         return () => { tl.kill() }
-    }, [])
+    }, [currentSlide])
 
     return (
-        <section className="relative min-h-screen flex items-center z-10">
-            {/* Header público: Logo centralizado en mobile, superior izquierda en desktop */}
-            <div className="absolute top-6 w-full flex justify-center lg:w-auto lg:justify-start lg:top-8 lg:left-10 z-50">
-                <TenantLogo
-                    config={(config as any)?.logo_config}
-                    colorPrimary={config?.color_primary}
-                    fallbackName={CLINIC.name}
-                />
-            </div>
+        <div className="w-full flex flex-col z-10 bg-transparent">
+            {/* TOP HEADER BAR (Transparent Glass overlay, floating) */}
+            <header className="absolute top-0 left-0 right-0 z-50 bg-gradient-to-b from-white/85 via-white/40 to-transparent border-b-0">
+                <div className="max-w-7xl mx-auto px-6 h-24 flex items-center justify-between">
+                    {/* Logo */}
+                    <TenantLogo
+                        config={(config as any)?.logo_config}
+                        colorPrimary={config?.color_primary}
+                        fallbackName={CLINIC.name}
+                    />
+                    
+                    {/* Call-to-Action */}
+                    <div className="flex items-center gap-4">
+                        <button
+                            onClick={onBookingClick}
+                            className="hidden sm:inline-flex items-center justify-center rounded-full px-6 py-3 text-xs font-black text-white shadow-lg transition-all hover:scale-[1.02] cursor-pointer"
+                            style={{ backgroundColor: config?.color_primary ?? '#0d9488' }}
+                        >
+                            RESERVA TU TURNO ONLINE
+                        </button>
+                    </div>
+                </div>
+            </header>
 
-            <div
-                ref={containerRef}
-                className="max-w-7xl mx-auto px-6 sm:px-10 pt-32 lg:pt-24 pb-20 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center min-h-screen w-full"
+            {/* HERO IMAGE BANNER SLIDER (Horizontal format) */}
+            <section 
+                onMouseEnter={() => setIsHovered(true)}
+                onMouseLeave={() => setIsHovered(false)}
+                className="relative w-full h-[500px] md:h-[580px] overflow-hidden"
             >
-                {/* LEFT — Text */}
-                <div className="flex flex-col justify-center order-2 lg:order-1 items-center text-center lg:items-start lg:text-left">
-                    {config?.hero_badge && (
-                        <div className="mb-4" style={{ opacity: 0 }} ref={heroBadgeRef}>
-                            <span
-                                className="text-xs font-bold px-3 py-1.5 rounded-full text-white tracking-wider uppercase inline-block"
-                                style={{ backgroundColor: config?.color_primary ?? '#0d9488' }}
+                {/* BACKGROUND CAROUSEL */}
+                <div className="absolute inset-0 w-full h-full z-0">
+                    <div
+                        className="flex h-full w-full transition-transform duration-1000 ease-out"
+                        style={{ transform: `translateX(-${currentSlide * 100}%)` }}
+                    >
+                        {SLIDES.map((slide, idx) => (
+                            <div key={idx} className="relative w-full h-full shrink-0 overflow-hidden">
+                                <img
+                                    src={slide.image}
+                                    alt={slide.title}
+                                    className={`w-full h-full object-cover transition-transform duration-[8000ms] ease-out ${
+                                        currentSlide === idx ? 'scale-105' : 'scale-100'
+                                    }`}
+                                />
+                            </div>
+                        ))}
+                    </div>
+                    {/* Subtle dark filter to keep image details soft */}
+                    <div className="absolute inset-0 bg-black/10 pointer-events-none" />
+                </div>
+
+                {/* BLENDING GRADIENTS (Smooth transitions to web background) */}
+                {/* Top Fade to White/Ice Blue */}
+                <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-[#eef6ff] via-[#eef6ff]/35 to-transparent pointer-events-none z-10" />
+                
+                {/* Bottom Fade to White/Ice Blue */}
+                <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#eef6ff] via-[#eef6ff]/50 to-transparent pointer-events-none z-10" />
+
+                {/* OVERLAY CARD (Left-aligned, white, rounded) */}
+                <div className="absolute left-6 md:left-20 lg:left-32 top-[55%] md:top-[50%] -translate-y-1/2 z-20 w-[calc(100%-3rem)] sm:w-auto sm:max-w-md">
+                    <div 
+                        ref={containerRef}
+                        className="bg-white/90 backdrop-blur-md p-8 md:p-10 rounded-3xl shadow-2xl border border-white/60 flex flex-col items-start text-left"
+                    >
+                        {/* Highlight Category Tag */}
+                        <div className="mb-1.5 flex items-center gap-2 overflow-hidden h-6">
+                            <span 
+                                className="text-[10px] sm:text-xs font-black uppercase tracking-widest"
+                                style={{ color: config?.color_primary ?? '#0d9488' }}
                             >
-                                {config.hero_badge}
+                                Tecnología de última generación
                             </span>
                         </div>
-                    )}
-                    <h1
-                        ref={titleRef}
-                        className="mb-7 block text-5xl sm:text-6xl lg:text-7xl font-extrabold leading-[0.95] tracking-tight text-gray-900"
-                        style={{ opacity: 0 }}
-                    >
-                        {(config?.hero_titulo || 'Tu sonrisa, elevada.').split(' ').map((w, i, arr) => (
-                            i === arr.length - 1
-                                ? <span key={i} className="text-gradient-landing">{w}</span>
-                                : <span key={i}>{w} </span>
-                        ))}
-                    </h1>
 
-                    <p
-                        ref={subtitleRef}
-                        className="text-base sm:text-lg text-gray-500 leading-relaxed max-w-md mb-8"
-                        style={{ opacity: 0 }}
-                    >
-                        {config?.hero_subtitulo || CLINIC.description}
-                    </p>
-
-                    <div ref={ctaRef} className="flex flex-wrap items-center justify-center lg:justify-start gap-3 mb-8" style={{ opacity: 0 }}>
-                        <StaggerButton
-                            onClick={onBookingClick}
-                            text="Reservar turno online"
-                            direction="up"
-                            className="rounded-full px-7 py-4 text-sm font-semibold text-white shadow-lg hover:shadow-xl hover:-translate-y-0.5 cursor-pointer border-0 h-auto"
-                            style={{ background: `linear-gradient(135deg, ${config?.color_primary ?? '#0d9488'}, ${config?.color_accent ?? '#2dd4bf'})` } as React.CSSProperties}
+                        {/* Title */}
+                        <h1 
+                            ref={titleRef}
+                            className="text-2xl md:text-3.5xl font-black text-slate-900 leading-tight mb-3 tracking-tight"
+                            style={{ opacity: 0 }}
                         >
-                            Reservar turno online
-                        </StaggerButton>
-                        <a
-                            href="#servicios"
-                            className="inline-flex items-center gap-2 rounded-full border border-gray-200 bg-white/70 backdrop-blur-sm px-6 py-4 text-sm font-semibold text-gray-700 hover:bg-white hover:border-gray-300 hover:shadow-md transition-all hover:-translate-y-0.5"
-                        >
-                            Ver servicios
-                        </a>
-                    </div>
+                            {SLIDES[currentSlide].title}
+                        </h1>
 
-                    <div ref={chipsRef} className="flex flex-col flex-wrap items-center justify-center lg:flex-row lg:justify-start gap-2 w-full lg:w-auto" style={{ opacity: 0 }}>
-                        <a href={`https://maps.google.com/?q=${encodeURIComponent(config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`)}`} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-1.5 rounded-full bg-gray-100 hover:bg-gray-200 border border-gray-200 px-4 py-2 w-full lg:w-auto text-xs text-gray-600 font-medium shadow-sm transition-all hover:shadow-md">
-                            <MapPin className="h-3.5 w-3.5" />
-                            {config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`}
-                        </a>
-                        {(config?.footer_phone ?? CLINIC.phone).split(/\|/).map((phoneStr, idx) => {
-                            const [num, lbl] = phoneStr.split('::')
-                            const trimmedNum = num?.trim()
-                            const trimmedLbl = lbl?.trim()
-                            if (!trimmedNum && !trimmedLbl) return null
-                            const telClean = trimmedNum?.replace(/[^\d+]/g, '') || ''
-                            const isMobile = telClean.replace('+', '').length >= 10
-                            const href = isMobile ? `https://wa.me/549${telClean.replace(/^\+?549?/, '')}` : `tel:${telClean}`
-                            return (
-                                <a key={idx} href={href} target={isMobile ? "_blank" : undefined} rel={isMobile ? "noopener noreferrer" : undefined} className="flex items-center justify-center gap-1.5 rounded-full bg-gray-100 hover:bg-gray-200 border border-gray-200 px-4 py-2 w-full lg:w-auto text-xs text-gray-600 font-medium shadow-sm transition-all hover:shadow-md">
-                                    <Phone className="h-3.5 w-3.5" />
-                                    {trimmedNum} {trimmedLbl && <span className="text-gray-400 font-medium">({trimmedLbl})</span>}
-                                </a>
-                            )
-                        })}
+                        {/* Subtitle / Description */}
+                        <p 
+                            ref={subtitleRef}
+                            className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-6"
+                            style={{ opacity: 0 }}
+                        >
+                            {SLIDES[currentSlide].description}
+                        </p>
+
+                        {/* CTA Button inside Card */}
+                        <div ref={ctaRef} className="w-full" style={{ opacity: 0 }}>
+                            <button
+                                onClick={onBookingClick}
+                                className="w-full rounded-xl py-4 text-xs font-black text-white shadow-xl hover:shadow-2xl hover:-translate-y-0.5 cursor-pointer border-0 transition-all duration-300 relative group overflow-hidden uppercase tracking-wider"
+                                style={{ backgroundColor: config?.color_primary ?? '#0d9488' }}
+                            >
+                                RESERVA TU TURNO ONLINE
+                                <span className="absolute inset-0 rounded-xl border border-white/20 animate-pulse" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
-                {/* RIGHT — Hero visual: glowing circle + image */}
-                <div className="relative flex items-center justify-center order-1 lg:order-2 min-h-[420px]">
-                    {/* Outer decorative ring */}
-                    <div
-                        style={{
-                            position: 'absolute',
-                            width: '340px', height: '340px',
-                            borderRadius: '50%',
-                            border: '1.5px solid rgba(13,148,136,0.2)',
-                            animation: 'spin-slow 20s linear infinite',
-                        }}
-                    />
+                {/* SCREEN EDGE ARROWS (for slide nav) */}
+                <button
+                    onClick={prevSlide}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/25 hover:bg-white/45 border border-white/20 text-slate-800 flex items-center justify-center backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all duration-300 cursor-pointer z-40"
+                    aria-label="Anterior"
+                >
+                    <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                    onClick={nextSlide}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 h-10 w-10 rounded-full bg-white/25 hover:bg-white/45 border border-white/20 text-slate-800 flex items-center justify-center backdrop-blur-md opacity-0 group-hover:opacity-100 transition-all duration-300 cursor-pointer z-40"
+                    aria-label="Siguiente"
+                >
+                    <ChevronRight className="h-5 w-5" />
+                </button>
 
-                    {/* Main glowing circle */}
-                    <div
-                        style={{
-                            width: '300px', height: '300px',
-                            borderRadius: '50%',
-                            background: `radial-gradient(circle at 40% 30%, ${config?.color_accent ?? '#2dd4bf'}58, ${config?.color_primary ?? '#0d9488'}8c 60%, rgba(8,51,68,0.7))`,
-                            boxShadow: `0 0 80px ${config?.color_primary ?? '#0d9488'}4d, inset 0 0 60px ${config?.color_primary ?? '#0d9488'}1a`,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            position: 'relative',
-                            overflow: 'hidden',
-                        }}
-                    >
-                        {/* Tooth image */}
-                        <img
-                            src="/DIENTE_compressed.webp"
-                            alt="Diente sano con tratamiento estético"
-                            style={{
-                                width: '240px', height: '240px',
-                                objectFit: 'contain',
-                                filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.25)) brightness(1.05)',
-                                animation: 'float-hero 4s ease-in-out infinite',
-                                position: 'relative', zIndex: 1,
+                {/* DOT INDICATORS (Bottom Right to prevent overlap) */}
+                <div className="absolute bottom-16 right-6 md:right-20 lg:right-32 flex gap-2 z-40 bg-white/30 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/30 shadow-sm transition-all duration-300">
+                    {SLIDES.map((_, idx) => (
+                        <button
+                            key={idx}
+                            onClick={() => {
+                                setCurrentSlide(idx)
+                                setProgress(0)
                             }}
+                            className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
+                                currentSlide === idx ? 'w-5 bg-slate-900' : 'w-1.5 bg-slate-600/60'
+                            }`}
+                            aria-label={`Ir a slide ${idx + 1}`}
                         />
-                    </div>
+                    ))}
+                </div>
 
-                    {/* Rating badge — top right */}
-                    <div
-                        ref={badge1Ref}
-                        className="absolute top-4 right-0 lg:right-4 z-10 glass-light rounded-2xl px-4 py-3 flex items-center gap-2.5"
-                        style={{ opacity: 0 }}
-                    >
+                {/* TOP PROGRESS BAR INDICATORS */}
+                <div className="absolute top-0 left-0 right-0 h-1 flex gap-1 z-40">
+                    {SLIDES.map((_, idx) => (
+                        <div key={idx} className="h-full bg-slate-800/10 flex-1 overflow-hidden">
+                            <div
+                                className="h-full bg-slate-800/60 transition-all duration-100 ease-linear"
+                                style={{
+                                    width: currentSlide === idx ? `${progress}%` : currentSlide > idx ? '100%' : '0%',
+                                    transition: progress === 0 && currentSlide === idx ? 'none' : undefined
+                                }}
+                            />
+                        </div>
+                    ))}
+                </div>
+            </section>
+
+            {/* FLOATING CONTACT CHIPS (Premium glass cards overlapping bottom edge) */}
+            <div className="w-full relative -mt-8 pb-8 z-30 px-6">
+                <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-center gap-3">
+                    {/* Google Rating Badge */}
+                    <div className="flex items-center gap-2 bg-white/85 backdrop-blur-md border border-white/80 rounded-full px-5 py-3 shadow-lg shadow-slate-200/50 hover:scale-[1.02] transition-transform">
                         <div className="flex items-center gap-0.5">
                             {[...Array(5)].map((_, i) => (
                                 <svg key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" viewBox="0 0 24 24">
@@ -251,58 +264,44 @@ export function HeroSection({ onBookingClick, config }: Props) {
                                 </svg>
                             ))}
                         </div>
-                        <div>
-                            <p className="text-xs font-bold text-gray-900 leading-none">4.9</p>
-                            <p className="text-[10px] text-gray-400 leading-none mt-0.5">valoración</p>
-                        </div>
+                        <span className="text-xs font-black text-slate-800">4.9 Valoración Google</span>
                     </div>
 
-                    {/* Turnos badge — bottom left */}
-                    <div
-                        ref={badge2Ref}
-                        className="absolute bottom-4 left-0 lg:-left-4 z-10"
-                        style={{ opacity: 0 }}
+                    {/* Address Chip */}
+                    <a 
+                        href={`https://maps.google.com/?q=${encodeURIComponent(config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`)}`} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="flex items-center gap-2 rounded-full bg-white/85 backdrop-blur-md border border-white/80 px-5 py-3 text-xs text-slate-800 font-black shadow-lg shadow-slate-200/50 hover:scale-[1.02] hover:bg-white transition-all cursor-pointer"
                     >
-                        <button
-                            onClick={onBookingClick}
-                            className="bg-white/80 backdrop-blur-md border border-white/20 shadow-sm rounded-2xl px-4 py-3 flex items-center gap-3 text-left cursor-pointer hover:scale-[1.08] hover:shadow-xl hover:-translate-y-1 transition-all duration-300 outline-none w-full"
-                        >
-                            <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white text-sm shrink-0 shadow-inner"
-                                style={{ backgroundColor: config?.color_primary ?? '#0d9488' }}
-                            >
-                                ✓
-                            </div>
-                            <div>
-                                <p className="text-xs font-bold text-gray-900 leading-none">Turnos online</p>
-                                <p className="text-[10px] text-gray-500 leading-none mt-0.5">disponibles 24h</p>
-                            </div>
-                        </button>
-                    </div>
+                        <MapPin className="h-4 w-4" style={{ color: config?.color_primary ?? '#0d9488' }} />
+                        {config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`}
+                    </a>
 
-                    {/* Sparkle dots */}
-                    {[
-                        { top: '15%', left: '8%', size: 8, delay: '0s' },
-                        { top: '70%', right: '10%', size: 6, delay: '1.2s' },
-                        { bottom: '20%', left: '15%', size: 5, delay: '2s' },
-                    ].map((dot, i) => (
-                        <div
-                            key={i}
-                            style={{
-                                position: 'absolute', ...dot,
-                                width: dot.size, height: dot.size,
-                                borderRadius: '50%',
-                                backgroundColor: `${config?.color_primary ?? '#14b8a6'}99`,
-                                animation: `pulse-dot 2.5s ease-in-out ${dot.delay} infinite`,
-                            }}
-                        />
-                    ))}
+                    {/* Phone / WhatsApp Chips */}
+                    {(config?.footer_phone ?? CLINIC.phone).split(/\|/).map((phoneStr, idx) => {
+                        const [num, lbl] = phoneStr.split('::')
+                        const trimmedNum = num?.trim()
+                        const trimmedLbl = lbl?.trim()
+                        if (!trimmedNum && !trimmedLbl) return null
+                        const telClean = trimmedNum?.replace(/[^\d+]/g, '') || ''
+                        const isMobile = telClean.replace('+', '').length >= 10
+                        const href = isMobile ? `https://wa.me/549${telClean.replace(/^\+?549?/, '')}` : `tel:${telClean}`
+                        return (
+                            <a 
+                                key={idx} 
+                                href={href} 
+                                target={isMobile ? "_blank" : undefined} 
+                                rel={isMobile ? "noopener noreferrer" : undefined} 
+                                className="flex items-center gap-2 rounded-full bg-white/85 backdrop-blur-md border border-white/80 px-5 py-3 text-xs text-slate-800 font-black shadow-lg shadow-slate-200/50 hover:scale-[1.02] hover:bg-white transition-all cursor-pointer"
+                            >
+                                <Phone className="h-4 w-4" style={{ color: config?.color_primary ?? '#0d9488' }} />
+                                {trimmedNum} {trimmedLbl && <span className="text-slate-400 font-medium">({trimmedLbl})</span>}
+                            </a>
+                        )
+                    })}
                 </div>
             </div>
-
-            <div className="absolute bottom-10 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2">
-                <span className="text-[10px] text-gray-400 font-medium tracking-[0.2em] uppercase">Scroll</span>
-                <ChevronDown className="h-4 w-4 text-gray-400 animate-bounce" />
-            </div>
-        </section>
+        </div>
     )
 }

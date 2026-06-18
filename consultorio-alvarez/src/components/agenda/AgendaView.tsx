@@ -803,6 +803,11 @@ export function AgendaView({
                             ))}
                         </div>
 
+                        {/* Current Time Indicator Line spanning the whole grid (if today is visible) */}
+                        {columns.some(col => isSameDay(col.date, new Date())) && (
+                            <CurrentTimeIndicator HOUR_HEIGHT={HOUR_HEIGHT} />
+                        )}
+
                         {/* Drop columns */}
                         {columns.map((col, colIdx) => {
                             const isColToday = isSameDay(col.date, new Date())
@@ -819,8 +824,6 @@ export function AgendaView({
                                     onDrop={(e) => handleDrop(e, col.date, col.profesionalId)}
                                     onClick={(e) => handleColumnClick(e, col.date, col.profesionalId)}
                                 >
-                                    {/* Current Time Indicator Line */}
-                                    {isColToday && <CurrentTimeIndicator HOUR_HEIGHT={HOUR_HEIGHT} />}
 
                                     {/* Appointments cards */}
                                     {col.turnos.map((turno: any) => {
@@ -1044,6 +1047,7 @@ function TurnoCalendarCard({
 
 function CurrentTimeIndicator({ HOUR_HEIGHT }: { HOUR_HEIGHT: number }) {
     const [now, setNow] = useState(new Date())
+    const [isHovered, setIsHovered] = useState(false)
 
     useEffect(() => {
         const timer = setInterval(() => setNow(new Date()), 60000)
@@ -1059,11 +1063,37 @@ function CurrentTimeIndicator({ HOUR_HEIGHT }: { HOUR_HEIGHT: number }) {
 
     return (
         <div 
-            className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
-            style={{ top: `${top}px` }}
+            className="absolute left-0 right-0 z-30 flex items-center pointer-events-auto group cursor-help"
+            style={{ top: `${top - 6}px`, height: '12px' }}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
         >
-            <div className="h-2 w-2 rounded-full bg-red-500 -ml-1 shrink-0 shadow-lg" />
-            <div className="flex-1 h-0.5 bg-red-500" />
+            {/* Tooltip */}
+            <AnimatePresence>
+                {isHovered && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 5, scale: 0.95 }}
+                        animate={{ opacity: 1, y: -26, scale: 1 }}
+                        exit={{ opacity: 0, y: 5, scale: 0.95 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute left-[80px] bg-red-600 text-white text-[9px] font-extrabold px-2 py-1 rounded shadow-xl border border-red-500 whitespace-nowrap pointer-events-none z-50 flex items-center gap-1.5"
+                    >
+                        <span className="h-1.5 w-1.5 rounded-full bg-white animate-ping" />
+                        HORA ACTUAL
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Pulsing time dot */}
+            <div className="h-2.5 w-2.5 rounded-full bg-red-500 -ml-1 shrink-0 shadow-lg animate-pulse" />
+            
+            {/* Visual Time Badge (like Google Calendar) */}
+            <span className="ml-1 px-1.5 py-0.5 bg-red-500 text-[8px] font-extrabold text-white rounded shadow-sm uppercase tracking-wider shrink-0 select-none">
+                {format(now, 'HH:mm')}
+            </span>
+
+            {/* Red Ruler Line */}
+            <div className="flex-1 h-0.5 bg-red-500/80 ml-1.5" />
         </div>
     )
 }

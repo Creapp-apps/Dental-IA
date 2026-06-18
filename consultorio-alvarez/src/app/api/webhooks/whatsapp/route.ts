@@ -1,0 +1,222 @@
+import { NextRequest, NextResponse } from 'next/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { revalidatePath } from 'next/cache'
+
+// GET: Webhook Verification (Meta Verification Challenge)
+export async function GET(request: NextRequest) {
+    const { searchParams } = new URL(request.url)
+    const mode = searchParams.get('hub.mode')
+    const token = searchParams.get('hub.verify_token')
+    const challenge = searchParams.get('hub.challenge')
+
+    // Read the secret verification token from environment variables
+    const verifyToken = process.env.META_WA_VERIFY_TOKEN || 'ALVAREZ_WA_WEBHOOK_VERIFY_TOKEN'
+
+    if (mode === 'subscribe' && token === verifyToken) {
+        console.log('✅ Webhook de WhatsApp verificado con éxito por Meta.')
+        return new Response(challenge, { status: 200 })
+    }
+    
+    console.warn('⚠️ Intento de verificación de webhook fallido o no autorizado.')
+    return new Response('Forbidden', { status: 403 })
+}
+
+// POST: Recepción de Eventos de Mensajes de Meta
+export async function POST(request: NextRequest) {
+    try {
+        const body = await request.json()
+        
+        // Registrar payload para depuración
+        console.log('📬 Webhook WhatsApp recibido:', JSON.stringify(body, null, 2))
+
+        const change = body.entry?.[0]?.changes?.[0]?.value
+        const message = change?.messages?.[0]
+
+        // Solo procesamos si hay un mensaje entrante
+        if (!message) {
+            return NextResponse.json({ success: true, message: 'No message in payload' })
+        }
+
+        const from = message.from // Número del paciente (ej: 5491130174859)
+        const messageId = message.id
+        
+        // Identificar tipo de mensaje
+        const type = message.type
+        let buttonPayload = ''
+        let textBody = ''
+
+        if (type === 'button') {
+            buttonPayload = message.button?.payload || ''
+        } else if (type === 'interactive') {
+            buttonPayload = message.interactive?.button_reply?.id || ''
+        } else if (type === 'text') {
+            textBody = message.text?.body?.trim().toUpperCase() || ''
+        }
+
+        console.log(`📱 Mensaje recibido de ${from}. Tipo: ${type}. Payload: "${buttonPayload}". Texto: "${textBody}"`)
+
+        // Instanciar cliente administrador para eludir RLS y operar en base de datos
+        const admin = createAdminClient()
+
+        let turnoIdToUpdate = ''
+        let respuestaPaciente: 'CONFIRMAR' | 'CANCELAR' | 'REPROGRAMAR' | null = null
+
+        // 1. Analizar respuesta de botón rápido
+        if (buttonPayload) {
+            const confirmMatch = buttonPayload.match(/^CONFIRMAR_TURNO_(.+)$/)
+            const cancelMatch = buttonPayload.match(/^CANCELAR_TURNO_(.+)$/)
+            const reprogramMatch = buttonPayload.match(/^REPROGRAMAR_TURNO_(.+)$/)
+
+            if (confirmMatch) {
+                turnoIdToUpdate = confirmMatch[1]
+                respuestaPaciente = 'CONFIRMAR'
+            } else if (cancelMatch) {
+                turnoIdToUpdate = cancelMatch[1]
+                respuestaPaciente = 'CANCELAR'
+            } else if (reprogramMatch) {
+                turnoIdToUpdate = reprogramMatch[1]
+                respuestaPaciente = 'REPROGRAMAR'
+            }
+        } 
+        // 2. Analizar respuesta de texto manual (ej: "SI", "NO", "SÍ", "CONFIRMO", "REPROGRAMAR")
+        else if (textBody) {
+            const cleanPhone = from.replace(/\D/g, '')
+            // Encontrar el último recordatorio enviado a este teléfono que esté pendiente de respuesta
+            const { data: lastRem } = await admin
+                .from('recordatorios')
+                .select('id, turno_id')
+                .eq('telefono', cleanPhone)
+                .eq('estado_envio', 'ENVIADO')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+
+            if (lastRem?.turno_id) {
+                if (['SI', 'SÍ', 'OK', 'CONFIRMO', 'CONFIRMAR'].includes(textBody)) {
+                    turnoIdToUpdate = lastRem.turno_id
+                    respuestaPaciente = 'CONFIRMAR'
+                } else if (['NO', 'CANCELO', 'CANCELAR', 'RECHAZO'].includes(textBody)) {
+                    turnoIdToUpdate = lastRem.turno_id
+                    respuestaPaciente = 'CANCELAR'
+                } else if (['REPROGRAMAR', 'CAMBIAR', 'MODIFICAR', 'REPROGRAMO', 'OTRO HORARIO', 'OTRO DIA', 'OTRO DÍA'].includes(textBody)) {
+                    turnoIdToUpdate = lastRem.turno_id
+                    respuestaPaciente = 'REPROGRAMAR'
+                }
+            }
+        }
+
+        // 3. Si se identificó un turno y una acción válida, actualizamos base de datos
+        if (turnoIdToUpdate && respuestaPaciente) {
+            // Traer información del turno antes de actualizar
+            const { data: turno } = await admin
+                .from('turnos')
+                .select(`
+                    fecha_inicio,
+                    profesional_id,
+                    paciente:pacientes(nombre, apellido),
+                    tipo_treatment:tipos_tratamiento(nombre)
+                `)
+                .eq('id', turnoIdToUpdate)
+                .single()
+
+            // Si no es solicitud de reprogramar, actualizamos el estado físico del turno en la grilla
+            if (respuestaPaciente !== 'REPROGRAMAR') {
+                const nuevoEstado = respuestaPaciente === 'CONFIRMAR' ? 'CONFIRMADO' : 'CANCELADO'
+                await admin
+                    .from('turnos')
+                    .update({ estado: nuevoEstado })
+                    .eq('id', turnoIdToUpdate)
+                console.log(`✅ Turno ${turnoIdToUpdate} actualizado a ${nuevoEstado}`)
+            } else {
+                console.log(`🔄 Turno ${turnoIdToUpdate} mantiene estado PENDIENTE, registrado pedido de reprogramación`)
+            }
+
+            // Actualizar tabla de recordatorios en base de datos
+            await admin
+                .from('recordatorios')
+                .update({
+                    estado_envio: 'RESPONDIDO',
+                    respuesta_paciente: respuestaPaciente,
+                    fecha_respuesta: new Date().toISOString()
+                })
+                .eq('turno_id', turnoIdToUpdate)
+
+            // --- Enviar mensaje de respuesta automática de WhatsApp al paciente ---
+            if (process.env.META_WA_ACCESS_TOKEN && process.env.META_WA_PHONE_NUMBER_ID) {
+                const nombrePaciente = (turno?.paciente as any)?.nombre || ''
+                let replyText = ''
+
+                if (respuestaPaciente === 'CONFIRMAR') {
+                    replyText = `¡Muchas gracias, ${nombrePaciente}! Tu turno ha sido confirmado con éxito. Te esperamos.`
+                } else if (respuestaPaciente === 'CANCELAR') {
+                    replyText = `Hola ${nombrePaciente}, registramos la cancelación de tu turno. Si querés agendar uno nuevo, podés hacerlo ingresando a nuestra web. ¡Saludos!`
+                } else {
+                    replyText = `Hola ${nombrePaciente}, registramos tu solicitud de reprogramación. Nos pondremos en contacto a la brevedad para coordinar un nuevo horario. ¡Saludos!`
+                }
+
+                try {
+                    await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            messaging_product: 'whatsapp',
+                            to: from,
+                            type: 'text',
+                            text: { body: replyText }
+                        })
+                    })
+                } catch (waErr) {
+                    console.error('❌ Error al enviar respuesta de confirmación a WhatsApp:', waErr)
+                }
+            }
+
+            // --- Enviar Push Notification al profesional asignado ---
+            try {
+                const { data: usuarioProf } = await admin
+                    .from('usuarios')
+                    .select('id')
+                    .eq('profesional_id', turno?.profesional_id)
+                    .eq('activo', true)
+                    .maybeSingle()
+
+                if (usuarioProf?.id) {
+                    const pct = turno?.paciente as any
+                    const trat = (turno as any)?.tipo_treatment?.nombre || 'Consulta'
+                    const fechaObj = new Date(turno?.fecha_inicio || '')
+                    const horaStr = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+                    
+                    let title = ''
+                    let body = ''
+
+                    if (respuestaPaciente === 'CONFIRMAR') {
+                        title = '📅 Turno Confirmado'
+                        body = `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} a las ${horaStr} hs.`
+                    } else if (respuestaPaciente === 'CANCELAR') {
+                        title = '❌ Turno Cancelado'
+                        body = `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} a las ${horaStr} hs.`
+                    } else {
+                        title = '🔄 Turno a Reprogramar'
+                        body = `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} a las ${horaStr} hs solicita cambio de horario.`
+                    }
+
+                    const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
+                    await sendPushToUser(usuarioProf.id, title, body, '/agenda')
+                }
+            } catch (pushErr) {
+                console.error('❌ Error al despachar push al profesional:', pushErr)
+            }
+
+            // Revalidar las vistas de la agenda
+            revalidatePath('/agenda')
+            revalidatePath('/admin')
+        }
+
+        return NextResponse.json({ success: true })
+    } catch (error: any) {
+        console.error('❌ Error en webhook handler:', error)
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+}
