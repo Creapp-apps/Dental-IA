@@ -5,6 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { AdminBackground } from '@/components/ui/admin-background'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
 import { NotificationProvider } from '@/components/providers/NotificationProvider'
+import { getCurrentUsuario } from '@/lib/supabase/queries'
 
 export default async function AdminLayout({
     children,
@@ -17,6 +18,11 @@ export default async function AdminLayout({
 
     if (!user) {
         redirect('/login')
+    }
+
+    const usuario = await getCurrentUsuario()
+    if (!usuario) {
+        redirect(`/api/auth/logout?redirectTo=/login`)
     }
 
     const config = await getLandingConfigAdmin()

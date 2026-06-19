@@ -33,8 +33,8 @@ export default async function PortalLayout({
 
     if (!paciente) {
         // El email autenticado no corresponde a un paciente de este tenant
-        await supabase.auth.signOut()
-        redirect(`/portal/${slug}/login`)
+        // Redirigir a la API de logout para limpiar la sesión en el cliente
+        redirect(`/api/auth/logout?redirectTo=/portal/${slug}/login`)
     }
 
     const primaryStr = config?.color_primary || '#2563eb'

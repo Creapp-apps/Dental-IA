@@ -1,29 +1,32 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-// Rutas que requieren sesión activa (admin)
 const ADMIN_PREFIXES = ['/admin', '/agenda', '/pacientes', '/cobros', '/configuracion']
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
 
-    // Clasificación de rutas
+    // Path classification
     const isRoot = pathname === '/'
     const isAdminRoute = ADMIN_PREFIXES.some((p) => pathname.startsWith(p))
     const isAdminLogin = pathname.startsWith('/login')
     const isPortalLogin = /^\/portal\/[^/]+\/login/.test(pathname)
     const isPortalRoute = pathname.startsWith('/portal/') && !isPortalLogin
 
-    // Si no es ninguna ruta que nos interese, pasar de largo
+    // Fast-path bypass if route is not protected or sensitive to auth state
     if (!isRoot && !isAdminRoute && !isAdminLogin && !isPortalRoute && !isPortalLogin) {
         return NextResponse.next()
     }
 
     let response = NextResponse.next({ request })
 
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+        return response
+    }
+
     const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        process.env.NEXT_PUBLIC_SUPABASE_URL,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
         {
             cookies: {
                 getAll() {
@@ -40,19 +43,18 @@ export async function proxy(request: NextRequest) {
         }
     )
 
-    const { data: { session } } = await supabase.auth.getSession()
-    const user = session?.user
+    // IMPORTANT: use getUser() instead of getSession() to guarantee API-validated auth state
+    // and avoid redirects on expired/stale session cookies.
+    const { data: { user } } = await supabase.auth.getUser()
 
-    // ── Portal routes ──────────────────────────────────────────
+    // ── Portal Route Protections ─────────────────────────────
     if (isPortalRoute && !user) {
-        // Extraer el slug del path: /portal/[slug]/...
         const slug = pathname.split('/')[2]
         const url = request.nextUrl.clone()
         url.pathname = `/portal/${slug}/login`
         return NextResponse.redirect(url)
     }
 
-    // Portal login: si ya tiene sesión, mandarlo al dashboard del portal
     if (isPortalLogin && user) {
         const slug = pathname.split('/')[2]
         const url = request.nextUrl.clone()
@@ -60,7 +62,7 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
-    // ── Admin routes ───────────────────────────────────────────
+    // ── Admin Route Protections ──────────────────────────────
     if (!user && isAdminRoute) {
         const url = request.nextUrl.clone()
         url.pathname = '/login'
