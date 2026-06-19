@@ -1223,7 +1223,7 @@ function TurnoDetailModal({
                             </GlassButton>
                         )}
                         {turno.paciente?.telefono && (
-                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-400"
+                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                                 onClick={() => { onNotifyDelay(turno); onOpenChange(false); }} disabled={isPending}>
                                 <MessageSquare className="h-3.5 w-3.5 mr-1" />
                                 Demora
@@ -1238,7 +1238,7 @@ function TurnoDetailModal({
                             <Edit2 className="h-3.5 w-3.5 mr-1" />
                             Editar
                         </GlassButton>
-                        <GlassButton size="sm" variant="glass" className="h-8 w-8 p-0 text-red-400 hover:text-red-500 hover:bg-red-500/10 border-red-500/20"
+                        <GlassButton size="sm" variant="glass" className="h-8 w-8 p-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 border-red-500/20"
                             onClick={() => { onDelete(turno.id); onOpenChange(false); }} disabled={isPending}>
                             <Trash2 className="h-3.5 w-3.5" />
                         </GlassButton>

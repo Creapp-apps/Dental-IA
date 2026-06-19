@@ -99,7 +99,7 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
                 <StatusBadge status={estado} />
                 <div className="flex items-center gap-1.5">
                     {turno.paciente?.telefono && (
-                        <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-400"
+                        <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                             onClick={() => setDemoraOpen(true)} disabled={isPending} title="Notificar Demora">
                             <MessageSquare className="h-3 w-3" />
                         </GlassButton>
@@ -109,7 +109,7 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
                         <Edit2 className="h-3 w-3 mr-1" />
                         Editar
                     </GlassButton>
-                    <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-red-400 hover:text-red-500 hover:bg-red-500/10"
+                    <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10"
                         onClick={handleDelete} disabled={isPending} title="Eliminar">
                         <Trash2 className="h-3 w-3" />
                     </GlassButton>

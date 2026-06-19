@@ -596,11 +596,11 @@ export function NuevoTurnoModal({
                             <div className="flex items-center justify-between">
                                 <Label>Disponibilidad del profesional</Label>
                                 <span className="text-[10px] text-muted-foreground flex items-center gap-1.5">
-                                    <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-emerald-500/50"></span> Libre</span>
-                                    <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-red-500/50"></span> Ocupado</span>
+                                    <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Libre</span>
+                                    <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-red-500"></span> Ocupado</span>
                                 </span>
                             </div>
-                            <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-black/20 border border-white/5 max-h-[135px] overflow-y-auto custom-scrollbar">
+                            <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-muted/50 dark:bg-black/20 border border-border dark:border-white/5 max-h-[135px] overflow-y-auto custom-scrollbar">
                                 {slots.map(s => {
                                     const ocupado = isSlotOccupied(s)
                                     return (
@@ -611,10 +611,10 @@ export function NuevoTurnoModal({
                                             onClick={() => setHora(s)}
                                             className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-colors border ${
                                                 ocupado 
-                                                    ? "bg-red-500/10 text-red-400/50 border-red-500/10 cursor-not-allowed" 
+                                                    ? "bg-red-50/50 text-red-700/60 border-red-100 dark:bg-red-950/30 dark:text-red-400/40 dark:border-red-900/20 cursor-not-allowed" 
                                                     : hora === s 
                                                         ? "bg-primary text-primary-foreground border-primary" 
-                                                        : "bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20"
+                                                        : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50 dark:hover:bg-emerald-950/70"
                                             }`}
                                         >
                                             {s}
