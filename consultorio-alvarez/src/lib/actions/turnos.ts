@@ -422,7 +422,8 @@ async function notificarTurnoPorWhatsApp(
             .select(`
                 fecha_inicio,
                 paciente:pacientes(nombre, telefono),
-                profesional:profesionales(nombre, apellido)
+                profesional:profesionales(nombre, apellido),
+                tipo_tratamiento:tipos_tratamiento(nombre)
             `)
             .eq('id', turnoId)
             .single()
@@ -459,17 +460,28 @@ async function notificarTurnoPorWhatsApp(
             timeZone: 'America/Argentina/Buenos_Aires'
         })
 
-        const nombreProf = prof ? `Dr. ${prof.nombre} ${prof.apellido}` : 'el especialista'
+        const nombreProf = prof ? `${prof.nombre.trim()} ${prof.apellido.trim()}` : 'el especialista'
 
         let parameters: { type: 'text'; text: string }[] = []
         if (templateName === 'aviso_ausencia') {
-            // Cuerpo: Hola {{1}}! Notamos que no pudiste asistir a tu turno de hoy a las {{2}} con el Dr. {{3}}...
+            // Cuerpo: Hola {{1}}! Notamos que no pudiste asistir a tu turno de hoy a las {{2}} con el Dr. {{3}}... (3 params)
             parameters = [
                 { type: 'text', text: pct.nombre },
                 { type: 'text', text: horaStr },
                 { type: 'text', text: nombreProf }
             ]
+        } else if (templateName === 'turno_confirmado') {
+            // Cuerpo: Hola {{1}}! Turno confirmado para {{2}} el día {{3}} a las {{4}} con el Dr. {{5}}... (5 params)
+            const tratamiento = (turno as any).tipo_tratamiento?.nombre || 'Consulta'
+            parameters = [
+                { type: 'text', text: pct.nombre },
+                { type: 'text', text: tratamiento },
+                { type: 'text', text: fechaStrFormatted },
+                { type: 'text', text: horaStr },
+                { type: 'text', text: nombreProf }
+            ]
         } else {
+            // templateName: 'turno_cancelado' | 'turno_reprogramado' (4 params)
             // Cuerpo: Hola {{1}}! ... turno para el dia {{2}} a las {{3}} con el Dr. {{4}}...
             parameters = [
                 { type: 'text', text: pct.nombre },
