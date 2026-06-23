@@ -101,10 +101,18 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                                 <h3 className="text-lg font-bold text-white drop-shadow-sm">
                                     Dr/a. {prof.nombre} {prof.apellido}
                                 </h3>
-                                <p
-                                    className="text-sm mt-1 drop-shadow-sm font-medium"
-                                    style={{ color: 'var(--landing-primary, #0d9488)' }}
-                                >{prof.especialidad || 'Odontología General'}</p>
+                                <div className="mt-2.5">
+                                    <span
+                                        className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-semibold tracking-wide border backdrop-blur-sm"
+                                        style={{ 
+                                            backgroundColor: 'var(--landing-primary, #0d9488)1a', 
+                                            borderColor: 'var(--landing-primary, #0d9488)33',
+                                            color: '#ffffff' 
+                                        }}
+                                    >
+                                        {prof.especialidad || 'Odontología General'}
+                                    </span>
+                                </div>
                                 {prof.matricula && (
                                     <p className="text-xs text-white/60 mt-3 font-medium tracking-wide drop-shadow-sm">{prof.matricula}</p>
                                 )}

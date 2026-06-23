@@ -84,10 +84,18 @@ export default function LoginClient({ errorMsg }: { errorMsg: string | null }) {
                         )}
 
                         <form
-                            action={async (formData) => {
+                            onSubmit={async (e) => {
+                                e.preventDefault()
+                                if (loading) return
                                 setLoading(true)
-                                await loginAction(formData)
-                                setLoading(false)
+                                const formData = new FormData(e.currentTarget)
+                                try {
+                                    await loginAction(formData)
+                                } catch (err) {
+                                    console.error(err)
+                                } finally {
+                                    setLoading(false)
+                                }
                             }}
                             className="space-y-4"
                         >

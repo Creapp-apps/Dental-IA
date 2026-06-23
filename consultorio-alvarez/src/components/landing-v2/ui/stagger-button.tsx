@@ -11,6 +11,8 @@ import {
 } from 'motion/react';
 import { cn } from '@/lib/utils';
 
+import { Loader2 } from 'lucide-react';
+
 const buttonVariants = cva(
   'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium transition-colors focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0',
   {
@@ -62,6 +64,7 @@ interface StaggerButtonProps
   direction?: 'up' | 'down' | 'alternate-even' | 'alternate-odd';
   easing?: Easing;
   disableStagger?: boolean;
+  loading?: boolean;
 }
 
 const useProcessedChars = (text: string, hoverText?: string) =>
@@ -119,6 +122,7 @@ const StaggerButton = React.forwardRef<HTMLButtonElement, StaggerButtonProps>(
       direction = 'down',
       easing = [0.25, 1, 0.5, 1] as Easing,
       disableStagger = false,
+      loading = false,
       children,
       ...props
     },
@@ -169,7 +173,7 @@ const StaggerButton = React.forwardRef<HTMLButtonElement, StaggerButtonProps>(
     };
 
     const handleTouchStart = (e: React.TouchEvent<HTMLButtonElement>) => {
-      if (isTouchDevice && !disableStagger) {
+      if (isTouchDevice && !disableStagger && !loading) {
         setIsTapped(true);
         setTimeout(
           () => setIsTapped(false),
@@ -179,7 +183,7 @@ const StaggerButton = React.forwardRef<HTMLButtonElement, StaggerButtonProps>(
       props.onTouchStart?.(e);
     };
 
-    const shouldAnimate = disableStagger
+    const shouldAnimate = disableStagger || loading
       ? false
       : isTouchDevice
         ? isTapped
@@ -195,18 +199,22 @@ const StaggerButton = React.forwardRef<HTMLButtonElement, StaggerButtonProps>(
           'relative group',
         )}
         ref={ref}
+        disabled={props.disabled || loading}
         onMouseEnter={() => {
           if (leaveTimeoutRef.current) clearTimeout(leaveTimeoutRef.current);
-          if (!isTouchDevice) setIsHovered(true);
+          if (!isTouchDevice && !loading) setIsHovered(true);
         }}
         onMouseLeave={() => {
-          if (!isTouchDevice) {
+          if (!isTouchDevice && !loading) {
             leaveTimeoutRef.current = setTimeout(() => setIsHovered(false), 60);
           }
         }}
         onTouchStart={handleTouchStart}
         {...props}
       >
+        {loading && (
+          <Loader2 className="h-4 w-4 animate-spin shrink-0 z-10" />
+        )}
         <AnimatePresence mode='wait'>
           <motion.span
             className='relative h-fit leading-none select-none transform-gpu will-change-transform inline-flex'

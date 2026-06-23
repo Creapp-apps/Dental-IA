@@ -58,10 +58,26 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                     
                     if (newNotif.tipo === 'turno_nuevo') {
                         setActiveAlert(newNotif)
-                        // Reproducir sonido
-                        const audio = new Audio('/sounds/bell.ogg')
-                        audio.volume = 0.5
-                        audio.play().catch(e => console.log('Audio autoplay blocked:', e))
+                    }
+
+                    // Reproducir sonido personalizado según configuración de timbre/volumen
+                    try {
+                        const saved = localStorage.getItem('consultorio-alvarez:notification-settings')
+                        const settings = saved ? JSON.parse(saved) : null
+                        const defaultSounds: Record<string, { sound: string; volume: number }> = {
+                            turno_nuevo: { sound: 'bell.ogg', volume: 0.5 },
+                            alerta: { sound: 'chime.mp3', volume: 0.5 },
+                            sistema: { sound: 'beep.mp3', volume: 0.5 },
+                        }
+                        const config = settings?.[newNotif.tipo] ?? defaultSounds[newNotif.tipo] ?? { sound: '', volume: 0.5 }
+
+                        if (config.sound) {
+                            const audio = new Audio(`/sounds/${config.sound}`)
+                            audio.volume = config.volume
+                            audio.play().catch(e => console.log('Audio autoplay blocked:', e))
+                        }
+                    } catch (e) {
+                        console.error('Error al reproducir sonido de alerta:', e)
                     }
                 }
             )

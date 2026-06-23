@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
+import { normalizarTelefonoArgentino } from '@/lib/utils'
 
 // ============================================================
 // SERVER ACTIONS — Turnos
@@ -163,13 +164,23 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
                 .select(`
                     fecha_inicio,
                     profesional_id,
-                    paciente:pacientes(nombre, apellido),
-                    tipo_tratamiento:tipos_tratamiento(nombre)
+                    paciente:pacientes(nombre, apellido, telefono),
+                    profesional:profesionales(nombre, apellido),
+                    tipo_treatment:tipos_tratamiento(nombre)
                 `)
                 .eq('id', turnoId)
                 .single()
 
             if (turno) {
+                // --- DISPARAR WHATSAPP AUTOMÁTICOS AL PACIENTE ---
+                if (nuevoEstado === 'CONFIRMADO') {
+                    await notificarTurnoPorWhatsApp(turnoId, 'turno_confirmado')
+                } else if (nuevoEstado === 'CANCELADO') {
+                    await notificarTurnoPorWhatsApp(turnoId, 'turno_cancelado')
+                } else if (nuevoEstado === 'AUSENTE') {
+                    await notificarTurnoPorWhatsApp(turnoId, 'aviso_ausencia')
+                }
+
                 const { data: usuarioProf } = await admin
                     .from('usuarios')
                     .select('id')
@@ -179,7 +190,7 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
 
                 if (usuarioProf?.id) {
                     const pct = turno.paciente as any
-                    const trat = (turno.tipo_tratamiento as any)?.nombre || 'Consulta'
+                    const trat = ((turno as any).tipo_treatment || (turno as any).tipo_tratamiento)?.nombre || 'Consulta'
 
                     const { format } = await import('date-fns')
                     const { es } = await import('date-fns/locale')
@@ -236,7 +247,9 @@ export async function moverTurno(turnoId: string, nuevaFechaInicio: string, nuev
 
     if (error) return { error: error.message }
 
-    after(() => {
+    after(async () => {
+        // Enviar notificación de reprogramación de turno
+        await notificarTurnoPorWhatsApp(turnoId, 'turno_reprogramado')
         revalidatePath('/agenda')
         revalidatePath('/admin')
     })
@@ -292,6 +305,13 @@ export async function editarTurno(turnoId: string, formData: {
 }) {
     const supabase = await createClient()
 
+    // Obtener la fecha anterior para saber si fue reprogramado
+    const { data: oldTurno } = await supabase
+        .from('turnos')
+        .select('fecha_inicio')
+        .eq('id', turnoId)
+        .maybeSingle()
+
     const { data, error } = await supabase
         .from('turnos')
         .update({
@@ -311,6 +331,11 @@ export async function editarTurno(turnoId: string, formData: {
     if (error) return { error: error.message }
 
     after(async () => {
+        // Si la fecha de inicio cambió, enviamos notificación de reprogramación
+        if (oldTurno?.fecha_inicio && new Date(oldTurno.fecha_inicio).getTime() !== new Date(formData.fecha_inicio).getTime()) {
+            await notificarTurnoPorWhatsApp(turnoId, 'turno_reprogramado')
+        }
+
         // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
         try {
             const { createAdminClient } = await import('@/lib/supabase/admin')
@@ -374,4 +399,118 @@ export async function eliminarTurno(turnoId: string) {
     })
 
     return { success: true }
+}
+
+// ==========================================
+// FUNCIÓN AUXILIAR PARA NOTIFICACIONES WHATSAPP
+// ==========================================
+async function notificarTurnoPorWhatsApp(
+    turnoId: string, 
+    templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' | 'aviso_ausencia'
+) {
+    if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
+        console.log('⚠️ Variables de WhatsApp no configuradas en entorno.')
+        return
+    }
+
+    try {
+        const { createAdminClient } = await import('@/lib/supabase/admin')
+        const admin = createAdminClient()
+
+        const { data: turno } = await admin
+            .from('turnos')
+            .select(`
+                fecha_inicio,
+                paciente:pacientes(nombre, telefono),
+                profesional:profesionales(nombre, apellido)
+            `)
+            .eq('id', turnoId)
+            .single()
+
+        if (!turno) {
+            console.error(`❌ Turno ${turnoId} no encontrado para notificar WhatsApp (${templateName})`)
+            return
+        }
+
+        const pct = turno.paciente as any
+        const prof = turno.profesional as any
+
+        if (!pct?.telefono) {
+            console.log(`⚠️ El paciente no tiene teléfono registrado para notificar ${templateName}`)
+            return
+        }
+
+        // Sanitizar teléfono para Meta API (regla de Argentina) usando helper robusto
+        let cleanPhone = normalizarTelefonoArgentino(pct.telefono)
+
+        const fechaObj = new Date(turno.fecha_inicio)
+        const fechaStr = fechaObj.toLocaleDateString('es-AR', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            timeZone: 'America/Argentina/Buenos_Aires'
+        })
+        const fechaStrFormatted = fechaStr.charAt(0).toUpperCase() + fechaStr.slice(1)
+
+        const horaStr = fechaObj.toLocaleTimeString('es-AR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: 'America/Argentina/Buenos_Aires'
+        })
+
+        const nombreProf = prof ? `Dr. ${prof.nombre} ${prof.apellido}` : 'el especialista'
+
+        let parameters: { type: 'text'; text: string }[] = []
+        if (templateName === 'aviso_ausencia') {
+            // Cuerpo: Hola {{1}}! Notamos que no pudiste asistir a tu turno de hoy a las {{2}} con el Dr. {{3}}...
+            parameters = [
+                { type: 'text', text: pct.nombre },
+                { type: 'text', text: horaStr },
+                { type: 'text', text: nombreProf }
+            ]
+        } else {
+            // Cuerpo: Hola {{1}}! ... turno para el dia {{2}} a las {{3}} con el Dr. {{4}}...
+            parameters = [
+                { type: 'text', text: pct.nombre },
+                { type: 'text', text: fechaStrFormatted },
+                { type: 'text', text: horaStr },
+                { type: 'text', text: nombreProf }
+            ]
+        }
+
+        console.log(`📤 Enviando plantilla "${templateName}" WhatsApp a ${cleanPhone}...`)
+
+        const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                to: cleanPhone,
+                type: 'template',
+                template: {
+                    name: templateName,
+                    language: { code: 'es_AR' },
+                    components: [
+                        {
+                            type: 'body',
+                            parameters: parameters
+                        }
+                    ]
+                }
+            })
+        })
+
+        const wpResult = await wpResponse.json()
+        if (!wpResponse.ok) {
+            console.error(`❌ Error Meta WhatsApp API "${templateName}":`, JSON.stringify(wpResult, null, 2))
+        } else {
+            console.log(`✅ WhatsApp "${templateName}" enviado con éxito a`, cleanPhone)
+        }
+    } catch (err) {
+        console.error(`❌ Error al procesar notificación WhatsApp "${templateName}":`, err)
+    }
 }

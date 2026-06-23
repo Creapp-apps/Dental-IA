@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition, useEffect } from 'react'
+import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key } from 'lucide-react'
+import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -28,6 +28,7 @@ const TABS = [
     { id: 'profesionales', label: 'Profesionales', icon: Users },
     { id: 'obras_sociales', label: 'Obras Sociales', icon: CreditCard },
     { id: 'horarios', label: 'Horarios', icon: Clock },
+    { id: 'sonidos', label: 'Sonidos/Alertas', icon: Volume2 },
     { id: 'mi_web', label: 'Mi Web', icon: Globe },
     { id: 'integraciones', label: 'Integraciones', icon: Blocks },
 ] as const
@@ -71,6 +72,7 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
                     {tab === 'profesionales' && <TabProfesionales tenantId={tenant.id} profesionales={profesionales} router={router} />}
                     {tab === 'obras_sociales' && <TabObrasSociales obrasSociales={obrasSociales} />}
                     {tab === 'horarios' && <TabHorarios horarios={tenant.horarios} profesionales={profesionales} />}
+                    {tab === 'sonidos' && <TabSonidos />}
                     {tab === 'mi_web' && landingConfig && <TabMiWeb config={landingConfig} slug={slug} />}
                     {tab === 'mi_web' && !landingConfig && (
                         <div className="glass rounded-2xl p-8 text-center text-muted-foreground text-sm">
@@ -863,4 +865,321 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
     return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>
+}
+
+/* ──────────── Tab: Sonidos/Alertas ──────────── */
+interface GlassSelectOption {
+    id: string
+    label: string
+}
+
+interface GlassSelectProps {
+    value: string
+    onChange: (value: string) => void
+    options: GlassSelectOption[]
+    placeholder?: string
+    disabled?: boolean
+}
+
+function GlassSelect({ value, onChange, options, placeholder = 'Seleccionar...', disabled = false }: GlassSelectProps) {
+    const [isOpen, setIsOpen] = useState(false)
+    const containerRef = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false)
+            }
+        }
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside)
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside)
+        }
+    }, [isOpen])
+
+    const selectedOption = options.find(o => o.id === value)
+
+    return (
+        <div className="relative w-full text-foreground" ref={containerRef}>
+            <button
+                type="button"
+                disabled={disabled}
+                onClick={() => setIsOpen(!isOpen)}
+                className="w-full flex items-center justify-between bg-background/30 backdrop-blur-md border border-border/30 hover:border-border/60 hover:bg-background/40 active:scale-[0.98] rounded-xl text-xs px-3 py-2 text-foreground cursor-pointer transition-all duration-200 select-none disabled:opacity-50 disabled:pointer-events-none"
+            >
+                <span className="truncate font-medium">{selectedOption ? selectedOption.label : placeholder}</span>
+                <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 shrink-0 ml-1.5 ${isOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, y: -4, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: -4, scale: 0.95 }}
+                        transition={{ duration: 0.15, ease: 'easeOut' }}
+                        className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto glass shadow-glass rounded-xl p-1 border border-border/40 focus:outline-none scrollbar-thin scrollbar-thumb-border/50 scrollbar-track-transparent"
+                    >
+                        <div className="space-y-0.5">
+                            {options.map((option) => {
+                                const isSelected = option.id === value
+                                return (
+                                    <button
+                                        key={option.id}
+                                        type="button"
+                                        onClick={() => {
+                                            onChange(option.id)
+                                            setIsOpen(false)
+                                        }}
+                                        className={`w-full flex items-center justify-between text-left text-xs px-2.5 py-1.5 rounded-lg transition-all duration-150 cursor-pointer select-none ${
+                                            isSelected
+                                                ? 'bg-primary/20 text-primary-foreground font-semibold'
+                                                : 'hover:bg-foreground/5 text-muted-foreground hover:text-foreground'
+                                        }`}
+                                    >
+                                        <span className="truncate">{option.label}</span>
+                                        {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    )
+}
+
+const SONIDOS_DISPONIBLES = [
+    { id: 'bell.ogg', label: 'Campana Clásica' },
+    { id: 'chime.mp3', label: 'Campanilla (Chime)' },
+    { id: 'ding.mp3', label: 'Timbre Digital (Ding)' },
+    { id: 'beep.mp3', label: 'Beep Corto' },
+    { id: 'chello.mp3', label: 'Violonchelo Alerta' },
+    { id: 'door.mp3', label: 'Timbre de Entrada (Door)' },
+    { id: 'chord.mp3', label: 'Acorde de Órgano (Chord)' },
+    { id: 'sonar.mp3', label: 'Sonar Submarino (Sonar)' },
+    { id: 'boing.mp3', label: 'Rebote Divertido (Boing)' },
+    { id: 'alarm.mp3', label: 'Alarma Digital (Alarm)' },
+]
+
+interface ConfigNotificacion {
+    sound: string
+    volume: number
+}
+
+interface SonidosSettings {
+    turno_nuevo: ConfigNotificacion
+    alerta: ConfigNotificacion
+    sistema: ConfigNotificacion
+}
+
+function TabSonidos() {
+    const [settings, setSettings] = useState<SonidosSettings>({
+        turno_nuevo: { sound: 'bell.ogg', volume: 0.5 },
+        alerta: { sound: 'chime.mp3', volume: 0.5 },
+        sistema: { sound: 'beep.mp3', volume: 0.5 },
+    })
+
+    useEffect(() => {
+        const saved = localStorage.getItem('consultorio-alvarez:notification-settings')
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved)
+                setSettings(prev => ({
+                    ...prev,
+                    ...parsed
+                }))
+            } catch (e) {
+                console.error('Error al cargar config de sonidos:', e)
+            }
+        }
+    }, [])
+
+    function updateSetting(tipo: keyof SonidosSettings, field: keyof ConfigNotificacion, value: any) {
+        setSettings(prev => ({
+            ...prev,
+            [tipo]: {
+                ...prev[tipo],
+                [field]: value
+            }
+        }))
+    }
+
+    function probarSonido(soundFile: string, volume: number) {
+        if (!soundFile) return
+        const audio = new Audio(`/sounds/${soundFile}`)
+        audio.volume = volume
+        audio.play().catch(err => {
+            console.error('Error al reproducir audio de prueba:', err)
+            const isNotAllowed = err.name === 'NotAllowedError'
+            glassAlert.error({
+                title: isNotAllowed ? 'Autoplay Bloqueado' : 'Error de Audio',
+                description: isNotAllowed
+                    ? 'El navegador bloqueó la reproducción de audio. Hace clic en cualquier parte de la pantalla e intentalo de nuevo.'
+                    : `No se pudo reproducir el sonido: ${err.message || err.name}`
+            })
+        })
+    }
+
+    function guardar() {
+        localStorage.setItem('consultorio-alvarez:notification-settings', JSON.stringify(settings))
+        glassAlert.success({
+            title: 'Configuración guardada',
+            description: 'Las preferencias de sonido se guardaron en tu navegador.'
+        })
+    }
+
+    const selectOptions = [{ id: '', label: 'Desactivado' }, ...SONIDOS_DISPONIBLES]
+
+    return (
+        <div className="glass rounded-2xl shadow-glass p-5 space-y-6">
+            <div className="border-b border-border/40 pb-4">
+                <h3 className="text-sm font-semibold text-foreground">Configuración de alertas y timbres</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                    Personalizá los sonidos y el volumen para cada tipo de notificación que recibe la administración.
+                </p>
+            </div>
+
+            <div className="space-y-4">
+                {/* Nuevo Turno */}
+                <div className="glass-subtle rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-border/20">
+                    <div className="space-y-1 md:max-w-xs">
+                        <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-primary" />
+                            Nuevos Turnos
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Sonido al recibir una reserva en línea desde la web pública.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 md:flex-1 md:justify-end">
+                        <div className="w-full sm:w-48">
+                            <GlassSelect
+                                value={settings.turno_nuevo.sound}
+                                onChange={val => updateSetting('turno_nuevo', 'sound', val)}
+                                options={selectOptions}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={settings.turno_nuevo.volume}
+                                onChange={e => updateSetting('turno_nuevo', 'volume', parseFloat(e.target.value))}
+                                className="w-24 accent-primary cursor-pointer h-1.5 bg-border rounded-lg appearance-none"
+                            />
+                            <span className="text-[10px] text-muted-foreground w-8 text-right font-mono">
+                                {Math.round(settings.turno_nuevo.volume * 100)}%
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => probarSonido(settings.turno_nuevo.sound, settings.turno_nuevo.volume)}
+                            disabled={!settings.turno_nuevo.sound}
+                            className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none glass shadow-glass hover:shadow-glass-lg text-foreground p-2 h-9 w-9 hover:scale-105 active:scale-95"
+                        >
+                            <Volume2 className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Alertas Críticas */}
+                <div className="glass-subtle rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-border/20">
+                    <div className="space-y-1 md:max-w-xs">
+                        <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+                            Avisos y Alertas
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Sonido al registrarse alertas críticas o cancelaciones de turnos.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 md:flex-1 md:justify-end">
+                        <div className="w-full sm:w-48">
+                            <GlassSelect
+                                value={settings.alerta.sound}
+                                onChange={val => updateSetting('alerta', 'sound', val)}
+                                options={selectOptions}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={settings.alerta.volume}
+                                onChange={e => updateSetting('alerta', 'volume', parseFloat(e.target.value))}
+                                className="w-24 accent-primary cursor-pointer h-1.5 bg-border rounded-lg appearance-none"
+                            />
+                            <span className="text-[10px] text-muted-foreground w-8 text-right font-mono">
+                                {Math.round(settings.alerta.volume * 100)}%
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => probarSonido(settings.alerta.sound, settings.alerta.volume)}
+                            disabled={!settings.alerta.sound}
+                            className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none glass shadow-glass hover:shadow-glass-lg text-foreground p-2 h-9 w-9 hover:scale-105 active:scale-95"
+                        >
+                            <Volume2 className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+
+                {/* Sistema / Avisos Generales */}
+                <div className="glass-subtle rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 border border-border/20">
+                    <div className="space-y-1 md:max-w-xs">
+                        <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                            <span className="h-2 w-2 rounded-full bg-blue-500" />
+                            Sistema y Mensajes
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                            Sonido para notificaciones de mantenimiento, avisos generales o logs.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-3 md:flex-1 md:justify-end">
+                        <div className="w-full sm:w-48">
+                            <GlassSelect
+                                value={settings.sistema.sound}
+                                onChange={val => updateSetting('sistema', 'sound', val)}
+                                options={selectOptions}
+                            />
+                        </div>
+                        <div className="flex items-center gap-2 flex-1 sm:flex-none">
+                            <input
+                                type="range"
+                                min="0"
+                                max="1"
+                                step="0.05"
+                                value={settings.sistema.volume}
+                                onChange={e => updateSetting('sistema', 'volume', parseFloat(e.target.value))}
+                                className="w-24 accent-primary cursor-pointer h-1.5 bg-border rounded-lg appearance-none"
+                            />
+                            <span className="text-[10px] text-muted-foreground w-8 text-right font-mono">
+                                {Math.round(settings.sistema.volume * 100)}%
+                            </span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => probarSonido(settings.sistema.sound, settings.sistema.volume)}
+                            disabled={!settings.sistema.sound}
+                            className="inline-flex items-center justify-center rounded-xl text-sm font-medium transition-all duration-200 disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none glass shadow-glass hover:shadow-glass-lg text-foreground p-2 h-9 w-9 hover:scale-105 active:scale-95"
+                        >
+                            <Volume2 className="h-4 w-4" />
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+                <GlassButton onClick={guardar}><Save className="h-4 w-4 mr-2" />Guardar configuración</GlassButton>
+            </div>
+        </div>
+    )
 }

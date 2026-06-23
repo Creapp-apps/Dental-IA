@@ -49,7 +49,7 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true, margin: "-100px" }}
                         transition={{ delay: 0.2 }}
-                        className="mt-4 text-lg leading-8 text-white/60"
+                        className="mt-4 text-lg leading-8 text-slate-300"
                     >
                         {config.coberturas_subtitulo || 'Trabajamos con las principales coberturas del país para brindarte la mejor atención médica sin preocupaciones.'}
                     </motion.p>
@@ -90,7 +90,7 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                                     </div>
                                 ) : (
                                     <div className="mt-auto pt-4 border-t border-white/10">
-                                        <p className="text-sm text-white/40 italic">Todos los planes</p>
+                                        <p className="text-sm text-slate-400 italic">Todos los planes</p>
                                     </div>
                                 )}
                             </motion.div>
@@ -136,7 +136,7 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                                         <ShieldCheck className="h-5 w-5 text-primary" />
                                         Obras Sociales y Prepagas
                                     </h3>
-                                    <p className="text-xs text-white/50 mt-1">Listado completo de coberturas con las que trabajamos</p>
+                                    <p className="text-xs text-slate-300 mt-1">Listado completo de coberturas con las que trabajamos</p>
                                 </div>
                                 <button 
                                     onClick={() => setShowModal(false)}
@@ -172,14 +172,14 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                                                             </span>
                                                         ))
                                                     ) : (
-                                                        <span className="text-xs text-white/40 italic">Todos los planes</span>
+                                                        <span className="text-xs text-slate-400 italic">Todos los planes</span>
                                                     )}
                                                 </div>
                                             </div>
                                         )
                                     })
                                 ) : (
-                                    <div className="text-center py-8 text-white/40 text-sm">
+                                    <div className="text-center py-8 text-slate-300 text-sm">
                                         No se encontraron obras sociales.
                                     </div>
                                 )}

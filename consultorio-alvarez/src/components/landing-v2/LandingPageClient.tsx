@@ -16,16 +16,16 @@ import type { LandingConfig } from '@/lib/types/landing'
 gsap.registerPlugin(ScrollTrigger)
 
 function getBackground(progress: number): string {
-    if (progress < 0.25) {
-        const t = progress / 0.25
+    if (progress < 0.45) {
+        const t = progress / 0.45
         return `rgb(${Math.round(238 - t * 15)},${Math.round(246 - t * 20)},255)`
-    } else if (progress < 0.55) {
-        const t = (progress - 0.25) / 0.3
+    } else if (progress < 0.65) {
+        const t = (progress - 0.45) / 0.2
         return `rgb(${Math.round(223 - t * 212)},${Math.round(226 - t * 205)},${Math.round(245 - t * 208)})`
-    } else if (progress < 0.8) {
+    } else if (progress < 0.82) {
         return 'rgb(11,21,37)'
     } else {
-        const t = (progress - 0.8) / 0.2
+        const t = (progress - 0.82) / 0.18
         return `rgb(${Math.round(11 + t * 230)},${Math.round(21 + t * 228)},${Math.round(37 + t * 218)})`
     }
 }

@@ -180,7 +180,7 @@ export function FormPaciente({
 
             {/* Acciones */}
             <div className="flex gap-3">
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" loading={loading}>
                     {loading ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Registrar paciente'}
                 </Button>
                 <Button

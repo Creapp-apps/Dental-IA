@@ -149,41 +149,32 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
             let mm = gsap.matchMedia()
 
             mm.add("(min-width: 768px)", () => {
-                // Desktop: Pin the section and scrub
-                ScrollTrigger.create({
-                    trigger: sectionRef.current,
-                    start: 'top top',
-                    end: '+=150%',
-                    pin: true,
-                    pinSpacing: true,
-                })
-
-                // Title reveal
+                // Title reveal (no scrub, fluid entry)
                 gsap.fromTo(
                     titleRef.current,
-                    { opacity: 0, y: 60 },
+                    { opacity: 0, y: 50 },
                     {
                         opacity: 1,
                         y: 0,
                         duration: 0.8,
+                        ease: 'power2.out',
                         scrollTrigger: {
                             trigger: sectionRef.current,
                             start: 'top 80%',
-                            end: 'top 40%',
-                            scrub: 1,
+                            toggleActions: 'play none none none',
                         },
                     }
                 )
 
-                // Cards stagger
+                // Cards stagger (no scrub, fluid entry)
                 const cards = cardsRef.current!.querySelectorAll('.service-card')
                 gsap.fromTo(
                     cards,
                     {
                         opacity: 0,
-                        y: 80,
-                        x: (i) => (i % 2 === 0 ? -40 : 40),
-                        scale: 0.9,
+                        y: 60,
+                        x: (i) => (i % 2 === 0 ? -30 : 30),
+                        scale: 0.95,
                     },
                     {
                         opacity: 1,
@@ -194,10 +185,9 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                         stagger: 0.15,
                         ease: 'power3.out',
                         scrollTrigger: {
-                            trigger: sectionRef.current,
-                            start: 'top 60%',
-                            end: 'top 10%',
-                            scrub: 1,
+                            trigger: cardsRef.current,
+                            start: 'top 75%',
+                            toggleActions: 'play none none none',
                         },
                     }
                 )

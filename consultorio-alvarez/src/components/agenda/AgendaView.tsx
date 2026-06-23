@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useMemo, useEffect } from 'react'
+import { useState, useTransition, useMemo, useEffect, useRef } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -9,7 +9,7 @@ import {
     startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -90,6 +90,9 @@ export function AgendaView({
     fechaInicial,
 }: AgendaViewProps) {
     const router = useRouter()
+    const searchParams = useSearchParams()
+    const urlVista = (searchParams.get('vista') as ViewMode) || 'semana'
+    
     const [turnos, setTurnos] = useState<any[]>(turnosIniciales || [])
     
     // Synchronize prop updates to local state
@@ -97,7 +100,7 @@ export function AgendaView({
         setTurnos(turnosIniciales || [])
     }, [turnosIniciales])
 
-    const [vistaActiva, setVistaActiva] = useState<ViewMode>('semana')
+    const [vistaActiva, setVistaActiva] = useState<ViewMode>(urlVista)
     const [baseDate, setBaseDate] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
     const [diaSeleccionado, setDiaSeleccionado] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
     const [modalOpen, setModalOpen] = useState(false)
@@ -110,6 +113,7 @@ export function AgendaView({
     const [draggedOverTime, setDraggedOverTime] = useState<{ time: string; colIndex: number; top: number } | null>(null)
     const [isPending, startTransition] = useTransition()
     const [isFullscreen, setIsFullscreen] = useState(false)
+    const [zoom, setZoom] = useState(100) // Zoom percentage: 80, 100, 120, 150, 200
 
     // Sync fechaInicial prop to local state
     useEffect(() => {
@@ -120,15 +124,30 @@ export function AgendaView({
         }
     }, [fechaInicial])
 
-    // Sync local baseDate back to the URL parameters
+    // Sync urlVista to vistaActiva if URL parameter changes
+    useEffect(() => {
+        if (urlVista && urlVista !== vistaActiva) {
+            setVistaActiva(urlVista)
+        }
+    }, [urlVista])
+
+    // Sync local baseDate and vistaActiva back to the URL parameters
     useEffect(() => {
         const formattedDate = format(baseDate, 'yyyy-MM-dd')
         const currentParams = new URLSearchParams(window.location.search)
+        let changed = false
         if (currentParams.get('fecha') !== formattedDate) {
             currentParams.set('fecha', formattedDate)
+            changed = true
+        }
+        if (currentParams.get('vista') !== vistaActiva) {
+            currentParams.set('vista', vistaActiva)
+            changed = true
+        }
+        if (changed) {
             router.replace(`/agenda?${currentParams.toString()}`, { scroll: false })
         }
-    }, [baseDate, router])
+    }, [baseDate, vistaActiva, router])
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -226,7 +245,6 @@ export function AgendaView({
     }
 
     // Auto-focus incoming webhook coordinates
-    const searchParams = useSearchParams()
     const urlTurnoId = searchParams.get('turno')
 
     useEffect(() => {
@@ -270,8 +288,10 @@ export function AgendaView({
     // ── Compute visible days based on view mode ────────────────
     const diasVisibles = useMemo(() => {
         switch (vistaActiva) {
-            case 'hoy':
-                return [baseDate]
+            case 'hoy': {
+                const inicio = startOfWeek(baseDate, { weekStartsOn: 1 })
+                return Array.from({ length: 7 }, (_, i) => addDays(inicio, i))
+            }
             case 'semana': {
                 const inicio = startOfWeek(baseDate, { weekStartsOn: 1 })
                 return Array.from({ length: 7 }, (_, i) => addDays(inicio, i))
@@ -290,19 +310,59 @@ export function AgendaView({
     // ── Navigation ─────────────────────────────────────────────
     function navAnterior() {
         switch (vistaActiva) {
-            case 'hoy': setBaseDate(p => subDays(p, 1)); break
-            case 'semana': setBaseDate(p => subWeeks(p, 1)); break
-            case '15dias': setBaseDate(p => subDays(p, 15)); break
-            case 'mes': setBaseDate(p => subMonths(p, 1)); break
+            case 'hoy': {
+                const prev = subDays(baseDate, 1)
+                setBaseDate(prev)
+                setDiaSeleccionado(prev)
+                break
+            }
+            case 'semana': {
+                const prev = subWeeks(baseDate, 1)
+                setBaseDate(prev)
+                setDiaSeleccionado(prev)
+                break
+            }
+            case '15dias': {
+                const prev = subDays(baseDate, 15)
+                setBaseDate(prev)
+                setDiaSeleccionado(prev)
+                break
+            }
+            case 'mes': {
+                const prev = subMonths(baseDate, 1)
+                setBaseDate(prev)
+                setDiaSeleccionado(prev)
+                break
+            }
         }
     }
 
     function navSiguiente() {
         switch (vistaActiva) {
-            case 'hoy': setBaseDate(p => addDays(p, 1)); break
-            case 'semana': setBaseDate(p => addWeeks(p, 1)); break
-            case '15dias': setBaseDate(p => addDays(p, 15)); break
-            case 'mes': setBaseDate(p => addMonths(p, 1)); break
+            case 'hoy': {
+                const next = addDays(baseDate, 1)
+                setBaseDate(next)
+                setDiaSeleccionado(next)
+                break
+            }
+            case 'semana': {
+                const next = addWeeks(baseDate, 1)
+                setBaseDate(next)
+                setDiaSeleccionado(next)
+                break
+            }
+            case '15dias': {
+                const next = addDays(baseDate, 15)
+                setBaseDate(next)
+                setDiaSeleccionado(next)
+                break
+            }
+            case 'mes': {
+                const next = addMonths(baseDate, 1)
+                setBaseDate(next)
+                setDiaSeleccionado(next)
+                break
+            }
         }
     }
 
@@ -326,9 +386,13 @@ export function AgendaView({
             .filter((t: any) => t.profesional_id === profId && isSameDay(parseISO(t.fecha_inicio), dia))
             .sort((a: any, b: any) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime())
     }
+    const usesCustomWidth = vistaActiva === '15dias' || vistaActiva === 'mes'
+    const columnWidth = useMemo(() => {
+        return Math.round(150 * (zoom / 100))
+    }, [zoom])
 
     const columns = useMemo(() => {
-        const showProfColumns = vistaActiva === 'hoy' || vistaActiva === 'mes'
+        const showProfColumns = vistaActiva === 'hoy'
         
         if (showProfColumns) {
             return profesionales.map(prof => {
@@ -586,7 +650,7 @@ export function AgendaView({
                         {VIEW_OPTIONS.map(opt => (
                             <button
                                 key={opt.key}
-                                onClick={() => { setVistaActiva(opt.key); if (opt.key === 'hoy') { setBaseDate(new Date()); setDiaSeleccionado(new Date()) } }}
+                                onClick={() => setVistaActiva(opt.key)}
                                 className={cn(
                                     'px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200',
                                     vistaActiva === opt.key
@@ -619,6 +683,31 @@ export function AgendaView({
                 </div>
 
                 <div className="flex items-center gap-2">
+                    {usesCustomWidth && (
+                        <div className="flex items-center gap-1 glass-subtle rounded-xl p-0.5 border border-white/5 mr-1">
+                            <GlassButton
+                                onClick={() => setZoom(prev => Math.max(80, prev - 10))}
+                                variant="ghost"
+                                size="icon-sm"
+                                title="Alejar (Zoom Out)"
+                                disabled={zoom <= 80}
+                            >
+                                <ZoomOut className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                            </GlassButton>
+                            <span className="text-[11px] font-semibold text-muted-foreground w-12 text-center select-none">
+                                {zoom}%
+                            </span>
+                            <GlassButton
+                                onClick={() => setZoom(prev => Math.min(200, prev + 10))}
+                                variant="ghost"
+                                size="icon-sm"
+                                title="Acercar (Zoom In)"
+                                disabled={zoom >= 200}
+                            >
+                                <ZoomIn className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                            </GlassButton>
+                        </div>
+                    )}
                     <GlassButton onClick={toggleFullscreen} variant="glass" size="icon" title="Pantalla completa">
                         {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
                     </GlassButton>
@@ -633,12 +722,12 @@ export function AgendaView({
                 </div>
             </motion.div>
 
-            {/* Selector de día (strip) — hidden in 'hoy' mode */}
-            {vistaActiva !== 'hoy' && (
+            {/* Selector de día (strip) */}
+            {true && (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible"
                     className={cn(
                         'flex gap-1.5 overflow-x-auto scrollbar-hide pb-1',
-                        vistaActiva === 'semana' && 'grid grid-cols-7'
+                        (vistaActiva === 'semana' || vistaActiva === 'hoy') && 'grid grid-cols-7'
                     )}
                 >
                     {diasVisibles.map((dia) => {
@@ -650,10 +739,20 @@ export function AgendaView({
                         return (
                             <motion.button
                                 key={dia.toISOString()}
-                                onClick={() => setDiaSeleccionado(dia)}
+                                onClick={() => {
+                                    setDiaSeleccionado(dia)
+                                    setBaseDate(dia)
+                                    setTimeout(() => {
+                                        const colId = `agenda-col-${format(dia, 'yyyy-MM-dd')}`
+                                        const colEl = document.getElementById(colId)
+                                        if (colEl) {
+                                            colEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+                                        }
+                                    }, 50)
+                                }}
                                 className={cn(
                                     'relative rounded-xl p-2.5 text-center transition-all cursor-pointer border shrink-0 flex flex-col items-center justify-between',
-                                    vistaActiva !== 'semana' && 'min-w-[4.5rem]',
+                                    vistaActiva !== 'semana' && vistaActiva !== 'hoy' && 'min-w-[4.5rem]',
                                     isSelected
                                         ? 'bg-primary border-primary text-primary-foreground shadow-glass-lg'
                                         : esHoy
@@ -732,135 +831,156 @@ export function AgendaView({
                 animate="visible" 
                 className="flex flex-col border border-border/40 rounded-2xl bg-card/10 backdrop-blur-xl shadow-glass overflow-hidden"
             >
-                {/* Header row */}
-                <div className="flex border-b border-border bg-muted/20 select-none overflow-x-auto scrollbar-hide">
-                    {/* Time cell spacer */}
-                    <div className="w-[65px] shrink-0 border-r border-border flex items-end justify-center pb-2 text-[10px] font-semibold text-muted-foreground uppercase">
-                        Hora
-                    </div>
-                    {/* Column headers */}
-                    <div className={cn(
-                        "flex flex-1 divide-x divide-border",
-                        vistaActiva === 'semana' && 'grid grid-cols-7',
-                        vistaActiva === '15dias' && 'flex min-w-max',
-                        vistaActiva === 'mes' && 'flex min-w-max',
-                        vistaActiva === 'hoy' && 'grid'
-                    )}
-                    style={
-                        vistaActiva === 'hoy'
-                            ? { gridTemplateColumns: `repeat(${profesionales.length}, minmax(0, 1fr))` }
-                            : vistaActiva === '15dias' || vistaActiva === 'mes'
-                                ? { width: `${columns.length * 150}px` }
+                {/* Single horizontal scroll wrapper */}
+                <div className="flex-1 overflow-x-auto scrollbar-hide flex flex-col min-w-0 w-full">
+                    {/* Width setter inside scroll container */}
+                    <div 
+                        className="flex flex-col flex-1 min-w-0"
+                        style={
+                            usesCustomWidth
+                                ? { width: `${65 + columns.length * columnWidth}px` }
                                 : undefined
-                    }
+                        }
                     >
-                        {columns.map((col, idx) => (
-                            <div key={idx} className={cn(
-                                "flex-1 py-3 text-center flex flex-col items-center justify-center min-w-[120px] transition-colors",
-                                isSameDay(col.date, new Date()) && "bg-primary/5"
-                            )}>
-                                {col.header}
+                        {/* Header row */}
+                        <div className={cn(
+                            "flex border-b border-border bg-muted/20 select-none",
+                            !usesCustomWidth && "w-full"
+                        )}>
+                            {/* Time cell spacer */}
+                            <div className="w-[65px] shrink-0 border-r border-border flex items-end justify-center pb-2 text-[10px] font-semibold text-muted-foreground uppercase sticky left-0 bg-slate-950 dark:bg-[#0b0c10] z-20">
+                                Hora
                             </div>
-                        ))}
-                    </div>
-                </div>
-
-                {/* Grid Body */}
-                <div className="flex flex-1 relative overflow-y-auto min-h-0 max-h-[650px] scrollbar-hide">
-                    {/* Hours column */}
-                    <div className="w-[65px] shrink-0 border-r border-border bg-muted/5 select-none relative z-10">
-                        {HOURS.map((hour) => (
-                            <div key={hour} className="text-right pr-2 text-[11px] font-semibold text-muted-foreground/85" style={{ height: `${HOUR_HEIGHT}px`, paddingTop: '4px' }}>
-                                {`${hour.toString().padStart(2, '0')}:00`}
+                            {/* Column headers wrapper */}
+                            <div className={cn(
+                                "flex flex-1 divide-x divide-border",
+                                vistaActiva === 'semana' && 'grid grid-cols-7',
+                                usesCustomWidth && 'flex',
+                                vistaActiva === 'hoy' && 'grid'
+                            )}
+                            style={
+                                vistaActiva === 'hoy'
+                                    ? { gridTemplateColumns: `repeat(${profesionales.length}, minmax(0, 1fr))` }
+                                    : undefined
+                            }
+                            >
+                                {columns.map((col, idx) => (
+                                    <div 
+                                        key={idx} 
+                                        id={`agenda-header-col-${format(col.date, 'yyyy-MM-dd')}`}
+                                        style={usesCustomWidth ? { width: `${columnWidth}px`, minWidth: `${columnWidth}px` } : undefined}
+                                        className={cn(
+                                            "flex-1 py-3 text-center flex flex-col items-center justify-center transition-colors",
+                                            !usesCustomWidth && "min-w-[120px]",
+                                            isSameDay(col.date, new Date()) && "bg-primary/5"
+                                        )}
+                                    >
+                                        {col.header}
+                                    </div>
+                                ))}
                             </div>
-                        ))}
-                    </div>
-
-                    {/* Columns grid */}
-                    <div className={cn(
-                        "flex-1 relative min-h-0 divide-x divide-border overflow-x-auto scrollbar-hide",
-                        vistaActiva === 'semana' && 'grid grid-cols-7',
-                        vistaActiva === '15dias' && 'flex min-w-max',
-                        vistaActiva === 'mes' && 'flex min-w-max',
-                        vistaActiva === 'hoy' && 'grid'
-                    )}
-                    style={
-                        vistaActiva === 'hoy'
-                            ? { gridTemplateColumns: `repeat(${profesionales.length}, minmax(0, 1fr))` }
-                            : vistaActiva === '15dias' || vistaActiva === 'mes'
-                                ? { width: `${columns.length * 150}px` }
-                                : undefined
-                    }
-                    >
-                        {/* Background hour lines */}
-                        <div className="absolute inset-0 pointer-events-none select-none">
-                            {HOURS.map((hour, idx) => (
-                                <div 
-                                    key={hour} 
-                                    className="absolute left-0 right-0 border-b border-border/40" 
-                                    style={{ top: `${(idx + 1) * HOUR_HEIGHT}px`, height: '1px' }}
-                                />
-                            ))}
                         </div>
 
-                        {/* Current Time Indicator Line spanning the whole grid (if today is visible) */}
-                        {columns.some(col => isSameDay(col.date, new Date())) && (
-                            <CurrentTimeIndicator HOUR_HEIGHT={HOUR_HEIGHT} />
-                        )}
+                        {/* Grid Body */}
+                        <div className={cn(
+                            "flex flex-1 relative overflow-y-auto min-h-0 max-h-[650px] scrollbar-hide",
+                            !usesCustomWidth && "w-full"
+                        )}>
+                            {/* Hours column */}
+                            <div className="w-[65px] shrink-0 border-r border-border bg-muted/5 select-none relative z-10 sticky left-0 bg-slate-950 dark:bg-[#0b0c10] z-20">
+                                {HOURS.map((hour) => (
+                                    <div key={hour} className="text-right pr-2 text-[11px] font-semibold text-muted-foreground/85" style={{ height: `${HOUR_HEIGHT}px`, paddingTop: '4px' }}>
+                                        {`${hour.toString().padStart(2, '0')}:00`}
+                                    </div>
+                                ))}
+                            </div>
 
-                        {/* Drop columns */}
-                        {columns.map((col, colIdx) => {
-                            const isColToday = isSameDay(col.date, new Date())
-                            return (
-                                <div
-                                    key={colIdx}
-                                    className={cn(
-                                        "flex-1 relative h-[1120px] transition-colors hover:bg-white/[0.02]",
-                                        (vistaActiva === '15dias' || vistaActiva === 'mes') ? 'min-w-[150px]' : 'min-w-[120px]',
-                                        isColToday && "bg-primary/[0.01]"
-                                    )}
-                                    onDragOver={(e) => handleDragOver(e, colIdx)}
-                                    onDragLeave={() => setDraggedOverTime(null)}
-                                    onDrop={(e) => handleDrop(e, col.date, col.profesionalId)}
-                                    onClick={(e) => handleColumnClick(e, col.date, col.profesionalId)}
-                                >
-
-                                    {/* Appointments cards */}
-                                    {col.turnos.map((turno: any) => {
-                                        const { top, height } = getCardPosition(turno.fecha_inicio, turno.fecha_fin)
-                                        return (
-                                            <TurnoCalendarCard
-                                                key={turno.id}
-                                                turno={turno}
-                                                top={top}
-                                                height={height}
-                                                colorProf={col.colorProf || turno.profesional?.color_agenda}
-                                                onSelect={() => setSelectedTurnoDetail(turno)}
-                                                onDragEnd={() => setDraggedOverTime(null)}
-                                            />
-                                        )
-                                    })}
-
-                                    {/* Drag-over Time Tooltip */}
-                                    {draggedOverTime && draggedOverTime.colIndex === colIdx && (
+                            {/* Columns grid */}
+                            <div className={cn(
+                                "flex-1 relative min-h-0 divide-x divide-border",
+                                vistaActiva === 'semana' && 'grid grid-cols-7',
+                                usesCustomWidth && 'flex',
+                                vistaActiva === 'hoy' && 'grid'
+                            )}
+                            style={
+                                vistaActiva === 'hoy'
+                                    ? { gridTemplateColumns: `repeat(${profesionales.length}, minmax(0, 1fr))` }
+                                    : undefined
+                            }
+                            >
+                                {/* Background hour lines */}
+                                <div className="absolute inset-0 pointer-events-none select-none">
+                                    {HOURS.map((hour, idx) => (
                                         <div 
-                                            className={cn(
-                                                "absolute z-[99] pointer-events-none transition-all duration-75 flex items-center",
-                                                colIdx === columns.length - 1 ? "right-full mr-2" : "left-full ml-2"
-                                            )}
-                                            style={{ 
-                                                top: `${draggedOverTime.top - 12}px`
-                                            }}
-                                        >
-                                            <span className="text-[10px] font-bold text-primary bg-background dark:bg-card border border-primary/45 px-2.5 py-1.5 rounded-md shadow-2xl flex items-center gap-1.5 font-mono whitespace-nowrap">
-                                                <Clock className="h-3.5 w-3.5 animate-pulse text-primary" />
-                                                Reprogramar: {draggedOverTime.time} hs
-                                            </span>
-                                        </div>
-                                    )}
+                                            key={hour} 
+                                            className="absolute left-0 right-0 border-b border-border/40" 
+                                            style={{ top: `${(idx + 1) * HOUR_HEIGHT}px`, height: '1px' }}
+                                        />
+                                    ))}
                                 </div>
-                            )
-                        })}
+
+                                {/* Current Time Indicator Line spanning the whole grid (if today is visible) */}
+                                {columns.some(col => isSameDay(col.date, new Date())) && (
+                                    <CurrentTimeIndicator HOUR_HEIGHT={HOUR_HEIGHT} />
+                                )}
+
+                                {/* Drop columns */}
+                                {columns.map((col, colIdx) => {
+                                    const isColToday = isSameDay(col.date, new Date())
+                                    return (
+                                        <div
+                                            key={colIdx}
+                                            id={`agenda-col-${format(col.date, 'yyyy-MM-dd')}`}
+                                            style={usesCustomWidth ? { width: `${columnWidth}px`, minWidth: `${columnWidth}px` } : undefined}
+                                            className={cn(
+                                                "flex-1 relative h-[1120px] transition-colors hover:bg-white/[0.02]",
+                                                !usesCustomWidth && "min-w-[120px]",
+                                                isColToday && "bg-primary/[0.01]"
+                                            )}
+                                            onDragOver={(e) => handleDragOver(e, colIdx)}
+                                            onDragLeave={() => setDraggedOverTime(null)}
+                                            onDrop={(e) => handleDrop(e, col.date, col.profesionalId)}
+                                            onClick={(e) => handleColumnClick(e, col.date, col.profesionalId)}
+                                        >
+
+                                            {/* Appointments cards */}
+                                            {col.turnos.map((turno: any) => {
+                                                const { top, height } = getCardPosition(turno.fecha_inicio, turno.fecha_fin)
+                                                return (
+                                                    <TurnoCalendarCard
+                                                        key={turno.id}
+                                                        turno={turno}
+                                                        top={top}
+                                                        height={height}
+                                                        colorProf={col.colorProf || turno.profesional?.color_agenda}
+                                                        onSelect={() => setSelectedTurnoDetail(turno)}
+                                                        onDragEnd={() => setDraggedOverTime(null)}
+                                                    />
+                                                )
+                                            })}
+
+                                            {/* Drag-over Time Tooltip */}
+                                            {draggedOverTime && draggedOverTime.colIndex === colIdx && (
+                                                <div 
+                                                    className={cn(
+                                                        "absolute z-[99] pointer-events-none transition-all duration-75 flex items-center",
+                                                        colIdx === columns.length - 1 ? "right-full mr-2" : "left-full ml-2"
+                                                    )}
+                                                    style={{ 
+                                                        top: `${draggedOverTime.top - 12}px`
+                                                    }}
+                                                >
+                                                    <span className="text-[10px] font-bold text-primary bg-background dark:bg-card border border-primary/45 px-2.5 py-1.5 rounded-md shadow-2xl flex items-center gap-1.5 font-mono whitespace-nowrap">
+                                                        <Clock className="h-3.5 w-3.5 animate-pulse text-primary" />
+                                                        Reprogramar: {draggedOverTime.time} hs
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
                     </div>
                 </div>
             </motion.div>

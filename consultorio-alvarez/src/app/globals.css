@@ -322,3 +322,19 @@
 #admin-layout-root:fullscreen #mobile-top-nav {
   display: none !important;
 }
+
+/* Red Pulsing Animation for missing inputs validation */
+@keyframes pulse-red {
+  0%, 100% {
+    border-color: rgba(239, 68, 68, 0.6);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+  }
+  50% {
+    border-color: rgba(239, 68, 68, 1);
+    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.45);
+  }
+}
+
+.animate-pulse-red {
+  animation: pulse-red 1.6s infinite ease-in-out;
+}

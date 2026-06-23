@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { getNextNroHistoriaClinica } from './pacientes'
+import { normalizarTelefonoArgentino } from '@/lib/utils'
 
 async function getTenantBySlug(slug: string) {
     const supabase = createAdminClient()
@@ -401,20 +402,59 @@ export async function crearReservaPublica(data: {
 
     if (process.env.META_WA_ACCESS_TOKEN && process.env.META_WA_PHONE_NUMBER_ID && data.telefono) {
         try {
-            // Formatear el número: Meta Cloud API tiene una regla específica MUY estricta para Argentina.
-            // A diferencia de los links wa.me (que usan 549), la API OFICIAL requiere usar SOLO 54 y omitir el 9.
-            let cleanPhone = data.telefono.replace(/\D/g, '')
-            if (cleanPhone.startsWith('11') || cleanPhone.length === 10) {
-                // Usamos 54 en vez de 549
-                cleanPhone = `54${cleanPhone}`
-            } else if (cleanPhone.startsWith('549')) {
-                // Si por alguna razón vino con 549, le quitamos el 9 para que quede 54
-                cleanPhone = cleanPhone.replace(/^549/, '54')
+            // Use robust helper to normalize the Argentine phone number for Meta Cloud API (omits 15 and 9)
+            let cleanPhone = normalizarTelefonoArgentino(data.telefono)
+
+            // Obtener nombres para los parámetros de la plantilla
+            let profesionalNombre = 'el especialista'
+            try {
+                const { data: profData } = await supabase
+                    .from('profesionales')
+                    .select('nombre, apellido')
+                    .eq('id', profesionalId)
+                    .single()
+                if (profData) {
+                    profesionalNombre = `${profData.nombre} ${profData.apellido}`
+                }
+            } catch (profErr) {
+                console.error('Error fetching profesional details for WhatsApp template:', profErr)
+            }
+
+            let tratamientoNombre = 'Consulta'
+            try {
+                const { data: tratData } = await supabase
+                    .from('tipos_tratamiento')
+                    .select('nombre')
+                    .eq('id', tipoTratamientoId)
+                    .single()
+                if (tratData) {
+                    tratamientoNombre = tratData.nombre
+                }
+            } catch (tratErr) {
+                console.error('Error fetching tratamiento details for WhatsApp template:', tratErr)
+            }
+
+            if (tratamientoNombre) {
+                tratamientoNombre = tratamientoNombre.toUpperCase()
+            }
+
+            // Formatear fecha amigable local (ej. Miércoles, 24 de junio)
+            let fechaStrFormatted = data.fecha
+            try {
+                const localDateTime = new Date(`${data.fecha}T${data.hora}:00-03:00`)
+                const fechaStr = localDateTime.toLocaleDateString('es-AR', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long',
+                    timeZone: 'America/Argentina/Buenos_Aires'
+                })
+                fechaStrFormatted = fechaStr.charAt(0).toUpperCase() + fechaStr.slice(1)
+            } catch (dateErr) {
+                console.error('Error formatting date for WhatsApp template:', dateErr)
             }
 
             console.log("Intentando fetch hacia Meta a:", cleanPhone)
 
-            // Petición OBLIGATORIAMENTE esperada (await) para evitar que Next.js mate el contexto
             const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
                 method: 'POST',
                 headers: {
@@ -426,8 +466,20 @@ export async function crearReservaPublica(data: {
                     to: cleanPhone,
                     type: 'template',
                     template: {
-                        name: 'hello_world',
-                        language: { code: 'en_US' }
+                        name: 'solicitud_turnos',
+                        language: { code: 'es_AR' },
+                        components: [
+                            {
+                                type: 'body',
+                                parameters: [
+                                    { type: 'text', text: data.nombre },
+                                    { type: 'text', text: tratamientoNombre },
+                                    { type: 'text', text: fechaStrFormatted },
+                                    { type: 'text', text: data.hora },
+                                    { type: 'text', text: profesionalNombre }
+                                ]
+                            }
+                        ]
                     }
                 })
             })
@@ -436,7 +488,7 @@ export async function crearReservaPublica(data: {
             if (!wpResponse.ok) {
                 console.error('❌ Error Meta WhatsApp API:', JSON.stringify(wpResult, null, 2))
             } else {
-                console.log('✅ WhatsApp de prueba despachado con éxito a', cleanPhone)
+                console.log('✅ WhatsApp de confirmación de solicitud enviado con éxito a', cleanPhone)
             }
         } catch (e) {
             console.error("❌ Excepción al ejecutar fetch hacia Meta:", e)

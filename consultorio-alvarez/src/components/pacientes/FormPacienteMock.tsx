@@ -108,7 +108,7 @@ export function FormPacienteMock({
             </Card>
 
             <div className="flex gap-3">
-                <Button type="submit" disabled={loading}>
+                <Button type="submit" loading={loading}>
                     {loading ? 'Guardando...' : isEdit ? 'Guardar cambios' : 'Registrar paciente'}
                 </Button>
                 <Button type="button" variant="outline" onClick={() => router.back()}>Cancelar</Button>

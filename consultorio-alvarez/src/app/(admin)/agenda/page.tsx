@@ -1,13 +1,18 @@
-import { startOfWeek, endOfWeek, parseISO, format } from 'date-fns'
+import { startOfWeek, endOfWeek, parseISO, format, addDays, startOfMonth, endOfMonth } from 'date-fns'
 import { getProfesionales, getTiposTratamiento, getTurnosSemana, getPacientes } from '@/lib/supabase/queries'
 import { AgendaView } from '@/components/agenda/AgendaView'
 import { createAdminClient } from '@/lib/supabase/admin'
 
-export default async function AgendaPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+interface PageProps {
+    searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}
+
+export default async function AgendaPage({ searchParams }: PageProps) {
+    const resolvedSearchParams = await searchParams
     let focusDate = new Date()
 
-    const fechaParam = searchParams?.fecha as string | undefined
-    const urlTurnoId = searchParams?.turno as string | undefined
+    const fechaParam = resolvedSearchParams?.fecha as string | undefined
+    const urlTurnoId = resolvedSearchParams?.turno as string | undefined
 
     if (fechaParam) {
         focusDate = parseISO(fechaParam)
@@ -24,8 +29,25 @@ export default async function AgendaPage({ searchParams }: { searchParams: { [ke
         }
     }
 
-    const inicio = startOfWeek(focusDate, { weekStartsOn: 1 })
-    const fin = endOfWeek(focusDate, { weekStartsOn: 1 })
+    const vistaParam = (resolvedSearchParams?.vista as string) || 'semana'
+
+    let inicio = startOfWeek(focusDate, { weekStartsOn: 1 })
+    let fin = endOfWeek(focusDate, { weekStartsOn: 1 })
+
+    if (vistaParam === 'hoy') {
+        inicio = new Date(focusDate)
+        inicio.setHours(0, 0, 0, 0)
+        fin = new Date(focusDate)
+        fin.setHours(23, 59, 59, 999)
+    } else if (vistaParam === '15dias') {
+        inicio = new Date(focusDate)
+        inicio.setHours(0, 0, 0, 0)
+        fin = addDays(focusDate, 14)
+        fin.setHours(23, 59, 59, 999)
+    } else if (vistaParam === 'mes') {
+        inicio = startOfMonth(focusDate)
+        fin = endOfMonth(focusDate)
+    }
 
     const [profesionales, tiposTratamiento, turnos, pacientes] = await Promise.all([
         getProfesionales(),
