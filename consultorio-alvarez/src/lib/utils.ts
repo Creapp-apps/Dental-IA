@@ -64,3 +64,13 @@ export function normalizarTelefonoArgentino(telefono: string): string {
     // Fallback: prepend '54' to whatever is left
     return `54${clean}`
 }
+
+/**
+ * Quita los prefijos honoríficos o títulos médicos como "Dr.", "Dr/a.", "Dra." etc.
+ * al principio del nombre de un profesional para evitar duplicaciones en plantillas.
+ */
+export function limpiarTituloProfesional(nombre: string): string {
+    if (!nombre) return ''
+    return nombre.replace(/^(dr\/?a?\.?\s+|dra\.?\s+)/i, '').trim()
+}
+

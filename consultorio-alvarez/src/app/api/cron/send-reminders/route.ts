@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { limpiarTituloProfesional } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
     return handleSendReminders(request)
@@ -114,7 +115,7 @@ async function handleSendReminders(request: NextRequest) {
                 timeZone: 'America/Argentina/Buenos_Aires'
             })
 
-            const nombreProf = prof ? `Dr/a. ${prof.nombre} ${prof.apellido}` : 'el especialista'
+            const nombreProf = prof ? `${limpiarTituloProfesional(prof.nombre)} ${prof.apellido.trim()}` : 'el especialista'
 
             console.log(`📤 Enviando recordatorio a ${pct.nombre} (${cleanPhone}) para turno ${t.id}`)
 

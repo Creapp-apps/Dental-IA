@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { limpiarTituloProfesional } from '@/lib/utils'
 
 export async function GET(request: NextRequest) {
     return handleDailyCron(request)
@@ -183,7 +184,7 @@ async function handleDailyCron(request: NextRequest) {
                     cleanPhone = cleanPhone.replace(/^549/, '54')
                 }
 
-                const nombreProf = prof ? `Dr. ${prof.nombre} ${prof.apellido}` : 'el especialista'
+                const nombreProf = prof ? `${limpiarTituloProfesional(prof.nombre)} ${prof.apellido.trim()}` : 'el especialista'
 
                 try {
                     const response = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {

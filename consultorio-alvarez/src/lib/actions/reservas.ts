@@ -3,7 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { getNextNroHistoriaClinica } from './pacientes'
-import { normalizarTelefonoArgentino } from '@/lib/utils'
+import { normalizarTelefonoArgentino, limpiarTituloProfesional } from '@/lib/utils'
 
 async function getTenantBySlug(slug: string) {
     const supabase = createAdminClient()
@@ -414,7 +414,7 @@ export async function crearReservaPublica(data: {
                     .eq('id', profesionalId)
                     .single()
                 if (profData) {
-                    profesionalNombre = `${profData.nombre} ${profData.apellido}`
+                    profesionalNombre = `${limpiarTituloProfesional(profData.nombre)} ${profData.apellido.trim()}`
                 }
             } catch (profErr) {
                 console.error('Error fetching profesional details for WhatsApp template:', profErr)

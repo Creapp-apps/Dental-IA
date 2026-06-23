@@ -1,8 +1,15 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { normalizarTelefonoArgentino } from '@/lib/utils'
+import { normalizarTelefonoArgentino, limpiarTituloProfesional } from '@/lib/utils'
+import { format } from 'date-fns'
+import { es } from 'date-fns/locale'
+import { sendPushToUser } from '@/lib/push-notifications/send-push'
+import { Resend } from 'resend'
+import { ConfirmacionTurnoEmail } from '@/components/emails/ConfirmacionTurnoEmail'
+
 
 // ============================================================
 // SERVER ACTIONS — Turnos
@@ -55,7 +62,6 @@ export async function crearTurno(formData: {
 
     // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
     try {
-        const { createAdminClient } = await import('@/lib/supabase/admin')
         const admin = createAdminClient()
         const { data: usuarioProf } = await admin
             .from('usuarios')
@@ -73,12 +79,9 @@ export async function crearTurno(formData: {
             const pct = pacienteRes.data
             const trat = tratamientoRes.data?.nombre || 'Consulta'
 
-            const { format } = await import('date-fns')
-            const { es } = await import('date-fns/locale')
             const fechaObj = new Date(formData.fecha_inicio)
             const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
 
-            const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
             await sendPushToUser(
                 usuarioProf.id,
                 '📅 Nuevo Turno Asignado',
@@ -93,11 +96,6 @@ export async function crearTurno(formData: {
     // --- INTEGRACIÓN RESEND ---
     if (process.env.RESEND_API_KEY) {
         try {
-            const { Resend } = await import('resend')
-            const { ConfirmacionTurnoEmail } = await import('@/components/emails/ConfirmacionTurnoEmail')
-            const { format } = await import('date-fns')
-            const { es } = await import('date-fns/locale')
-
             const resend = new Resend(process.env.RESEND_API_KEY)
 
             // Obtener información relacionada completa para armar el correo
@@ -149,34 +147,43 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
     if (error) return { error: error.message }
 
     // --- DISPARAR NOTIFICACIONES WHATSAPP Y PUSH ---
+    console.log(`[ACTION LOG] Disparando notificaciones en cambiarEstadoTurno para turno: ${turnoId}, estado: ${nuevoEstado}`)
     try {
-        const { createAdminClient } = await import('@/lib/supabase/admin')
         const admin = createAdminClient()
 
-        const { data: turno } = await admin
+        const { data: turno, error: queryErr } = await admin
             .from('turnos')
             .select(`
                 fecha_inicio,
                 profesional_id,
                 paciente:pacientes(nombre, apellido, telefono),
                 profesional:profesionales(nombre, apellido),
-                tipo_treatment:tipos_tratamiento(nombre)
+                tipo_tratamiento:tipos_tratamiento(nombre)
             `)
             .eq('id', turnoId)
             .single()
 
+        if (queryErr) {
+            console.error(`[ACTION LOG] Error al obtener el turno en cambiarEstadoTurno:`, queryErr.message)
+        }
+
         if (turno) {
+            const pct = turno.paciente as any
+            console.log(`[ACTION LOG] Turno encontrado para notificaciones. Paciente: ${pct?.nombre}, Teléfono: ${pct?.telefono}`)
             // --- DISPARAR WHATSAPP AUTOMÁTICOS AL PACIENTE ---
             try {
                 if (nuevoEstado === 'CONFIRMADO') {
+                    console.log(`[ACTION LOG] Ejecutando notificarTurnoPorWhatsApp con "turno_confirmado"`)
                     await notificarTurnoPorWhatsApp(turnoId, 'turno_confirmado')
                 } else if (nuevoEstado === 'CANCELADO') {
+                    console.log(`[ACTION LOG] Ejecutando notificarTurnoPorWhatsApp con "turno_cancelado"`)
                     await notificarTurnoPorWhatsApp(turnoId, 'turno_cancelado')
                 } else if (nuevoEstado === 'AUSENTE') {
+                    console.log(`[ACTION LOG] Ejecutando notificarTurnoPorWhatsApp con "aviso_ausencia"`)
                     await notificarTurnoPorWhatsApp(turnoId, 'aviso_ausencia')
                 }
             } catch (waErr) {
-                console.error('Error al enviar WhatsApp en cambiarEstadoTurno:', waErr)
+                console.error('[ACTION LOG] Error al enviar WhatsApp en cambiarEstadoTurno:', waErr)
             }
 
             // --- DISPARAR PUSH AL PROFESIONAL ---
@@ -190,10 +197,8 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
 
                 if (usuarioProf?.id) {
                     const pct = turno.paciente as any
-                    const trat = ((turno as any).tipo_treatment || (turno as any).tipo_tratamiento)?.nombre || 'Consulta'
+                    const trat = (turno.tipo_tratamiento as any)?.nombre || 'Consulta'
 
-                    const { format } = await import('date-fns')
-                    const { es } = await import('date-fns/locale')
                     const fechaObj = new Date(turno.fecha_inicio)
                     const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
 
@@ -212,16 +217,18 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
                     }
 
                     if (title && body) {
-                        const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
+                        console.log(`[ACTION LOG] Enviando push a profesional ${usuarioProf.id}: ${title} - ${body}`)
                         await sendPushToUser(usuarioProf.id, title, body, '/agenda')
                     }
                 }
             } catch (pushErr) {
-                console.error('Error al enviar push al profesional en cambiarEstadoTurno:', pushErr)
+                console.error('[ACTION LOG] Error al enviar push al profesional en cambiarEstadoTurno:', pushErr)
             }
+        } else {
+            console.warn('[ACTION LOG] No se pudo obtener el turno de la base de datos, omitiendo notificaciones.')
         }
     } catch (err) {
-        console.error('Error general en notificaciones de cambiarEstadoTurno:', err)
+        console.error('[ACTION LOG] Error general en notificaciones de cambiarEstadoTurno:', err)
     }
 
     revalidatePath('/agenda')
@@ -346,7 +353,6 @@ export async function editarTurno(turnoId: string, formData: {
 
     // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
     try {
-        const { createAdminClient } = await import('@/lib/supabase/admin')
         const admin = createAdminClient()
         const { data: usuarioProf } = await admin
             .from('usuarios')
@@ -366,12 +372,9 @@ export async function editarTurno(turnoId: string, formData: {
                 const pct = pacienteRes.data
                 const trat = tratamientoRes.data?.nombre || 'Consulta'
 
-                const { format } = await import('date-fns')
-                const { es } = await import('date-fns/locale')
                 const fechaObj = new Date(formData.fecha_inicio)
                 const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
 
-                const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
                 await sendPushToUser(
                     usuarioProf.id,
                     '✏️ Turno Modificado',
@@ -413,16 +416,16 @@ async function notificarTurnoPorWhatsApp(
     turnoId: string, 
     templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' | 'aviso_ausencia'
 ) {
+    console.log(`[WA LOG] Iniciando notificarTurnoPorWhatsApp para turnoId: ${turnoId}, plantilla: "${templateName}"`)
     if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
-        console.log('⚠️ Variables de WhatsApp no configuradas en entorno.')
+        console.log('[WA LOG] ⚠️ Variables de WhatsApp no configuradas en el entorno (META_WA_ACCESS_TOKEN o META_WA_PHONE_NUMBER_ID faltantes).')
         return
     }
 
     try {
-        const { createAdminClient } = await import('@/lib/supabase/admin')
         const admin = createAdminClient()
 
-        const { data: turno } = await admin
+        const { data: turno, error: fetchErr } = await admin
             .from('turnos')
             .select(`
                 fecha_inicio,
@@ -433,8 +436,8 @@ async function notificarTurnoPorWhatsApp(
             .eq('id', turnoId)
             .single()
 
-        if (!turno) {
-            console.error(`❌ Turno ${turnoId} no encontrado para notificar WhatsApp (${templateName})`)
+        if (fetchErr || !turno) {
+            console.error(`[WA LOG] ❌ Turno ${turnoId} no encontrado para notificar WhatsApp (${templateName}). Error:`, fetchErr?.message)
             return
         }
 
@@ -442,7 +445,7 @@ async function notificarTurnoPorWhatsApp(
         const prof = turno.profesional as any
 
         if (!pct?.telefono) {
-            console.log(`⚠️ El paciente no tiene teléfono registrado para notificar ${templateName}`)
+            console.log(`[WA LOG] ⚠️ El paciente no tiene teléfono registrado para notificar ${templateName}`)
             return
         }
 
@@ -465,7 +468,7 @@ async function notificarTurnoPorWhatsApp(
             timeZone: 'America/Argentina/Buenos_Aires'
         })
 
-        const nombreProf = prof ? `${prof.nombre.trim()} ${prof.apellido.trim()}` : 'el especialista'
+        const nombreProf = prof ? `${limpiarTituloProfesional(prof.nombre)} ${prof.apellido.trim()}` : 'el especialista'
 
         let parameters: { type: 'text'; text: string }[] = []
         if (templateName === 'aviso_ausencia') {
@@ -496,7 +499,25 @@ async function notificarTurnoPorWhatsApp(
             ]
         }
 
-        console.log(`📤 Enviando plantilla "${templateName}" WhatsApp a ${cleanPhone}...`)
+        console.log(`[WA LOG] Preparando envío Meta a ${cleanPhone} con plantilla "${templateName}". Parámetros:`, JSON.stringify(parameters, null, 2))
+
+        const requestBody = {
+            messaging_product: 'whatsapp',
+            to: cleanPhone,
+            type: 'template',
+            template: {
+                name: templateName,
+                language: { code: 'es_AR' },
+                components: [
+                    {
+                        type: 'body',
+                        parameters: parameters
+                    }
+                ]
+            }
+        }
+
+        console.log(`[WA LOG] Realizando fetch a Graph Facebook para plantilla "${templateName}"...`)
 
         const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
             method: 'POST',
@@ -504,30 +525,16 @@ async function notificarTurnoPorWhatsApp(
                 'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: cleanPhone,
-                type: 'template',
-                template: {
-                    name: templateName,
-                    language: { code: 'es_AR' },
-                    components: [
-                        {
-                            type: 'body',
-                            parameters: parameters
-                        }
-                    ]
-                }
-            })
+            body: JSON.stringify(requestBody)
         })
 
         const wpResult = await wpResponse.json()
         if (!wpResponse.ok) {
-            console.error(`❌ Error Meta WhatsApp API "${templateName}":`, JSON.stringify(wpResult, null, 2))
+            console.error(`[WA LOG] ❌ Error Meta WhatsApp API "${templateName}" (Status ${wpResponse.status}):`, JSON.stringify(wpResult, null, 2))
         } else {
-            console.log(`✅ WhatsApp "${templateName}" enviado con éxito a`, cleanPhone)
+            console.log(`[WA LOG] ✅ WhatsApp "${templateName}" enviado con éxito a ${cleanPhone}. Result:`, JSON.stringify(wpResult, null, 2))
         }
     } catch (err) {
-        console.error(`❌ Error al procesar notificación WhatsApp "${templateName}":`, err)
+        console.error(`[WA LOG] ❌ Error al procesar notificación WhatsApp "${templateName}":`, err)
     }
 }
