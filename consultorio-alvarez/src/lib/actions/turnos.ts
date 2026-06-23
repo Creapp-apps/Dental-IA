@@ -2,7 +2,6 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { after } from 'next/server'
 import { normalizarTelefonoArgentino } from '@/lib/utils'
 
 // ============================================================
@@ -54,91 +53,87 @@ export async function crearTurno(formData: {
 
     if (error) return { error: error.message }
 
-    // Defer emails, push notifications and path revalidations so they don't block the UI
-    after(async () => {
-        // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
+    // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
+    try {
+        const { createAdminClient } = await import('@/lib/supabase/admin')
+        const admin = createAdminClient()
+        const { data: usuarioProf } = await admin
+            .from('usuarios')
+            .select('id')
+            .eq('profesional_id', formData.profesional_id)
+            .eq('activo', true)
+            .maybeSingle()
+
+        if (usuarioProf?.id) {
+            const [pacienteRes, tratamientoRes] = await Promise.all([
+                admin.from('pacientes').select('nombre, apellido').eq('id', formData.paciente_id).single(),
+                admin.from('tipos_tratamiento').select('nombre').eq('id', formData.tipo_tratamiento_id).single()
+            ])
+
+            const pct = pacienteRes.data
+            const trat = tratamientoRes.data?.nombre || 'Consulta'
+
+            const { format } = await import('date-fns')
+            const { es } = await import('date-fns/locale')
+            const fechaObj = new Date(formData.fecha_inicio)
+            const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
+
+            const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
+            await sendPushToUser(
+                usuarioProf.id,
+                '📅 Nuevo Turno Asignado',
+                `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} (${fechaStr})`,
+                '/agenda'
+            )
+        }
+    } catch (pushErr) {
+        console.error('Error al enviar push al profesional en crearTurno:', pushErr)
+    }
+
+    // --- INTEGRACIÓN RESEND ---
+    if (process.env.RESEND_API_KEY) {
         try {
-            const { createAdminClient } = await import('@/lib/supabase/admin')
-            const admin = createAdminClient()
-            const { data: usuarioProf } = await admin
-                .from('usuarios')
-                .select('id')
-                .eq('profesional_id', formData.profesional_id)
-                .eq('activo', true)
-                .maybeSingle()
+            const { Resend } = await import('resend')
+            const { ConfirmacionTurnoEmail } = await import('@/components/emails/ConfirmacionTurnoEmail')
+            const { format } = await import('date-fns')
+            const { es } = await import('date-fns/locale')
 
-            if (usuarioProf?.id) {
-                const [pacienteRes, tratamientoRes] = await Promise.all([
-                    admin.from('pacientes').select('nombre, apellido').eq('id', formData.paciente_id).single(),
-                    admin.from('tipos_tratamiento').select('nombre').eq('id', formData.tipo_tratamiento_id).single()
-                ])
+            const resend = new Resend(process.env.RESEND_API_KEY)
 
-                const pct = pacienteRes.data
-                const trat = tratamientoRes.data?.nombre || 'Consulta'
+            // Obtener información relacionada completa para armar el correo
+            const [pacienteRes, profesionalRes, tratamientoRes] = await Promise.all([
+                supabase.from('pacientes').select('nombre, email').eq('id', formData.paciente_id).single(),
+                supabase.from('profesionales').select('nombre, apellido').eq('id', formData.profesional_id).single(),
+                supabase.from('tipos_tratamiento').select('nombre').eq('id', formData.tipo_tratamiento_id).single()
+            ])
 
-                const { format } = await import('date-fns')
-                const { es } = await import('date-fns/locale')
+            const paciente = pacienteRes.data
+            if (paciente?.email) {
                 const fechaObj = new Date(formData.fecha_inicio)
-                const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
+                const fechaStr = format(fechaObj, "EEEE d 'de' MMMM", { locale: es })
+                const horaStr = format(fechaObj, "HH:mm")
 
-                const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
-                await sendPushToUser(
-                    usuarioProf.id,
-                    '📅 Nuevo Turno Asignado',
-                    `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} (${fechaStr})`,
-                    '/agenda'
-                )
-            }
-        } catch (pushErr) {
-            console.error('Error al enviar push al profesional en crearTurno:', pushErr)
-        }
-
-        // --- INTEGRACIÓN RESEND ---
-        if (process.env.RESEND_API_KEY) {
-            try {
-                const { Resend } = await import('resend')
-                const { ConfirmacionTurnoEmail } = await import('@/components/emails/ConfirmacionTurnoEmail')
-                const { format } = await import('date-fns')
-                const { es } = await import('date-fns/locale')
-
-                const resend = new Resend(process.env.RESEND_API_KEY)
-
-                // Obtener información relacionada completa para armar el correo
-                const [pacienteRes, profesionalRes, tratamientoRes] = await Promise.all([
-                    supabase.from('pacientes').select('nombre, email').eq('id', formData.paciente_id).single(),
-                    supabase.from('profesionales').select('nombre, apellido').eq('id', formData.profesional_id).single(),
-                    supabase.from('tipos_tratamiento').select('nombre').eq('id', formData.tipo_tratamiento_id).single()
-                ])
-
-                const paciente = pacienteRes.data
-                if (paciente?.email) {
-                    const fechaObj = new Date(formData.fecha_inicio)
-                    const fechaStr = format(fechaObj, "EEEE d 'de' MMMM", { locale: es })
-                    const horaStr = format(fechaObj, "HH:mm")
-
-                    await resend.emails.send({
-                        // 'onboarding@resend.dev' permite hacer tests a uno mismo sin verificar el dominio en la capa gratuita
-                        from: 'Consultorio Alvarez <onboarding@resend.dev>',
-                        to: paciente.email,
-                        subject: 'Confirmación de Turno - Consultorio Alvarez',
-                        react: ConfirmacionTurnoEmail({
-                            pacienteNombre: paciente.nombre,
-                            fecha: fechaStr,
-                            hora: horaStr,
-                            tratamiento: tratamientoRes.data?.nombre || 'Consulta M.',
-                            profesional: `${profesionalRes.data?.nombre} ${profesionalRes.data?.apellido}`
-                        })
+                await resend.emails.send({
+                    // 'onboarding@resend.dev' permite hacer tests a uno mismo sin verificar el dominio en la capa gratuita
+                    from: 'Consultorio Alvarez <onboarding@resend.dev>',
+                    to: paciente.email,
+                    subject: 'Confirmación de Turno - Consultorio Alvarez',
+                    react: ConfirmacionTurnoEmail({
+                        pacienteNombre: paciente.nombre,
+                        fecha: fechaStr,
+                        hora: horaStr,
+                        tratamiento: tratamientoRes.data?.nombre || 'Consulta M.',
+                        profesional: `${profesionalRes.data?.nombre} ${profesionalRes.data?.apellido}`
                     })
-                }
-            } catch (err) {
-                console.error("Error al despachar el correo de confirmación de Resend:", err)
+                })
             }
+        } catch (err) {
+            console.error("Error al despachar el correo de confirmación de Resend:", err)
         }
-        // -------------------------
+    }
 
-        revalidatePath('/agenda')
-        revalidatePath('/dashboard')
-    })
+    revalidatePath('/agenda')
+    revalidatePath('/dashboard')
 
     return { data }
 }
@@ -153,26 +148,26 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
 
     if (error) return { error: error.message }
 
-    after(async () => {
-        // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
-        try {
-            const { createAdminClient } = await import('@/lib/supabase/admin')
-            const admin = createAdminClient()
+    // --- DISPARAR NOTIFICACIONES WHATSAPP Y PUSH ---
+    try {
+        const { createAdminClient } = await import('@/lib/supabase/admin')
+        const admin = createAdminClient()
 
-            const { data: turno } = await admin
-                .from('turnos')
-                .select(`
-                    fecha_inicio,
-                    profesional_id,
-                    paciente:pacientes(nombre, apellido, telefono),
-                    profesional:profesionales(nombre, apellido),
-                    tipo_treatment:tipos_tratamiento(nombre)
-                `)
-                .eq('id', turnoId)
-                .single()
+        const { data: turno } = await admin
+            .from('turnos')
+            .select(`
+                fecha_inicio,
+                profesional_id,
+                paciente:pacientes(nombre, apellido, telefono),
+                profesional:profesionales(nombre, apellido),
+                tipo_treatment:tipos_tratamiento(nombre)
+            `)
+            .eq('id', turnoId)
+            .single()
 
-            if (turno) {
-                // --- DISPARAR WHATSAPP AUTOMÁTICOS AL PACIENTE ---
+        if (turno) {
+            // --- DISPARAR WHATSAPP AUTOMÁTICOS AL PACIENTE ---
+            try {
                 if (nuevoEstado === 'CONFIRMADO') {
                     await notificarTurnoPorWhatsApp(turnoId, 'turno_confirmado')
                 } else if (nuevoEstado === 'CANCELADO') {
@@ -180,7 +175,12 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
                 } else if (nuevoEstado === 'AUSENTE') {
                     await notificarTurnoPorWhatsApp(turnoId, 'aviso_ausencia')
                 }
+            } catch (waErr) {
+                console.error('Error al enviar WhatsApp en cambiarEstadoTurno:', waErr)
+            }
 
+            // --- DISPARAR PUSH AL PROFESIONAL ---
+            try {
                 const { data: usuarioProf } = await admin
                     .from('usuarios')
                     .select('id')
@@ -216,14 +216,16 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
                         await sendPushToUser(usuarioProf.id, title, body, '/agenda')
                     }
                 }
+            } catch (pushErr) {
+                console.error('Error al enviar push al profesional en cambiarEstadoTurno:', pushErr)
             }
-        } catch (pushErr) {
-            console.error('Error al enviar push en cambiarEstadoTurno:', pushErr)
         }
+    } catch (err) {
+        console.error('Error general en notificaciones de cambiarEstadoTurno:', err)
+    }
 
-        revalidatePath('/agenda')
-        revalidatePath('/admin')
-    })
+    revalidatePath('/agenda')
+    revalidatePath('/admin')
 
     return { success: true }
 }
@@ -247,12 +249,15 @@ export async function moverTurno(turnoId: string, nuevaFechaInicio: string, nuev
 
     if (error) return { error: error.message }
 
-    after(async () => {
-        // Enviar notificación de reprogramación de turno
+    // Enviar notificación de reprogramación de turno
+    try {
         await notificarTurnoPorWhatsApp(turnoId, 'turno_reprogramado')
-        revalidatePath('/agenda')
-        revalidatePath('/admin')
-    })
+    } catch (waErr) {
+        console.error('Error al enviar WhatsApp en moverTurno:', waErr)
+    }
+
+    revalidatePath('/agenda')
+    revalidatePath('/admin')
 
     return { success: true }
 }
@@ -330,55 +335,57 @@ export async function editarTurno(turnoId: string, formData: {
 
     if (error) return { error: error.message }
 
-    after(async () => {
-        // Si la fecha de inicio cambió, enviamos notificación de reprogramación
-        if (oldTurno?.fecha_inicio && new Date(oldTurno.fecha_inicio).getTime() !== new Date(formData.fecha_inicio).getTime()) {
-            await notificarTurnoPorWhatsApp(turnoId, 'turno_reprogramado')
-        }
-
-        // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
+    // Si la fecha de inicio cambió, enviamos notificación de reprogramación
+    if (oldTurno?.fecha_inicio && new Date(oldTurno.fecha_inicio).getTime() !== new Date(formData.fecha_inicio).getTime()) {
         try {
-            const { createAdminClient } = await import('@/lib/supabase/admin')
-            const admin = createAdminClient()
-            const { data: usuarioProf } = await admin
-                .from('usuarios')
-                .select('id')
-                .eq('profesional_id', formData.profesional_id)
-                .eq('activo', true)
-                .maybeSingle()
-
-            if (usuarioProf?.id) {
-                const pacienteId = formData.paciente_id
-                if (pacienteId) {
-                    const [pacienteRes, tratamientoRes] = await Promise.all([
-                        admin.from('pacientes').select('nombre, apellido').eq('id', pacienteId).single(),
-                        admin.from('tipos_tratamiento').select('nombre').eq('id', formData.tipo_tratamiento_id).single()
-                    ])
-
-                    const pct = pacienteRes.data
-                    const trat = tratamientoRes.data?.nombre || 'Consulta'
-
-                    const { format } = await import('date-fns')
-                    const { es } = await import('date-fns/locale')
-                    const fechaObj = new Date(formData.fecha_inicio)
-                    const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
-
-                    const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
-                    await sendPushToUser(
-                        usuarioProf.id,
-                        '✏️ Turno Modificado',
-                        `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} (${fechaStr})`,
-                        '/agenda'
-                    )
-                }
-            }
-        } catch (pushErr) {
-            console.error('Error al enviar push de modificación al profesional:', pushErr)
+            await notificarTurnoPorWhatsApp(turnoId, 'turno_reprogramado')
+        } catch (waErr) {
+            console.error('Error al enviar WhatsApp en editarTurno:', waErr)
         }
+    }
 
-        revalidatePath('/agenda')
-        revalidatePath('/admin')
-    })
+    // --- DISPARAR NOTIFICACION PUSH AL PROFESIONAL ---
+    try {
+        const { createAdminClient } = await import('@/lib/supabase/admin')
+        const admin = createAdminClient()
+        const { data: usuarioProf } = await admin
+            .from('usuarios')
+            .select('id')
+            .eq('profesional_id', formData.profesional_id)
+            .eq('activo', true)
+            .maybeSingle()
+
+        if (usuarioProf?.id) {
+            const pacienteId = formData.paciente_id
+            if (pacienteId) {
+                const [pacienteRes, tratamientoRes] = await Promise.all([
+                    admin.from('pacientes').select('nombre, apellido').eq('id', pacienteId).single(),
+                    admin.from('tipos_tratamiento').select('nombre').eq('id', formData.tipo_tratamiento_id).single()
+                ])
+
+                const pct = pacienteRes.data
+                const trat = tratamientoRes.data?.nombre || 'Consulta'
+
+                const { format } = await import('date-fns')
+                const { es } = await import('date-fns/locale')
+                const fechaObj = new Date(formData.fecha_inicio)
+                const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
+
+                const { sendPushToUser } = await import('@/lib/push-notifications/send-push')
+                await sendPushToUser(
+                    usuarioProf.id,
+                    '✏️ Turno Modificado',
+                    `Paciente: ${pct?.nombre} ${pct?.apellido} - ${trat} (${fechaStr})`,
+                    '/agenda'
+                )
+            }
+        }
+    } catch (pushErr) {
+        console.error('Error al enviar push de modificación al profesional:', pushErr)
+    }
+
+    revalidatePath('/agenda')
+    revalidatePath('/admin')
 
     return { data }
 }
@@ -393,10 +400,8 @@ export async function eliminarTurno(turnoId: string) {
 
     if (error) return { error: error.message }
 
-    after(() => {
-        revalidatePath('/agenda')
-        revalidatePath('/admin')
-    })
+    revalidatePath('/agenda')
+    revalidatePath('/admin')
 
     return { success: true }
 }
