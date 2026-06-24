@@ -76,7 +76,7 @@ export function BookingSection({ config }: { config?: Pick<LandingConfig, 'booki
 
                 <div
                     ref={contentRef}
-                    className="glass-strong rounded-3xl shadow-2xl shadow-black/5 overflow-hidden"
+                    className="dark bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl shadow-black/40 overflow-hidden"
                     style={{ opacity: 0 }}
                 >
                     <BookingForm />

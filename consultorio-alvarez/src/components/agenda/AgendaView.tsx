@@ -1245,19 +1245,19 @@ function TurnoDetailModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[425px] bg-slate-950 dark:bg-[#0b0c10] border border-white/15 text-foreground shadow-2xl p-6 rounded-2xl overflow-hidden">
+            <DialogContent className="dark sm:max-w-[425px] bg-black border border-white/15 text-slate-100 shadow-2xl p-6 rounded-2xl overflow-hidden">
                 <DialogHeader className="space-y-1">
                     <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                        <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
                             <Clock className="h-3.5 w-3.5" />
                             {format(parseISO(turno.fecha_inicio), "EEEE d 'de' MMMM", { locale: es })}
                         </span>
                         <StatusBadge status={estado} />
                     </div>
-                    <DialogTitle className="text-xl font-bold pt-2 flex items-center gap-2">
+                    <DialogTitle className="text-xl font-bold pt-2 flex items-center gap-2 text-slate-100">
                         {turno.paciente?.apellido}, {turno.paciente?.nombre}
                         {isST && (
-                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-500 border border-amber-500/30 rounded px-1.5 py-0.5">
+                            <span className="text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 rounded px-1.5 py-0.5">
                                 Sobreturno
                             </span>
                         )}
@@ -1266,34 +1266,34 @@ function TurnoDetailModal({
 
                 <div className="space-y-4 py-4 text-sm">
                     {/* Paciente details block */}
-                    <div className="bg-slate-900/80 dark:bg-zinc-900/80 p-3.5 rounded-xl border border-white/5 space-y-2.5">
+                    <div className="bg-white/[0.03] p-3.5 rounded-xl border border-white/5 space-y-2.5">
                         <div className="flex items-center gap-2">
                             <User className="h-4 w-4 text-primary shrink-0" />
-                            <span className="text-xs font-medium">Paciente: {turno.paciente?.apellido}, {turno.paciente?.nombre}</span>
+                            <span className="text-xs font-medium text-slate-200">Paciente: {turno.paciente?.apellido}, {turno.paciente?.nombre}</span>
                         </div>
                         {turno.paciente?.dni && (
-                            <div className="flex items-center gap-2 pl-6 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2 pl-6 text-xs text-slate-400">
                                 <span>DNI: {turno.paciente.dni}</span>
                             </div>
                         )}
                         {turno.paciente?.telefono && (
-                            <div className="flex items-center gap-2 pl-6 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2 pl-6 text-xs text-slate-400">
                                 <span>Tel: {turno.paciente.telefono}</span>
                             </div>
                         )}
                     </div>
 
                     {/* Tratamiento & Profesional block */}
-                    <div className="bg-slate-900/80 dark:bg-zinc-900/80 p-3.5 rounded-xl border border-white/5 space-y-2">
+                    <div className="bg-white/[0.03] p-3.5 rounded-xl border border-white/5 space-y-2">
                         <div className="flex items-center gap-2">
                             <Activity className="h-4 w-4 text-purple-400 shrink-0" />
-                            <span className="text-xs font-medium">Tratamiento: {turno.tipo_tratamiento?.nombre}</span>
+                            <span className="text-xs font-medium text-slate-200">Tratamiento: {turno.tipo_tratamiento?.nombre}</span>
                         </div>
                         <div className="flex items-center gap-2">
                             <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: turno.profesional?.color_agenda }} />
-                            <span className="text-xs font-medium">Dr. {turno.profesional?.nombre} {turno.profesional?.apellido}</span>
+                            <span className="text-xs font-medium text-slate-200">Dr. {turno.profesional?.nombre} {turno.profesional?.apellido}</span>
                         </div>
-                        <div className="flex items-center gap-2 pl-4 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-2 pl-6 text-xs text-slate-400">
                             <Clock className="h-3.5 w-3.5" />
                             <span>Horario: {format(parseISO(turno.fecha_inicio), 'HH:mm')} — {format(parseISO(turno.fecha_fin), 'HH:mm')}</span>
                         </div>
@@ -1302,8 +1302,8 @@ function TurnoDetailModal({
                     {/* Notas block */}
                     {turno.notas && (
                         <div className="glass-panel p-3.5 rounded-xl border border-white/5 bg-white/[0.02]">
-                            <p className="text-xs font-semibold text-muted-foreground mb-1">Notas:</p>
-                            <p className="text-xs italic text-muted-foreground/90 font-mono bg-black/10 p-2 rounded-lg border border-white/5 whitespace-pre-line leading-relaxed">{turno.notas}</p>
+                            <p className="text-xs font-semibold text-slate-400 mb-1">Notas:</p>
+                            <p className="text-xs italic text-slate-300 font-mono bg-black/40 p-2 rounded-lg border border-white/5 whitespace-pre-line leading-relaxed">{turno.notas}</p>
                         </div>
                     )}
                 </div>
@@ -1313,13 +1313,13 @@ function TurnoDetailModal({
                     {/* Status change actions */}
                     <div className="flex flex-wrap gap-1.5 mr-auto">
                         {estado === 'PENDIENTE' && (
-                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3"
+                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border border-white/15 hover:bg-white/10 text-slate-200"
                                 onClick={() => { onCambiarEstado(turno.id, 'CONFIRMADO'); onOpenChange(false); }} disabled={isPending}>
                                 ✓ Confirmar
                             </GlassButton>
                         )}
                         {estado === 'CONFIRMADO' && (
-                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border-violet-300 dark:border-violet-700 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20"
+                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border-violet-500/30 bg-violet-500/10 text-violet-400 hover:bg-violet-500/20"
                                 onClick={() => { onCambiarEstado(turno.id, 'EN_SALA'); onOpenChange(false); }} disabled={isPending}>
                                 🔔 En sala
                             </GlassButton>
@@ -1331,19 +1331,19 @@ function TurnoDetailModal({
                             </GlassButton>
                         )}
                         {!['ATENDIDO', 'CANCELADO', 'AUSENTE'].includes(estado) && (
-                            <GlassButton size="sm" variant="ghost" className="h-8 text-xs px-3 text-destructive hover:bg-destructive/10"
+                            <GlassButton size="sm" variant="ghost" className="h-8 text-xs px-3 text-red-400 hover:bg-red-500/10 hover:text-red-300 border-transparent"
                                 onClick={() => { onCambiarEstado(turno.id, 'CANCELADO'); onOpenChange(false); }} disabled={isPending}>
                                 Cancelar
                             </GlassButton>
                         )}
                         {estado === 'ATENDIDO' && (
-                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3"
+                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border border-white/15 hover:bg-white/10 text-slate-200"
                                 onClick={() => { onCambiarEstado(turno.id, 'PENDIENTE'); onOpenChange(false); }} disabled={isPending}>
                                 Revertir a pendiente
                             </GlassButton>
                         )}
                         {turno.paciente?.telefono && (
-                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-400"
                                 onClick={() => { onNotifyDelay(turno); onOpenChange(false); }} disabled={isPending}>
                                 <MessageSquare className="h-3.5 w-3.5 mr-1" />
                                 Demora
@@ -1353,12 +1353,12 @@ function TurnoDetailModal({
 
                     {/* Edit/Delete actions */}
                     <div className="flex gap-2 justify-end mt-2 sm:mt-0">
-                        <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 text-primary border-primary/20 hover:border-primary/50"
+                        <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 text-blue-400 border border-blue-500/20 hover:border-blue-500/50 hover:bg-blue-500/10"
                             onClick={() => { onEdit(turno); onOpenChange(false); }} disabled={isPending}>
                             <Edit2 className="h-3.5 w-3.5 mr-1" />
                             Editar
                         </GlassButton>
-                        <GlassButton size="sm" variant="glass" className="h-8 w-8 p-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10 border-red-500/20"
+                        <GlassButton size="sm" variant="glass" className="h-8 w-8 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-red-500/20"
                             onClick={() => { onDelete(turno.id); onOpenChange(false); }} disabled={isPending}>
                             <Trash2 className="h-3.5 w-3.5" />
                         </GlassButton>

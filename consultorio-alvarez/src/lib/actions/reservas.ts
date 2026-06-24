@@ -314,6 +314,8 @@ export async function crearReservaPublica(data: {
             .select('id')
             .eq('tenant_id', tenant.id)
             .or(`dni.eq.${cleanDni},dni.eq.${dotsDni}`)
+            .order('created_at', { ascending: false })
+            .limit(1)
             .maybeSingle()
         pacienteId = existing?.id ?? null
     }
@@ -534,6 +536,8 @@ export async function getPacientePorDni(tenantSlug: string, dni: string) {
         `)
         .eq('tenant_id', tenant.id)
         .or(`dni.eq.${cleanDni},dni.eq.${dotsDni}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
         .maybeSingle()
 
     if (error) {

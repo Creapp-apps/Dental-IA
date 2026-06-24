@@ -130,6 +130,13 @@ export async function crearTurno(formData: {
         }
     }
 
+    // --- INTEGRACIÓN WHATSAPP ---
+    try {
+        await notificarTurnoPorWhatsApp(data.id, 'solicitud_turnos')
+    } catch (waErr) {
+        console.error('Error al enviar WhatsApp en crearTurno:', waErr)
+    }
+
     revalidatePath('/agenda')
     revalidatePath('/dashboard')
 
@@ -414,7 +421,7 @@ export async function eliminarTurno(turnoId: string) {
 // ==========================================
 async function notificarTurnoPorWhatsApp(
     turnoId: string, 
-    templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' | 'aviso_ausencia'
+    templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' | 'aviso_ausencia' | 'solicitud_turnos'
 ) {
     console.log(`[WA LOG] Iniciando notificarTurnoPorWhatsApp para turnoId: ${turnoId}, plantilla: "${templateName}"`)
     if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
@@ -478,9 +485,12 @@ async function notificarTurnoPorWhatsApp(
                 { type: 'text', text: horaStr },
                 { type: 'text', text: nombreProf }
             ]
-        } else if (templateName === 'turno_confirmado') {
-            // Cuerpo: Hola {{1}}! Turno confirmado para {{2}} el día {{3}} a las {{4}} con el Dr. {{5}}... (5 params)
-            const tratamiento = (turno as any).tipo_tratamiento?.nombre || 'Consulta'
+        } else if (templateName === 'turno_confirmado' || templateName === 'solicitud_turnos') {
+            // Cuerpo: Hola {{1}}! Turno confirmado/solicitado para {{2}} el día {{3}} a las {{4}} con el Dr. {{5}}... (5 params)
+            let tratamiento = (turno as any).tipo_tratamiento?.nombre || 'Consulta'
+            if (templateName === 'solicitud_turnos') {
+                tratamiento = tratamiento.toUpperCase()
+            }
             parameters = [
                 { type: 'text', text: pct.nombre },
                 { type: 'text', text: tratamiento },
