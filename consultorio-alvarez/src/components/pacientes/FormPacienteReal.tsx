@@ -118,6 +118,16 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     const [isOcrPending, setIsOcrPending] = useState(false)
     const [ocrData, setOcrData] = useState<any>(null)
     const [scannedImage, setScannedImage] = useState<string | null>(null)
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+    function resetOcr() {
+        setOcrData(null)
+        setScannedImage(null)
+        if (previewUrl) {
+            URL.revokeObjectURL(previewUrl)
+            setPreviewUrl(null)
+        }
+    }
 
     const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
         resolver: zodResolver(schema),
@@ -168,6 +178,27 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             }
 
             setScannedImage(compressedBase64)
+
+            // Generar una URL de objeto blob local para previsualizar la imagen sin problemas de renderizado
+            if (previewUrl) {
+                URL.revokeObjectURL(previewUrl)
+            }
+            try {
+                const parts = compressedBase64.split(';base64,')
+                const contentType = parts[0].split(':')[1]
+                const raw = window.atob(parts[1])
+                const rawLength = raw.length
+                const uInt8Array = new Uint8Array(rawLength)
+                for (let i = 0; i < rawLength; ++i) {
+                    uInt8Array[i] = raw.charCodeAt(i)
+                }
+                const blob = new Blob([uInt8Array], { type: contentType })
+                const blobUrl = URL.createObjectURL(blob)
+                setPreviewUrl(blobUrl)
+            } catch (blobErr) {
+                console.error('Error generando blob URL para vista previa:', blobErr)
+                setPreviewUrl(compressedBase64)
+            }
             
             console.log('Invocando Server Action processPatientCardOcr...')
             const res = await processPatientCardOcr(compressedBase64)
@@ -207,8 +238,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             }
         })
         
-        setOcrData(null)
-        setScannedImage(null)
+        resetOcr()
         glassAlert.success({ 
             title: 'Datos cargados', 
             description: 'Se autocompletó el formulario del paciente.' 
@@ -512,10 +542,10 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                                 </span>
                                 Ficha Escaneada
                             </div>
-                            {scannedImage ? (
+                            {previewUrl ? (
                                 <div className="flex-1 relative flex items-center justify-center p-6 select-none group">
                                     <img 
-                                        src={scannedImage} 
+                                        src={previewUrl} 
                                         alt="Ficha de Paciente" 
                                         className="max-w-full max-h-[450px] object-contain rounded-lg shadow-lg border border-white/10" 
                                     />
@@ -547,7 +577,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                                 </div>
                                 <button 
                                     type="button" 
-                                    onClick={() => { setOcrData(null); setScannedImage(null); }}
+                                    onClick={resetOcr}
                                     className="p-1.5 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
                                 >
                                     <X className="h-5 w-5" />
@@ -711,7 +741,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                                 <GlassButton 
                                     type="button" 
                                     variant="ghost" 
-                                    onClick={() => { setOcrData(null); setScannedImage(null); }}
+                                    onClick={resetOcr}
                                 >
                                     Descartar
                                 </GlassButton>
