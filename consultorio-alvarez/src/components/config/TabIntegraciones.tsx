@@ -12,6 +12,8 @@ import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { guardarIntegracion } from '@/lib/actions/integrations'
+import { registrarSuscripcionPush, removerSuscripcionPush, verificarSuscripcionBD, enviarPruebaPush } from '@/lib/actions/push'
+import { getActiveSubscription, registerServiceWorker, subscribeToPushNotifications, unsubscribeFromPushNotifications } from '@/lib/push-notifications/push-subscription'
 
 interface TabIntegracionesProps {
     integrations: any[]
@@ -306,43 +308,59 @@ function WizardPushNotifications() {
         setDbSyncState('checking')
         setDbError(null)
         try {
-            const { getActiveSubscription } = await import('@/lib/push-notifications/push-subscription')
             const sub = await getActiveSubscription()
             if (!sub) {
                 setDbSyncState('missing')
+                glassAlert.warning({ 
+                    title: 'Token no activo', 
+                    description: 'No hay ninguna suscripción activa en este navegador. Activa las notificaciones primero.' 
+                })
                 return
             }
 
-            const { verificarSuscripcionBD } = await import('@/lib/actions/push')
             const res = await verificarSuscripcionBD(sub.endpoint)
             if (res.success) {
                 if (res.exists) {
                     setDbSyncState('synced')
+                    glassAlert.success({ 
+                        title: 'Conexión verificada', 
+                        description: 'La suscripción está activa en este navegador y registrada correctamente en el servidor.' 
+                    })
                 } else {
                     setDbSyncState('missing')
+                    glassAlert.warning({ 
+                        title: 'Token no registrado', 
+                        description: 'El token de este navegador no figura en el servidor. Desactiva y vuelve a activar para re-vincular.' 
+                    })
                 }
             } else {
                 setDbSyncState('error')
                 setDbError(res.error || 'No se pudo verificar el token en la base de datos.')
+                glassAlert.error({ 
+                    title: 'Error de verificación', 
+                    description: res.error || 'No se pudo verificar el token en el servidor.' 
+                })
             }
         } catch (err: any) {
             console.error('Error al verificar vinculación:', err)
             setDbSyncState('error')
             setDbError(err.message || 'Error al conectar con la base de datos.')
+            glassAlert.error({ 
+                title: 'Error', 
+                description: err.message || 'Error al conectar con la base de datos.' 
+            })
         }
     }
 
     async function enviarNotificacionPrueba() {
         setIsTestingPush(true)
         try {
-            const { getActiveSubscription } = await import('@/lib/push-notifications/push-subscription')
             const sub = await getActiveSubscription()
             if (!sub) {
                 glassAlert.error({ title: 'Error', description: 'No hay ninguna suscripción activa en este navegador.' })
                 return
             }
 
-            const { enviarPruebaPush } = await import('@/lib/actions/push')
             const res = await enviarPruebaPush(sub.endpoint)
             if (res.success) {
                 glassAlert.success({ title: 'Notificación enviada', description: 'Se disparó la notificación de prueba a este dispositivo.' })
@@ -366,7 +384,6 @@ function WizardPushNotifications() {
             }
             setPermissionState(Notification.permission)
             try {
-                const { getActiveSubscription, registerServiceWorker } = await import('@/lib/push-notifications/push-subscription')
                 // Asegurar registro del SW primero
                 await registerServiceWorker()
                 const sub = await getActiveSubscription()
@@ -375,7 +392,6 @@ function WizardPushNotifications() {
                 
                 if (subscribed && sub) {
                     setDbSyncState('checking')
-                    const { verificarSuscripcionBD } = await import('@/lib/actions/push')
                     const res = await verificarSuscripcionBD(sub.endpoint)
                     if (res.success && res.exists) {
                         setDbSyncState('synced')
@@ -395,14 +411,6 @@ function WizardPushNotifications() {
 
     function togglePush() {
         startTransition(async () => {
-            const { 
-                subscribeToPushNotifications, 
-                unsubscribeFromPushNotifications, 
-                getActiveSubscription 
-            } = await import('@/lib/push-notifications/push-subscription')
-            
-            const { registrarSuscripcionPush, removerSuscripcionPush } = await import('@/lib/actions/push')
-
             if (isSubscribed) {
                 // Desactivar
                 const sub = await getActiveSubscription()
@@ -569,6 +577,7 @@ function WizardPushNotifications() {
 
                         <div className="flex items-center gap-2 shrink-0">
                             <GlassButton
+                                type="button"
                                 size="sm"
                                 variant="outline"
                                 onClick={verificarVinculacion}
@@ -579,6 +588,7 @@ function WizardPushNotifications() {
                             </GlassButton>
 
                             <GlassButton
+                                type="button"
                                 size="sm"
                                 variant="default"
                                 onClick={enviarNotificacionPrueba}
