@@ -151,10 +151,28 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
 
         setIsOcrPending(true)
         try {
-            const compressedBase64 = await compressImage(file)
+            console.log('Iniciando procesamiento de archivo:', file.name, 'de tamaño:', file.size, 'bytes')
+            let compressedBase64 = ''
+            try {
+                console.log('Comprimiendo imagen en cliente...')
+                compressedBase64 = await compressImage(file)
+                console.log('Imagen comprimida con éxito. Largo base64:', compressedBase64.length)
+            } catch (compressErr) {
+                console.warn('La compresión falló, intentando con archivo original:', compressErr)
+                compressedBase64 = await new Promise<string>((resolve, reject) => {
+                    const reader = new FileReader()
+                    reader.onloadend = () => resolve(reader.result as string)
+                    reader.onerror = reject
+                    reader.readAsDataURL(file)
+                })
+            }
+
             setScannedImage(compressedBase64)
             
+            console.log('Invocando Server Action processPatientCardOcr...')
             const res = await processPatientCardOcr(compressedBase64)
+            console.log('Respuesta del servidor:', res)
+
             if (res.success && res.data) {
                 setOcrData(res.data)
                 glassAlert.success({ 
@@ -168,6 +186,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                 })
             }
         } catch (err: any) {
+            console.error('Error detallado en handleOcrFileChange:', err)
             glassAlert.error({ 
                 title: 'Error de conexión', 
                 description: err.message || 'Error al procesar la imagen.' 
