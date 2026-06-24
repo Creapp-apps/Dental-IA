@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
     MessageCircle, CreditCard, Receipt, AlertCircle, Save,
-    CheckCircle2, ExternalLink, BellRing
+    CheckCircle2, ExternalLink, BellRing, Send, RefreshCw, Loader2
 } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
@@ -298,6 +298,63 @@ function WizardPushNotifications() {
     const [isSubscribed, setIsSubscribed] = useState(false)
     const [permissionState, setPermissionState] = useState<NotificationPermission | 'unsupported'>('default')
     const [checking, setChecking] = useState(true)
+    const [dbSyncState, setDbSyncState] = useState<'unchecked' | 'checking' | 'synced' | 'missing' | 'error'>('unchecked')
+    const [dbError, setDbError] = useState<string | null>(null)
+    const [isTestingPush, setIsTestingPush] = useState(false)
+
+    async function verificarVinculacion() {
+        setDbSyncState('checking')
+        setDbError(null)
+        try {
+            const { getActiveSubscription } = await import('@/lib/push-notifications/push-subscription')
+            const sub = await getActiveSubscription()
+            if (!sub) {
+                setDbSyncState('missing')
+                return
+            }
+
+            const { verificarSuscripcionBD } = await import('@/lib/actions/push')
+            const res = await verificarSuscripcionBD(sub.endpoint)
+            if (res.success) {
+                if (res.exists) {
+                    setDbSyncState('synced')
+                } else {
+                    setDbSyncState('missing')
+                }
+            } else {
+                setDbSyncState('error')
+                setDbError(res.error || 'No se pudo verificar el token en la base de datos.')
+            }
+        } catch (err: any) {
+            console.error('Error al verificar vinculación:', err)
+            setDbSyncState('error')
+            setDbError(err.message || 'Error al conectar con la base de datos.')
+        }
+    }
+
+    async function enviarNotificacionPrueba() {
+        setIsTestingPush(true)
+        try {
+            const { getActiveSubscription } = await import('@/lib/push-notifications/push-subscription')
+            const sub = await getActiveSubscription()
+            if (!sub) {
+                glassAlert.error({ title: 'Error', description: 'No hay ninguna suscripción activa en este navegador.' })
+                return
+            }
+
+            const { enviarPruebaPush } = await import('@/lib/actions/push')
+            const res = await enviarPruebaPush(sub.endpoint)
+            if (res.success) {
+                glassAlert.success({ title: 'Notificación enviada', description: 'Se disparó la notificación de prueba a este dispositivo.' })
+            } else {
+                glassAlert.error({ title: 'Error al enviar', description: res.error || 'No se pudo enviar la prueba.' })
+            }
+        } catch (err: any) {
+            glassAlert.error({ title: 'Error', description: err.message || 'Error al enviar la prueba.' })
+        } finally {
+            setIsTestingPush(false)
+        }
+    }
 
     useEffect(() => {
         async function checkStatus() {
@@ -313,7 +370,20 @@ function WizardPushNotifications() {
                 // Asegurar registro del SW primero
                 await registerServiceWorker()
                 const sub = await getActiveSubscription()
-                setIsSubscribed(!!sub)
+                const subscribed = !!sub
+                setIsSubscribed(subscribed)
+                
+                if (subscribed && sub) {
+                    setDbSyncState('checking')
+                    const { verificarSuscripcionBD } = await import('@/lib/actions/push')
+                    const res = await verificarSuscripcionBD(sub.endpoint)
+                    if (res.success && res.exists) {
+                        setDbSyncState('synced')
+                    } else {
+                        setDbSyncState('missing')
+                        setDbError(res.error || null)
+                    }
+                }
             } catch (err) {
                 console.error('Error al inicializar notificaciones push en UI:', err)
             } finally {
@@ -346,6 +416,7 @@ function WizardPushNotifications() {
                 const success = await unsubscribeFromPushNotifications()
                 if (success) {
                     setIsSubscribed(false)
+                    setDbSyncState('unchecked')
                     glassAlert.success({ title: 'Notificaciones desactivadas', description: 'Se desactivaron las alertas en este dispositivo.' })
                 } else {
                     glassAlert.error({ title: 'Error', description: 'No se pudo dar de baja la suscripción push.' })
@@ -362,6 +433,7 @@ function WizardPushNotifications() {
                         }
                         setIsSubscribed(true)
                         setPermissionState(Notification.permission)
+                        setDbSyncState('synced')
                         glassAlert.success({ title: '¡Notificaciones activadas!', description: 'Este dispositivo recibirá alertas del consultorio.' })
                     }
                 } catch (err: any) {
@@ -450,6 +522,84 @@ function WizardPushNotifications() {
                     />
                 </button>
             </div>
+
+            {isSubscribed && (
+                <div className="border-t border-border/40 pt-4 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-muted/20 p-4 rounded-xl border border-white/5">
+                        <div className="space-y-1">
+                            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Estado de Vinculación</span>
+                            <div className="flex items-center gap-2">
+                                {dbSyncState === 'checking' && (
+                                    <>
+                                        <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                                        <span className="text-sm font-medium text-foreground">Verificando en el servidor...</span>
+                                    </>
+                                )}
+                                {dbSyncState === 'synced' && (
+                                    <>
+                                        <div className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                                        <span className="text-sm font-medium text-emerald-500 flex items-center gap-1.5">
+                                            ✓ Token Vinculado y Activo
+                                        </span>
+                                    </>
+                                )}
+                                {dbSyncState === 'missing' && (
+                                    <>
+                                        <div className="h-2.5 w-2.5 rounded-full bg-destructive animate-pulse" />
+                                        <span className="text-sm font-medium text-destructive">
+                                            ⚠️ Desvinculado en el servidor
+                                        </span>
+                                    </>
+                                )}
+                                {dbSyncState === 'error' && (
+                                    <>
+                                        <div className="h-2.5 w-2.5 rounded-full bg-amber-500 animate-pulse" />
+                                        <span className="text-sm font-medium text-amber-500">
+                                            Error de sincronización
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+                            <p className="text-xs text-muted-foreground max-w-[360px]">
+                                {dbSyncState === 'synced' && 'El token se encuentra registrado correctamente en la base de datos de alertas.'}
+                                {dbSyncState === 'missing' && 'El token no figura en el servidor (pudo haber expirado o sido eliminado). Por favor desactiva y vuelve a activar para re-vincular.'}
+                                {dbSyncState === 'error' && (dbError || 'No se pudo verificar el estado en el servidor.')}
+                            </p>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                            <GlassButton
+                                size="sm"
+                                variant="outline"
+                                onClick={verificarVinculacion}
+                                disabled={dbSyncState === 'checking'}
+                            >
+                                <RefreshCw className={cn("h-3.5 w-3.5 mr-1.5", dbSyncState === 'checking' && "animate-spin")} />
+                                Verificar
+                            </GlassButton>
+
+                            <GlassButton
+                                size="sm"
+                                variant="default"
+                                onClick={enviarNotificacionPrueba}
+                                disabled={dbSyncState !== 'synced' || isTestingPush}
+                            >
+                                {isTestingPush ? (
+                                    <>
+                                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                                        Enviando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Send className="h-3.5 w-3.5 mr-1.5" />
+                                        Probar
+                                    </>
+                                )}
+                            </GlassButton>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
