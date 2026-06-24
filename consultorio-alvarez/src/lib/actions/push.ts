@@ -118,7 +118,11 @@ export async function verificarSuscripcionBD(endpoint: string): Promise<{ succes
 /**
  * Envía una notificación push de prueba a un endpoint de suscripción específico del usuario.
  */
-export async function enviarPruebaPush(endpoint: string): Promise<{ success: boolean; error?: string }> {
+export async function enviarPruebaPush(
+    endpoint: string, 
+    title?: string, 
+    body?: string
+): Promise<{ success: boolean; error?: string }> {
     try {
         if (!endpoint) {
             return { success: false, error: 'Endpoint no provisto' }
@@ -146,8 +150,8 @@ export async function enviarPruebaPush(endpoint: string): Promise<{ success: boo
         const { sendPushNotification } = await import('@/lib/push-notifications/send-push')
         const sent = await sendPushNotification(
             data.subscription,
-            '🔔 Prueba de Notificación',
-            '¡Excelente! Las notificaciones push están configuradas y funcionando correctamente en este dispositivo.',
+            title || '🔔 Prueba de Notificación',
+            body || 'Verificacion notificaciones push funcionando correctamente!',
             '/agenda'
         )
 

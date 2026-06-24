@@ -322,10 +322,25 @@ function WizardPushNotifications() {
             if (res.success) {
                 if (res.exists) {
                     setDbSyncState('synced')
-                    glassAlert.success({ 
-                        title: 'Conexión verificada', 
-                        description: 'La suscripción está activa en este navegador y registrada correctamente en el servidor.' 
-                    })
+                    
+                    // Disparar la notificación push de prueba
+                    const testRes = await enviarPruebaPush(
+                        sub.endpoint, 
+                        '🔔 Verificación', 
+                        'Verificacion notificaciones push funcionando correctamente!'
+                    )
+                    
+                    if (testRes.success) {
+                        glassAlert.success({ 
+                            title: 'Verificación enviada', 
+                            description: 'Token válido. Se disparó la notificación de prueba a este dispositivo.' 
+                        })
+                    } else {
+                        glassAlert.warning({ 
+                            title: 'Conexión verificada', 
+                            description: 'El token está registrado en el servidor, pero falló el envío de prueba: ' + (testRes.error || 'Token inválido/expirado.')
+                        })
+                    }
                 } else {
                     setDbSyncState('missing')
                     glassAlert.warning({ 
