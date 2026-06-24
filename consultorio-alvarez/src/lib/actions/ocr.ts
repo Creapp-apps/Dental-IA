@@ -81,38 +81,58 @@ Responde únicamente con un objeto JSON válido que contenga estas claves exacta
   "antecedentes": string
 }`
 
-        const response = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`,
-            {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    contents: [
-                        {
-                            parts: [
-                                { text: prompt },
-                                {
-                                    inlineData: {
-                                        mimeType: mimeType,
-                                        data: base64Data
-                                    }
-                                }
-                            ]
-                        }
-                    ],
-                    generationConfig: {
-                        responseMimeType: 'application/json'
-                    }
-                })
-            }
-        )
+        const models = ['gemini-3.5-flash', 'gemini-2.5-flash']
+        let response: Response | null = null
+        let lastErrorMsg = ''
 
-        if (!response.ok) {
-            const errText = await response.text()
-            console.error('Error llamando a Gemini API:', errText)
-            return { success: false, error: `Error de API de Gemini: ${response.statusText}` }
+        for (const model of models) {
+            try {
+                console.log(`Intentando digitalizar con el modelo: ${model}...`)
+                response = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            contents: [
+                                {
+                                    parts: [
+                                        { text: prompt },
+                                        {
+                                            inlineData: {
+                                                mimeType: mimeType,
+                                                data: base64Data
+                                            }
+                                        }
+                                    ]
+                                }
+                            ],
+                            generationConfig: {
+                                responseMimeType: 'application/json'
+                            }
+                        })
+                    }
+                )
+
+                if (response.ok) {
+                    console.log(`Modelo ${model} respondió exitosamente (200 OK)`)
+                    break
+                } else {
+                    const errText = await response.text()
+                    lastErrorMsg = `Modelo ${model} falló con código ${response.status} ${response.statusText}. Detalle: ${errText}`
+                    console.warn(lastErrorMsg)
+                }
+            } catch (fetchErr: any) {
+                lastErrorMsg = `Fallo de red para el modelo ${model}: ${fetchErr.message}`
+                console.warn(lastErrorMsg)
+            }
+        }
+
+        if (!response || !response.ok) {
+            console.error('Todos los modelos de Gemini fallaron en la digitalización.')
+            return { success: false, error: `Error de API de Gemini: ${lastErrorMsg}` }
         }
 
         const resJson = await response.json()
