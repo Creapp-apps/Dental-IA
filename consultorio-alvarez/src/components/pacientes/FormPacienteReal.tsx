@@ -14,6 +14,8 @@ import { GlassSelect } from '@/components/ui/glass-select'
 import { GlassPhotoCapture } from '@/components/ui/glass-photo-capture'
 import { crearPaciente, actualizarPaciente } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
+import { Sparkles, Loader2, Check, X } from 'lucide-react'
+import { processPatientCardOcr } from '@/lib/actions/ocr'
 
 const schema = z.object({
     nro_historia_clinica: z.string().optional(),
@@ -69,6 +71,10 @@ const sectionVariants = {
 export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: any[], paciente?: any }) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
+    const [isOcrPending, setIsOcrPending] = useState(false)
+    const [ocrData, setOcrData] = useState<any>(null)
+    const [scannedImage, setScannedImage] = useState<string | null>(null)
+
     const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
         resolver: zodResolver(schema),
         defaultValues: paciente ? {
@@ -94,6 +100,60 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             notas_internas: paciente.notas_internas || '',
         } : { genero: '', obra_social_id: '' },
     })
+
+    function handleOcrFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        if (!file) return
+
+        setIsOcrPending(true)
+        const reader = new FileReader()
+        reader.onloadend = async () => {
+            const base64 = reader.result as string
+            setScannedImage(base64)
+            try {
+                const res = await processPatientCardOcr(base64)
+                if (res.success && res.data) {
+                    setOcrData(res.data)
+                    glassAlert.success({ 
+                        title: 'Ficha digitalizada', 
+                        description: 'Verificá los datos extraídos antes de confirmar.' 
+                    })
+                } else {
+                    glassAlert.error({ 
+                        title: 'Error al escanear', 
+                        description: res.error || 'No se pudieron extraer datos de la imagen.' 
+                    })
+                }
+            } catch (err: any) {
+                glassAlert.error({ 
+                    title: 'Error de conexión', 
+                    description: err.message || 'Error al procesar la imagen.' 
+                })
+            } finally {
+                setIsOcrPending(false)
+                e.target.value = ''
+            }
+        }
+        reader.readAsDataURL(file)
+    }
+
+    function handleConfirmOcr(confirmedData: any) {
+        if (!confirmedData) return
+        
+        // Populate react-hook-form values
+        Object.entries(confirmedData).forEach(([key, val]) => {
+            if (val !== undefined && val !== null) {
+                setValue(key as any, val as string, { shouldValidate: true })
+            }
+        })
+        
+        setOcrData(null)
+        setScannedImage(null)
+        glassAlert.success({ 
+            title: 'Datos cargados', 
+            description: 'Se autocompletó el formulario del paciente.' 
+        })
+    }
 
     function onSubmit(data: FormData) {
         startTransition(async () => {
@@ -158,11 +218,43 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                     value={watch('foto_url')}
                     onChange={(url) => setValue('foto_url', url)}
                 />
-                <div>
-                    <h2 className="text-xl font-bold text-foreground">Perfil del Paciente</h2>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Completá los datos personales y carga una foto identificatoria.
-                    </p>
+                <div className="flex-1 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div>
+                        <h2 className="text-xl font-bold text-foreground">Perfil del Paciente</h2>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            Completá los datos personales y cargá una foto o escaneá su ficha física.
+                        </p>
+                    </div>
+                    {!paciente && (
+                        <div>
+                            <input
+                                type="file"
+                                accept="image/*"
+                                id="ocr-file-upload"
+                                className="hidden"
+                                onChange={handleOcrFileChange}
+                            />
+                            <GlassButton
+                                type="button"
+                                variant="outline"
+                                onClick={() => document.getElementById('ocr-file-upload')?.click()}
+                                disabled={isOcrPending}
+                                className="border-primary/30 hover:border-primary/80 hover:bg-primary/5 transition-all duration-300 flex items-center gap-2 group shadow-sm"
+                            >
+                                {isOcrPending ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                        <span className="text-sm font-medium">Digitalizando ficha...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Sparkles className="h-4 w-4 text-amber-500 group-hover:scale-110 transition-transform duration-300 animate-pulse" />
+                                        <span className="text-sm font-medium">Escanear Ficha con IA</span>
+                                    </>
+                                )}
+                            </GlassButton>
+                        </div>
+                    )}
                 </div>
             </motion.div>
 
@@ -335,6 +427,247 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                     {paciente ? 'Guardar cambios' : 'Crear paciente'}
                 </GlassButton>
             </motion.div>
+
+            {/* OCR Verification Modal */}
+            {ocrData && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/40 backdrop-blur-md">
+                    <style>{`
+                        @keyframes scan-loop {
+                            0% { top: 0%; }
+                            50% { top: 100%; }
+                            100% { top: 0%; }
+                        }
+                    `}</style>
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        className="glass border border-white/10 dark:border-white/5 rounded-3xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col md:flex-row"
+                    >
+                        {/* Left Side: Scanned Card Preview */}
+                        <div className="w-full md:w-1/2 bg-black/40 border-b md:border-b-0 md:border-r border-white/10 flex flex-col relative overflow-hidden h-[250px] md:h-auto min-h-[250px]">
+                            <div className="absolute top-4 left-4 z-10 glass px-3 py-1 rounded-full text-[10px] uppercase font-bold tracking-wider text-white flex items-center gap-1.5 shadow-md">
+                                <span className="relative flex h-2 w-2">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                                </span>
+                                Ficha Escaneada
+                            </div>
+                            {scannedImage ? (
+                                <div className="flex-1 relative flex items-center justify-center p-6 select-none group">
+                                    <img 
+                                        src={scannedImage} 
+                                        alt="Ficha de Paciente" 
+                                        className="max-w-full max-h-[450px] object-contain rounded-lg shadow-lg border border-white/10" 
+                                    />
+                                    {/* Laser scanning line effect */}
+                                    <div 
+                                        className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-80 pointer-events-none" 
+                                        style={{ animation: 'scan-loop 2.5s ease-in-out infinite' }}
+                                    />
+                                </div>
+                            ) : (
+                                <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+                                    Sin vista previa de imagen
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Right Side: Verified Fields List */}
+                        <div className="w-full md:w-1/2 flex flex-col max-h-[85vh]">
+                            {/* Modal Header */}
+                            <div className="p-6 border-b border-white/10 flex justify-between items-center">
+                                <div>
+                                    <h3 className="text-lg font-bold text-foreground flex items-center gap-2">
+                                        <Sparkles className="h-5 w-5 text-amber-500 animate-pulse" />
+                                        Datos Extraídos con IA
+                                    </h3>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Revisá y corregí la información antes de guardarla.
+                                    </p>
+                                </div>
+                                <button 
+                                    type="button" 
+                                    onClick={() => { setOcrData(null); setScannedImage(null); }}
+                                    className="p-1.5 rounded-full hover:bg-white/10 text-muted-foreground hover:text-foreground transition-colors"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+
+                            {/* Fields list */}
+                            <div className="flex-1 overflow-y-auto p-6 space-y-4 max-h-[50vh] md:max-h-[55vh] scrollbar-thin">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Apellido</Label>
+                                        <Input 
+                                            value={ocrData.apellido || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, apellido: e.target.value })}
+                                            placeholder="Apellido"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Nombre</Label>
+                                        <Input 
+                                            value={ocrData.nombre || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, nombre: e.target.value })}
+                                            placeholder="Nombre"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">DNI</Label>
+                                        <Input 
+                                            value={ocrData.dni || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, dni: e.target.value })}
+                                            placeholder="DNI"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Fecha de Nacimiento</Label>
+                                        <Input 
+                                            value={ocrData.fecha_nacimiento || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, fecha_nacimiento: e.target.value })}
+                                            placeholder="DD/MM/AAAA"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Género</Label>
+                                        <GlassSelect
+                                            value={ocrData.genero || ''}
+                                            onChange={v => setOcrData({ ...ocrData, genero: v })}
+                                            options={[
+                                                { value: 'M', label: 'Masculino' },
+                                                { value: 'F', label: 'Femenino' },
+                                                { value: 'X', label: 'No binario' },
+                                                { value: '', label: 'No especificado' }
+                                            ]}
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Teléfono</Label>
+                                        <Input 
+                                            value={ocrData.telefono || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, telefono: e.target.value })}
+                                            placeholder="Teléfono"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Dirección</Label>
+                                        <Input 
+                                            value={ocrData.direccion || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, direccion: e.target.value })}
+                                            placeholder="Calle y Nro"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Ciudad</Label>
+                                        <Input 
+                                            value={ocrData.ciudad || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, ciudad: e.target.value })}
+                                            placeholder="Ciudad"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-3">
+                                    <div className="col-span-1 space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Obra Social</Label>
+                                        <Input 
+                                            value={ocrData.obra_social_id || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, obra_social_id: e.target.value })}
+                                            placeholder="Obra Social"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                    <div className="col-span-1 space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Plan</Label>
+                                        <Input 
+                                            value={ocrData.plan_obra_social || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, plan_obra_social: e.target.value })}
+                                            placeholder="Plan"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                    <div className="col-span-1 space-y-1">
+                                        <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Nº Afiliado</Label>
+                                        <Input 
+                                            value={ocrData.n_afiliado || ''} 
+                                            onChange={e => setOcrData({ ...ocrData, n_afiliado: e.target.value })}
+                                            placeholder="Nº Afiliado"
+                                            className="bg-black/10"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Alergias</Label>
+                                    <Input 
+                                        value={ocrData.alergias || ''} 
+                                        onChange={e => setOcrData({ ...ocrData, alergias: e.target.value })}
+                                        placeholder="Alergias encontradas..."
+                                        className="bg-black/10"
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Medicación Actual</Label>
+                                    <Input 
+                                        value={ocrData.medicacion_actual || ''} 
+                                        onChange={e => setOcrData({ ...ocrData, medicacion_actual: e.target.value })}
+                                        placeholder="Medicación actual..."
+                                        className="bg-black/10"
+                                    />
+                                </div>
+
+                                <div className="space-y-1">
+                                    <Label className="text-[10px] text-muted-foreground uppercase tracking-wider">Antecedentes</Label>
+                                    <Textarea 
+                                        value={ocrData.antecedentes || ''} 
+                                        onChange={e => setOcrData({ ...ocrData, antecedentes: e.target.value })}
+                                        placeholder="Antecedentes médicos..."
+                                        rows={2}
+                                        className="bg-black/10"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Modal Footer */}
+                            <div className="p-6 border-t border-white/10 flex gap-3 justify-end bg-black/10">
+                                <GlassButton 
+                                    type="button" 
+                                    variant="ghost" 
+                                    onClick={() => { setOcrData(null); setScannedImage(null); }}
+                                >
+                                    Descartar
+                                </GlassButton>
+                                <GlassButton 
+                                    type="button" 
+                                    onClick={() => handleConfirmOcr(ocrData)}
+                                    className="flex items-center gap-1.5"
+                                >
+                                    <Check className="h-4 w-4" />
+                                    Confirmar e Importar
+                                </GlassButton>
+                            </div>
+                        </div>
+                    </motion.div>
+                </div>
+            )}
         </form>
     )
 }
