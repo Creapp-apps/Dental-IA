@@ -175,7 +175,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                                 animate={{ scale: 1, opacity: 1, y: 0 }}
                                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
                                 transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                                className="relative w-full max-w-sm glass rounded-2xl shadow-2xl border border-primary/20 overflow-hidden flex flex-col"
+                                className="relative w-full max-w-sm bg-card text-card-foreground rounded-2xl shadow-2xl border border-primary/20 overflow-hidden flex flex-col"
                                 onClick={(e) => e.stopPropagation()}
                             >
                                 {/* Pulso animado de fondo */}

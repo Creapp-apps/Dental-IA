@@ -212,7 +212,7 @@ export function CobrosView({ cobros, filtroActual }: CobrosViewProps) {
             {pagoModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={() => setPagoModal(null)}>
                     <motion.div
-                        className="glass-strong rounded-2xl shadow-glass-xl p-6 w-full max-w-sm mx-4"
+                        className="bg-card text-card-foreground border border-border rounded-2xl shadow-glass-xl p-6 w-full max-w-sm mx-4"
                         initial={{ opacity: 0, scale: 0.95 }}
                         animate={{ opacity: 1, scale: 1 }}
                         onClick={e => e.stopPropagation()}

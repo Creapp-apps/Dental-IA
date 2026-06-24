@@ -531,7 +531,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                     <motion.div
                         initial={{ opacity: 0, scale: 0.95, y: 20 }}
                         animate={{ opacity: 1, scale: 1, y: 0 }}
-                        className="glass border border-white/10 dark:border-white/5 rounded-3xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col md:flex-row"
+                        className="bg-card text-card-foreground border border-border rounded-3xl w-full max-w-4xl max-h-[85vh] overflow-hidden shadow-2xl flex flex-col md:flex-row"
                     >
                         {/* Left Side: Scanned Card Preview */}
                         <div className="w-full md:w-1/2 bg-black/40 border-b md:border-b-0 md:border-r border-white/10 flex flex-col relative overflow-hidden h-[250px] md:h-auto min-h-[250px]">

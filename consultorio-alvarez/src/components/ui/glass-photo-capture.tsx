@@ -181,7 +181,7 @@ export function GlassPhotoCapture({ value, onChange, className }: GlassPhotoCapt
                                 initial={{ opacity: 0, scale: 0.95, y: 10 }}
                                 animate={{ opacity: 1, scale: 1, y: 0 }}
                                 exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                                className="relative w-full max-w-md bg-sidebar/95 supports-[backdrop-filter]:bg-sidebar/80 backdrop-blur-3xl border border-sidebar-border shadow-glass-xl rounded-3xl overflow-hidden flex flex-col z-50 p-6"
+                                className="relative w-full max-w-md bg-sidebar border border-sidebar-border shadow-glass-xl rounded-3xl overflow-hidden flex flex-col z-50 p-6"
                             >
                                 <button
                                     onClick={() => setIsOpen(false)}
