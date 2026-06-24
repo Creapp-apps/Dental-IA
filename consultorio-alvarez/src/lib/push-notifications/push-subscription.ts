@@ -3,7 +3,7 @@
 // ============================================================
 
 // Helper to convert VAPID Key to Uint8Array for browser push manager subscription
-function urlB64ToUint8Array(base64String: string) {
+export function urlB64ToUint8Array(base64String: string) {
     const padding = '='.repeat((4 - base64String.length % 4) % 4);
     const base64 = (base64String + padding)
         .replace(/\-/g, '+')
@@ -17,6 +17,7 @@ function urlB64ToUint8Array(base64String: string) {
     }
     return outputArray;
 }
+
 
 /**
  * Registra el Service Worker de notificaciones y devuelve el registro activo.

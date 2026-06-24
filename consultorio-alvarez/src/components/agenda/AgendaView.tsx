@@ -944,20 +944,26 @@ export function AgendaView({
                                         >
 
                                             {/* Appointments cards */}
-                                            {col.turnos.map((turno: any) => {
-                                                const { top, height } = getCardPosition(turno.fecha_inicio, turno.fecha_fin)
-                                                return (
-                                                    <TurnoCalendarCard
-                                                        key={turno.id}
-                                                        turno={turno}
-                                                        top={top}
-                                                        height={height}
-                                                        colorProf={col.colorProf || turno.profesional?.color_agenda}
-                                                        onSelect={() => setSelectedTurnoDetail(turno)}
-                                                        onDragEnd={() => setDraggedOverTime(null)}
-                                                    />
-                                                )
-                                            })}
+                                            {(() => {
+                                                const overlapStyles = calculateOverlappingStyle(col.turnos)
+                                                return col.turnos.map((turno: any) => {
+                                                    const { top, height } = getCardPosition(turno.fecha_inicio, turno.fecha_fin)
+                                                    const cardStyle = overlapStyles[turno.id] || { left: '4px', width: 'calc(100% - 8px)' }
+                                                    return (
+                                                        <TurnoCalendarCard
+                                                            key={turno.id}
+                                                            turno={turno}
+                                                            top={cardStyle.top !== undefined ? cardStyle.top : top}
+                                                            height={cardStyle.height !== undefined ? cardStyle.height : height}
+                                                            left={cardStyle.left}
+                                                            width={cardStyle.width}
+                                                            colorProf={col.colorProf || turno.profesional?.color_agenda}
+                                                            onSelect={() => setSelectedTurnoDetail(turno)}
+                                                            onDragEnd={() => setDraggedOverTime(null)}
+                                                        />
+                                                    )
+                                                })
+                                            })()}
 
                                             {/* Drag-over Time Tooltip */}
                                             {draggedOverTime && draggedOverTime.colIndex === colIdx && (
@@ -1071,6 +1077,85 @@ export function AgendaView({
 
 /* ──────────── Helper Components ──────────── */
 
+// Algoritmo estándar para calcular la superposición temporal y posicionar tarjetas en columnas laterales (como Google Calendar)
+function calculateOverlappingStyle(turnos: any[]) {
+    const sorted = [...turnos]
+        .filter(t => t.fecha_inicio && t.fecha_fin)
+        .sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime())
+
+    const styles: Record<string, { width: string; left: string; top?: number; height?: number }> = {}
+    if (sorted.length === 0) return styles
+
+    const clusters: any[][] = []
+    let currentCluster: any[] = []
+    let maxEnd = 0
+
+    for (const t of sorted) {
+        const start = new Date(t.fecha_inicio).getTime()
+        const end = new Date(t.fecha_fin).getTime()
+
+        if (currentCluster.length === 0) {
+            currentCluster.push(t)
+            maxEnd = end
+        } else if (start < maxEnd) {
+            currentCluster.push(t)
+            if (end > maxEnd) maxEnd = end
+        } else {
+            clusters.push(currentCluster)
+            currentCluster = [t]
+            maxEnd = end
+        }
+    }
+    if (currentCluster.length > 0) {
+        clusters.push(currentCluster)
+    }
+
+    for (const cluster of clusters) {
+        const columns: number[] = []
+        const eventCols: Record<string, number> = {}
+
+        let minTop = Infinity
+        let maxBottom = -Infinity
+
+        for (const t of cluster) {
+            const start = new Date(t.fecha_inicio).getTime()
+            const end = new Date(t.fecha_fin).getTime()
+
+            let colIndex = 0
+            while (colIndex < columns.length && columns[colIndex] > start) {
+                colIndex++
+            }
+
+            eventCols[t.id] = colIndex
+            columns[colIndex] = end
+
+            const pos = getCardPosition(t.fecha_inicio, t.fecha_fin)
+            if (pos.top < minTop) minTop = pos.top
+            const bottom = pos.top + pos.height
+            if (bottom > maxBottom) maxBottom = bottom
+        }
+
+        const totalCols = columns.length
+        const hasOverlap = totalCols > 1
+        const unifiedHeight = maxBottom - minTop
+
+        for (const t of cluster) {
+            const colIndex = eventCols[t.id]
+            const widthVal = 100 / totalCols
+            const leftVal = colIndex * widthVal
+
+            styles[t.id] = {
+                width: `calc(${widthVal}% - 4px)`,
+                left: `calc(${leftVal}% + 2px)`,
+                top: hasOverlap ? minTop : undefined,
+                height: hasOverlap ? unifiedHeight : undefined,
+            }
+        }
+    }
+
+    return styles
+}
+
 interface TurnoCalendarCardProps {
     turno: any
     top: number
@@ -1078,6 +1163,8 @@ interface TurnoCalendarCardProps {
     colorProf: string
     onSelect: () => void
     onDragEnd?: () => void
+    left?: string
+    width?: string
 }
 
 function TurnoCalendarCard({
@@ -1087,6 +1174,8 @@ function TurnoCalendarCard({
     colorProf,
     onSelect,
     onDragEnd,
+    left,
+    width,
 }: TurnoCalendarCardProps) {
     const estado = turno.estado as EstadoTurno
     const isST = turno.es_sobreturno === true
@@ -1111,12 +1200,14 @@ function TurnoCalendarCard({
             onDragEnd={onDragEnd}
             onClick={handleClick}
             className={cn(
-                "absolute left-1 right-1 rounded-lg border border-white/5 shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow select-none group",
+                "absolute rounded-lg border border-white/5 shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow select-none group",
                 height < 50 ? "py-1 px-1.5 flex items-center justify-between" : "p-2"
             )}
             style={{
                 top: `${top}px`,
                 height: `${height}px`,
+                left: left || '4px',
+                width: width || 'calc(100% - 8px)',
                 borderLeft: `3px solid ${borderLeftColor}`,
                 backgroundColor: bgColor,
             }}

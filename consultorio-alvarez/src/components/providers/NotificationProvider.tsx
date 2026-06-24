@@ -30,6 +30,48 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const router = useRouter()
 
     useEffect(() => {
+        async function syncPush() {
+            if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('Notification' in window)) {
+                return
+            }
+
+            // Sincronizar automáticamente en segundo plano si el permiso ya fue otorgado
+            if (Notification.permission === 'granted') {
+                try {
+                    const { registerServiceWorker, urlB64ToUint8Array } = await import('@/lib/push-notifications/push-subscription')
+                    const { registrarSuscripcionPush } = await import('@/lib/actions/push')
+
+                    const registration = await registerServiceWorker()
+                    if (!registration || !registration.pushManager) return
+
+                    let sub = await registration.pushManager.getSubscription()
+                    const publicKeyB64 = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+
+                    // Si no hay una suscripción activa pero el permiso está concedido,
+                    // renovamos silenciosamente la suscripción sin molestar al usuario
+                    if (!sub && publicKeyB64) {
+                        console.log('[PUSH SYNC] Permiso concedido pero sin suscripción activa. Renovando token en segundo plano...')
+                        const applicationServerKey = urlB64ToUint8Array(publicKeyB64)
+                        sub = await registration.pushManager.subscribe({
+                            userVisibleOnly: true,
+                            applicationServerKey: applicationServerKey
+                        })
+                    }
+
+                    if (sub) {
+                        await registrarSuscripcionPush(sub.toJSON())
+                        console.log('[PUSH SYNC] Suscripción push sincronizada con éxito.')
+                    }
+                } catch (err) {
+                    console.error('[PUSH SYNC] Error al sincronizar notificaciones push:', err)
+                }
+            }
+        }
+
+        syncPush()
+    }, [])
+
+    useEffect(() => {
         setMounted(true)
         let isMounted = true
 
