@@ -68,6 +68,50 @@ const sectionVariants = {
     }),
 }
 
+// Client-side image compression to speed up upload times and respect payload limits
+function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 0.85): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.readAsDataURL(file)
+        reader.onload = (event) => {
+            const img = new Image()
+            img.src = event.target?.result as string
+            img.onload = () => {
+                const canvas = document.createElement('canvas')
+                let width = img.width
+                let height = img.height
+
+                if (width > height) {
+                    if (width > maxWidth) {
+                        height = Math.round((height * maxWidth) / width)
+                        width = maxWidth
+                    }
+                } else {
+                    if (height > maxHeight) {
+                        width = Math.round((width * maxHeight) / height)
+                        height = maxHeight
+                    }
+                }
+
+                canvas.width = width
+                canvas.height = height
+
+                const ctx = canvas.getContext('2d')
+                if (!ctx) {
+                    resolve(event.target?.result as string)
+                    return
+                }
+
+                ctx.drawImage(img, 0, 0, width, height)
+                const dataUrl = canvas.toDataURL('image/jpeg', quality)
+                resolve(dataUrl)
+            }
+            img.onerror = (err) => reject(err)
+        }
+        reader.onerror = (err) => reject(err)
+    })
+}
+
 export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: any[], paciente?: any }) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
@@ -101,40 +145,37 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
         } : { genero: '', obra_social_id: '' },
     })
 
-    function handleOcrFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    async function handleOcrFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0]
         if (!file) return
 
         setIsOcrPending(true)
-        const reader = new FileReader()
-        reader.onloadend = async () => {
-            const base64 = reader.result as string
-            setScannedImage(base64)
-            try {
-                const res = await processPatientCardOcr(base64)
-                if (res.success && res.data) {
-                    setOcrData(res.data)
-                    glassAlert.success({ 
-                        title: 'Ficha digitalizada', 
-                        description: 'Verificá los datos extraídos antes de confirmar.' 
-                    })
-                } else {
-                    glassAlert.error({ 
-                        title: 'Error al escanear', 
-                        description: res.error || 'No se pudieron extraer datos de la imagen.' 
-                    })
-                }
-            } catch (err: any) {
-                glassAlert.error({ 
-                    title: 'Error de conexión', 
-                    description: err.message || 'Error al procesar la imagen.' 
+        try {
+            const compressedBase64 = await compressImage(file)
+            setScannedImage(compressedBase64)
+            
+            const res = await processPatientCardOcr(compressedBase64)
+            if (res.success && res.data) {
+                setOcrData(res.data)
+                glassAlert.success({ 
+                    title: 'Ficha digitalizada', 
+                    description: 'Verificá los datos extraídos antes de confirmar.' 
                 })
-            } finally {
-                setIsOcrPending(false)
-                e.target.value = ''
+            } else {
+                glassAlert.error({ 
+                    title: 'Error al escanear', 
+                    description: res.error || 'No se pudieron extraer datos de la imagen.' 
+                })
             }
+        } catch (err: any) {
+            glassAlert.error({ 
+                title: 'Error de conexión', 
+                description: err.message || 'Error al procesar la imagen.' 
+            })
+        } finally {
+            setIsOcrPending(false)
+            e.target.value = ''
         }
-        reader.readAsDataURL(file)
     }
 
     function handleConfirmOcr(confirmedData: any) {
