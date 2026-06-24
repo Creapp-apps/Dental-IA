@@ -120,6 +120,7 @@ export function NuevoTurnoModal({
     const [showResults, setShowResults] = useState(false)
     const [esSobreturno, setEsSobreturno] = useState(false)
     const [ocupacion, setOcupacion] = useState<{fecha_inicio: string, fecha_fin: string}[]>([])
+    const [extraMinutes, setExtraMinutes] = useState(0)
 
     // Quick add patient states
     const [modoNuevoPaciente, setModoNuevoPaciente] = useState(false)
@@ -146,6 +147,12 @@ export function NuevoTurnoModal({
                 setNotas(turnoAEditar.notas || '')
                 setPrioridad(turnoAEditar.prioridad_override || '')
                 setEsSobreturno(turnoAEditar.es_sobreturno || false)
+
+                // Calcular minutos extra originales
+                const duracionOriginal = (new Date(turnoAEditar.fecha_fin).getTime() - new Date(turnoAEditar.fecha_inicio).getTime()) / 60000
+                const tratOriginal = tiposTratamiento.find((t: any) => String(t.id) === String(turnoAEditar.tipo_tratamiento_id))
+                const baseMin = turnoAEditar.es_sobreturno ? 15 : (tratOriginal?.duracion_minutos || 0)
+                setExtraMinutes(Math.max(0, duracionOriginal - baseMin))
             } else {
                 setProfId(defaultProfesionalId || (profesionales[0]?.id ?? ''))
                 setFecha(defaultFecha || format(new Date(), 'yyyy-MM-dd'))
@@ -156,9 +163,10 @@ export function NuevoTurnoModal({
                 setNotas('')
                 setPrioridad('')
                 setEsSobreturno(false)
+                setExtraMinutes(0)
             }
         }
-    }, [open, defaultProfesionalId, defaultFecha, defaultHora, profesionales, turnoAEditar])
+    }, [open, defaultProfesionalId, defaultFecha, defaultHora, profesionales, turnoAEditar, tiposTratamiento])
 
     useEffect(() => {
         if (open && profId && fecha) {
@@ -191,17 +199,20 @@ export function NuevoTurnoModal({
         })
     }
 
-    // Auto-select 'Chequeo de rutina' treatment when sobreturno is toggled
+    // Auto-select 'Consulta' treatment when sobreturno is toggled
     function toggleSobreturno() {
         const next = !esSobreturno
         setEsSobreturno(next)
         if (next) {
+            const consulta = tiposTratamiento.find((t: any) =>
+                t.nombre.toLowerCase().includes('consulta')
+            )
             const chequeo = tiposTratamiento.find((t: any) =>
                 t.nombre.toLowerCase().includes('chequeo') || 
                 t.nombre.toLowerCase().includes('control') ||
                 t.nombre.toLowerCase().includes('revis')
             )
-            const selectedTrat = chequeo || tiposTratamiento[0]
+            const selectedTrat = consulta || chequeo || tiposTratamiento[0]
             if (selectedTrat) setTratId(selectedTrat.id)
             setPrioridad('BAJA')
         } else {
@@ -272,7 +283,7 @@ export function NuevoTurnoModal({
         }
 
         const fechaInicio = new Date(`${fecha}T${horaFormateada}:00`)
-        const duracion = esSobreturno ? 15 : trat.duracion_minutos
+        const duracion = (esSobreturno ? 15 : trat.duracion_minutos) + extraMinutes
         const fechaFin = new Date(fechaInicio.getTime() + duracion * 60000)
 
         startTransition(async () => {
@@ -554,6 +565,39 @@ export function NuevoTurnoModal({
                                     options={tiposTratamiento.map(t => ({ value: t.id, label: `${t.nombre} (${t.duracion_minutos}m)` }))}
                                 />
                             )}
+                        </div>
+                    </div>
+
+                    {/* Controles de Minutos Extra (+20 Min) */}
+                    <div className="flex items-center justify-between bg-white/[0.03] p-3 rounded-lg border border-white/5 mt-1">
+                        <div className="flex flex-col">
+                            <span className="text-xs font-semibold text-slate-300">Duración del Turno</span>
+                            <span className="text-xs text-slate-400">
+                                {esSobreturno ? 15 : (tiposTratamiento.find((t: any) => String(t.id) === String(tratId))?.duracion_minutos || 0)} min
+                                {extraMinutes > 0 && <span className="text-amber-400 font-bold ml-1">+{extraMinutes} min extra</span>}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            {extraMinutes > 0 && (
+                                <GlassButton
+                                    type="button"
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 text-xs text-slate-400 hover:text-white"
+                                    onClick={() => setExtraMinutes(0)}
+                                >
+                                    Restablecer
+                                </GlassButton>
+                            )}
+                            <GlassButton
+                                type="button"
+                                size="sm"
+                                variant="glass"
+                                className="h-7 text-xs border border-amber-500/20 text-amber-400 hover:bg-amber-500/10"
+                                onClick={() => setExtraMinutes(prev => prev + 20)}
+                            >
+                                +20 min
+                            </GlassButton>
                         </div>
                     </div>
 

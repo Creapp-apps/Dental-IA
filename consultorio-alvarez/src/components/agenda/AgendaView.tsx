@@ -586,6 +586,41 @@ export function AgendaView({
         setConfirmDeleteId(id)
     }
 
+    function handleExtend20Minutes(turnoId: string) {
+        const targetTurno = turnos.find(t => t.id === turnoId)
+        if (!targetTurno) return
+
+        const currentEnd = new Date(targetTurno.fecha_fin)
+        const newEnd = new Date(currentEnd.getTime() + 20 * 60 * 1000)
+
+        // Optimistic update: extend card immediately in UI
+        setTurnos((prev: any[]) => prev.map(t => t.id === turnoId ? { ...t, fecha_fin: newEnd.toISOString() } : t))
+        setSelectedTurnoDetail((prev: any) => prev && prev.id === turnoId ? { ...prev, fecha_fin: newEnd.toISOString() } : prev)
+
+        startTransition(async () => {
+            const { editarTurno } = await import('@/lib/actions/turnos')
+            const res = await editarTurno(turnoId, {
+                paciente_id: targetTurno.paciente_id,
+                profesional_id: targetTurno.profesional_id,
+                tipo_tratamiento_id: targetTurno.tipo_tratamiento_id,
+                fecha_inicio: targetTurno.fecha_inicio,
+                fecha_fin: newEnd.toISOString(),
+                notas: targetTurno.notas,
+                prioridad_override: targetTurno.prioridad_override,
+                es_sobreturno: targetTurno.es_sobreturno,
+            })
+
+            if (res.error) {
+                // Revert optimistic update
+                setTurnos((prev: any[]) => prev.map(t => t.id === turnoId ? { ...t, fecha_fin: currentEnd.toISOString() } : t))
+                setSelectedTurnoDetail((prev: any) => prev && prev.id === turnoId ? { ...prev, fecha_fin: currentEnd.toISOString() } : prev)
+                glassAlert.error({ title: 'Error al extender turno', description: res.error })
+            } else {
+                glassAlert.success({ title: 'Turno extendido', description: '+20 minutos agregados con éxito.' })
+            }
+        })
+    }
+
     function onConfirmDelete() {
         if (!confirmDeleteId) return
         const targetId = confirmDeleteId
@@ -1070,6 +1105,7 @@ export function AgendaView({
                 onDelete={handleDeleteTurno}
                 onNotifyDelay={(t) => setTurnoADemorar(t)}
                 isPending={isPending}
+                onAdd20Minutes={handleExtend20Minutes}
             />
         </div>
     )
@@ -1129,10 +1165,23 @@ function calculateOverlappingStyle(turnos: any[]) {
             eventCols[t.id] = colIndex
             columns[colIndex] = end
 
-            const pos = getCardPosition(t.fecha_inicio, t.fecha_fin)
-            if (pos.top < minTop) minTop = pos.top
-            const bottom = pos.top + pos.height
-            if (bottom > maxBottom) maxBottom = bottom
+            // Solo calcular minTop y maxBottom usando turnos que NO son sobreturnos para evitar que estiren el grupo
+            if (t.es_sobreturno !== true) {
+                const pos = getCardPosition(t.fecha_inicio, t.fecha_fin)
+                if (pos.top < minTop) minTop = pos.top
+                const bottom = pos.top + pos.height
+                if (bottom > maxBottom) maxBottom = bottom
+            }
+        }
+
+        if (minTop === Infinity) {
+            // Si el cluster contiene solo sobreturnos
+            for (const t of cluster) {
+                const pos = getCardPosition(t.fecha_inicio, t.fecha_fin)
+                if (pos.top < minTop) minTop = pos.top
+                const bottom = pos.top + pos.height
+                if (bottom > maxBottom) maxBottom = bottom
+            }
         }
 
         const totalCols = columns.length
@@ -1143,12 +1192,13 @@ function calculateOverlappingStyle(turnos: any[]) {
             const colIndex = eventCols[t.id]
             const widthVal = 100 / totalCols
             const leftVal = colIndex * widthVal
+            const isST = t.es_sobreturno === true
 
             styles[t.id] = {
                 width: `calc(${widthVal}% - 4px)`,
                 left: `calc(${leftVal}% + 2px)`,
-                top: hasOverlap ? minTop : undefined,
-                height: hasOverlap ? unifiedHeight : undefined,
+                top: isST ? getCardPosition(t.fecha_inicio, t.fecha_fin).top : (hasOverlap ? minTop : undefined),
+                height: isST ? getCardPosition(t.fecha_inicio, t.fecha_fin).height : (hasOverlap ? unifiedHeight : undefined),
             }
         }
     }
@@ -1190,8 +1240,8 @@ function TurnoCalendarCard({
         onSelect()
     }
 
-    const borderLeftColor = isST ? '#f59e0b' : (turno.tipo_tratamiento?.color ?? colorProf)
-    const bgColor = `${isST ? '#f59e0b' : (turno.tipo_tratamiento?.color ?? colorProf)}20`
+    const borderLeftColor = isST ? '#ef4444' : (turno.tipo_tratamiento?.color ?? colorProf)
+    const bgColor = isST ? 'rgba(239, 68, 68, 0.15)' : `${turno.tipo_tratamiento?.color ?? colorProf}20`
     
     return (
         <motion.div
@@ -1200,7 +1250,8 @@ function TurnoCalendarCard({
             onDragEnd={onDragEnd}
             onClick={handleClick}
             className={cn(
-                "absolute rounded-lg border border-white/5 shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow select-none group",
+                "absolute rounded-lg shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow select-none group",
+                isST ? "border border-red-500/30 animate-pulse-subtle" : "border border-white/5",
                 height < 50 ? "py-1 px-1.5 flex items-center justify-between" : "p-2"
             )}
             style={{
@@ -1221,7 +1272,7 @@ function TurnoCalendarCard({
                         <span className="text-[10px] font-bold text-foreground truncate">
                             {format(parseISO(turno.fecha_inicio), 'HH:mm')} {turno.paciente?.apellido}, {turno.paciente?.nombre?.charAt(0)}.
                         </span>
-                        {isST && <span className="text-[8px] bg-amber-500/20 text-amber-500 font-bold px-0.5 rounded leading-none">ST</span>}
+                        {isST && <span className="text-[8px] bg-red-500/20 text-red-400 font-bold px-0.5 rounded leading-none">ST</span>}
                     </div>
                     <div className="shrink-0 flex items-center scale-75 origin-right">
                         <StatusBadge status={estado} />
@@ -1246,7 +1297,7 @@ function TurnoCalendarCard({
                         </p>
                     </div>
                     {isST && (
-                        <div className="w-fit text-[8px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-500 border border-amber-500/25 rounded px-1 leading-none mt-1">
+                        <div className="w-fit text-[8px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 border border-red-500/25 rounded px-1 leading-none mt-1">
                             Sobreturno
                         </div>
                     )}
@@ -1318,6 +1369,7 @@ interface TurnoDetailModalProps {
     onDelete: (id: string) => void
     onNotifyDelay: (turno: any) => void
     isPending: boolean
+    onAdd20Minutes?: (id: string) => void
 }
 
 function TurnoDetailModal({
@@ -1329,6 +1381,7 @@ function TurnoDetailModal({
     onDelete,
     onNotifyDelay,
     isPending,
+    onAdd20Minutes,
 }: TurnoDetailModalProps) {
     if (!turno) return null
     const estado = turno.estado as EstadoTurno
@@ -1431,6 +1484,13 @@ function TurnoDetailModal({
                             <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border border-white/15 hover:bg-white/10 text-slate-200"
                                 onClick={() => { onCambiarEstado(turno.id, 'PENDIENTE'); onOpenChange(false); }} disabled={isPending}>
                                 Revertir a pendiente
+                            </GlassButton>
+                        )}
+                        {!['ATENDIDO', 'CANCELADO', 'AUSENTE'].includes(estado) && (
+                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border border-amber-500/20 hover:border-amber-500/50 hover:bg-amber-500/10 text-amber-400"
+                                onClick={() => { onAdd20Minutes?.(turno.id); }} disabled={isPending}>
+                                <Clock className="h-3.5 w-3.5 mr-1" />
+                                +20 Min
                             </GlassButton>
                         )}
                         {turno.paciente?.telefono && (
