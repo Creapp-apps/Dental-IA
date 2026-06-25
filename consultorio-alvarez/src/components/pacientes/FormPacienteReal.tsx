@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { motion } from 'framer-motion'
+import { motion, AnimatePresence } from 'framer-motion'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -119,6 +119,27 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     const [ocrData, setOcrData] = useState<any>(null)
     const [scannedImage, setScannedImage] = useState<string | null>(null)
     const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+    const [ocrStep, setOcrStep] = useState(0)
+    const ocrSteps = [
+        "Iniciando digitalización inteligente...",
+        "Mejorando contraste de la imagen...",
+        "Analizando estructura del documento...",
+        "Dental IA: Extrayendo DNI y datos personales...",
+        "Dental IA: Reconociendo obra social y plan...",
+        "Dental IA: Validando números de contacto...",
+        "Casi listo: Organizando ficha médica..."
+    ]
+
+    useEffect(() => {
+        let interval: any
+        if (isOcrPending) {
+            setOcrStep(0)
+            interval = setInterval(() => {
+                setOcrStep(prev => (prev + 1) % ocrSteps.length)
+            }, 1800)
+        }
+        return () => clearInterval(interval)
+    }, [isOcrPending])
 
     function resetOcr() {
         setOcrData(null)
@@ -758,6 +779,94 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                     </motion.div>
                 </div>
             )}
+
+            {/* Modal de Carga para Digitalización / OCR */}
+            <AnimatePresence>
+                {isOcrPending && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 15 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95, y: 15 }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                            className="w-full max-w-sm glass border border-white/10 p-6 rounded-2xl shadow-glass flex flex-col items-center text-center space-y-6 relative overflow-hidden"
+                            style={{ background: 'rgba(15, 23, 42, 0.85)' }}
+                        >
+                            {/* Fondo decorativo con luces */}
+                            <div className="absolute -top-12 -left-12 w-24 h-24 bg-primary/20 rounded-full blur-xl pointer-events-none" />
+                            <div className="absolute -bottom-12 -right-12 w-24 h-24 bg-purple-500/20 rounded-full blur-xl pointer-events-none" />
+
+                            {/* Cabecera del Escaneo */}
+                            <div className="space-y-1">
+                                <div className="flex items-center justify-center gap-2 text-primary">
+                                    <Sparkles className="h-5 w-5 text-amber-400 animate-pulse" />
+                                    <span className="text-sm font-semibold tracking-wider uppercase text-slate-200">Dental IA</span>
+                                </div>
+                                <h3 className="text-lg font-bold text-white">Digitalizando Ficha</h3>
+                                <p className="text-xs text-slate-400">Procesando imagen del paciente</p>
+                            </div>
+
+                            {/* Contenedor de la Imagen con Efecto Laser */}
+                            <div className="relative w-56 h-36 bg-slate-950/80 border border-white/5 rounded-xl overflow-hidden flex items-center justify-center shadow-inner">
+                                {previewUrl ? (
+                                    <img
+                                        src={previewUrl}
+                                        alt="Ficha digitalizada"
+                                        className="w-full h-full object-cover opacity-60 grayscale contrast-125"
+                                    />
+                                ) : (
+                                    <div className="flex flex-col items-center gap-2 opacity-50">
+                                        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                        <span className="text-[10px] uppercase tracking-wider text-slate-400">Cargando archivo...</span>
+                                    </div>
+                                )}
+                                
+                                {/* Overlay gradiente para el escaneo */}
+                                <div className="absolute inset-0 bg-gradient-to-b from-transparent via-primary/5 to-transparent pointer-events-none" />
+                                
+                                {/* Línea láser animada */}
+                                <motion.div
+                                    className="absolute left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_8px_#22d3ee,0_0_15px_#06b6d4] z-10"
+                                    animate={{ top: ['0%', '100%', '0%'] }}
+                                    transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+                                />
+                            </div>
+
+                            {/* Pasos y Barra de progreso */}
+                            <div className="w-full space-y-3">
+                                <div className="h-5 flex items-center justify-center">
+                                    <AnimatePresence mode="wait">
+                                        <motion.span
+                                            key={ocrStep}
+                                            initial={{ opacity: 0, y: 5 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -5 }}
+                                            transition={{ duration: 0.2 }}
+                                            className="text-sm font-medium text-slate-200"
+                                        >
+                                            {ocrSteps[ocrStep]}
+                                        </motion.span>
+                                    </AnimatePresence>
+                                </div>
+                                
+                                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                                    <motion.div
+                                        className="h-full bg-gradient-to-r from-primary via-cyan-400 to-purple-500 rounded-full"
+                                        initial={{ width: '0%' }}
+                                        animate={{ width: '100%' }}
+                                        transition={{ duration: 15, ease: 'easeOut' }}
+                                    />
+                                </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </form>
     )
 }
