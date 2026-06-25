@@ -188,6 +188,36 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
         } : { genero: '', obra_social_id: '' },
     })
 
+    async function runOcrProcessing(base64Image: string) {
+        setIsOcrPending(true)
+        try {
+            console.log('Invocando Server Action processPatientCardOcr...')
+            const res = await processPatientCardOcr(base64Image)
+            console.log('Respuesta del servidor:', res)
+
+            if (res.success && res.data) {
+                setOcrData(res.data)
+                glassAlert.success({ 
+                    title: 'Ficha digitalizada', 
+                    description: 'Verificá los datos extraídos antes de confirmar.' 
+                })
+            } else {
+                setGeminiErrorModal({
+                    isOpen: true,
+                    message: res.error || 'No se pudieron extraer datos de la imagen.'
+                })
+            }
+        } catch (err: any) {
+            console.error('Error detallado en runOcrProcessing:', err)
+            setGeminiErrorModal({
+                isOpen: true,
+                message: err.message || 'Error al procesar la imagen.'
+            })
+        } finally {
+            setIsOcrPending(false)
+        }
+    }
+
     async function handleOcrFileChange(e: React.ChangeEvent<HTMLInputElement>) {
         const file = e.target.files?.[0]
         if (!file) return
@@ -212,24 +242,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             }
 
             setScannedImage(compressedBase64)
-            
-            console.log('Invocando Server Action processPatientCardOcr...')
-            const res = await processPatientCardOcr(compressedBase64)
-            console.log('Respuesta del servidor:', res)
-
-            if (res.success && res.data) {
-                setOcrData(res.data)
-                glassAlert.success({ 
-                    title: 'Ficha digitalizada', 
-                    description: 'Verificá los datos extraídos antes de confirmar.' 
-                })
-            } else {
-                // Mostrar modal de error flotante central ante fallos de escaneo
-                setGeminiErrorModal({
-                    isOpen: true,
-                    message: res.error || 'No se pudieron extraer datos de la imagen.'
-                })
-            }
+            await runOcrProcessing(compressedBase64)
         } catch (err: any) {
             console.error('Error detallado en handleOcrFileChange:', err)
             setGeminiErrorModal({
@@ -947,30 +960,44 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                             </div>
 
                             {/* Botones de acción */}
-                            <div className="flex flex-col sm:flex-row gap-3 w-full pt-2">
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setGeminiErrorModal({ isOpen: false, message: '' })
-                                        resetOcr()
-                                    }}
-                                    className="flex-1 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/5 transition-all shadow-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                                >
-                                    Completar Manualmente
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => {
-                                        setGeminiErrorModal({ isOpen: false, message: '' })
-                                        resetOcr()
-                                        // Simular click en el input file para reintentar con otro archivo
-                                        document.getElementById('ocr-file-upload')?.click()
-                                    }}
-                                    className="flex-1 px-4 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold transition-all shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
-                                >
-                                    <Sparkles className="h-3.5 w-3.5" />
-                                    Reintentar escaneo
-                                </button>
+                            <div className="flex flex-col gap-2.5 w-full pt-2">
+                                {scannedImage && (
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setGeminiErrorModal({ isOpen: false, message: '' })
+                                            runOcrProcessing(scannedImage)
+                                        }}
+                                        className="w-full px-4 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-cyan-500 to-primary hover:from-cyan-600 hover:to-primary/90 text-slate-950 transition-all shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+                                    >
+                                        <Sparkles className="h-3.5 w-3.5 animate-pulse" />
+                                        Reintentar con la misma foto
+                                    </button>
+                                )}
+                                <div className="flex gap-2.5 w-full">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setGeminiErrorModal({ isOpen: false, message: '' })
+                                            resetOcr()
+                                        }}
+                                        className="flex-1 px-3 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/5 transition-all shadow-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                                    >
+                                        Completar Manualmente
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setGeminiErrorModal({ isOpen: false, message: '' })
+                                            resetOcr()
+                                            // Simular click en el input file para reintentar con otro archivo
+                                            document.getElementById('ocr-file-upload')?.click()
+                                        }}
+                                        className="flex-1 px-3 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/5 transition-all shadow-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+                                    >
+                                        Subir otra foto
+                                    </button>
+                                </div>
                             </div>
                         </motion.div>
                     </motion.div>
