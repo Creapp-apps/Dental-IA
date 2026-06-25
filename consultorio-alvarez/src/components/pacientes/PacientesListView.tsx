@@ -138,12 +138,13 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                         {filteredPacientes.length} paciente{filteredPacientes.length !== 1 ? 's' : ''} {activeQuery ? 'encontrados' : 'registrados'}
                     </p>
                 </div>
-                <GlassButton asChild className="w-full sm:w-auto shrink-0">
-                    <Link href="/pacientes/nuevo">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Nuevo paciente
-                    </Link>
-                </GlassButton>
+                <Link
+                    href="/pacientes/nuevo"
+                    className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold h-10 px-5 bg-primary text-primary-foreground cursor-pointer select-none active:opacity-90 transition-none"
+                >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nuevo paciente
+                </Link>
             </div>
 
             {/* Search */}
