@@ -14,7 +14,7 @@ import { GlassSelect } from '@/components/ui/glass-select'
 import { GlassPhotoCapture } from '@/components/ui/glass-photo-capture'
 import { crearPaciente, actualizarPaciente } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
-import { Sparkles, Loader2, Check, X } from 'lucide-react'
+import { Sparkles, Loader2, Check, X, FileText, FileImage } from 'lucide-react'
 import { processPatientCardOcr } from '@/lib/actions/ocr'
 
 const schema = z.object({
@@ -118,6 +118,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     const [isOcrPending, setIsOcrPending] = useState(false)
     const [ocrData, setOcrData] = useState<any>(null)
     const [scannedImage, setScannedImage] = useState<string | null>(null)
+    const [scannedImageError, setScannedImageError] = useState(false)
     const [ocrStep, setOcrStep] = useState(0)
     const ocrSteps = [
         "Iniciando digitalización inteligente...",
@@ -143,6 +144,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     function resetOcr() {
         setOcrData(null)
         setScannedImage(null)
+        setScannedImageError(false)
     }
 
     const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
@@ -176,6 +178,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
         if (!file) return
 
         setIsOcrPending(true)
+        setScannedImageError(false)
         try {
             console.log('Iniciando procesamiento de archivo:', file.name, 'de tamaño:', file.size, 'bytes')
             let compressedBase64 = ''
@@ -537,18 +540,37 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                                 </span>
                                 Ficha Escaneada
                             </div>
-                            {scannedImage ? (
+                            {scannedImage && !scannedImageError && !scannedImage.startsWith('data:application/pdf') ? (
                                 <div className="flex-1 relative flex items-center justify-center p-6 select-none group">
                                     <img 
                                         src={scannedImage} 
                                         alt="Ficha de Paciente" 
                                         className="max-w-full max-h-[450px] object-contain rounded-lg shadow-lg border border-white/10" 
+                                        onError={() => setScannedImageError(true)}
                                     />
                                     {/* Laser scanning line effect */}
                                     <div 
                                         className="absolute left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent opacity-80 pointer-events-none" 
                                         style={{ animation: 'scan-loop 2.5s ease-in-out infinite' }}
                                     />
+                                </div>
+                            ) : scannedImage ? (
+                                <div className="flex-1 flex flex-col items-center justify-center p-8 text-center gap-4 bg-slate-900/10">
+                                    <div className="w-20 h-20 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center shadow-lg animate-pulse">
+                                        {scannedImage.startsWith('data:application/pdf') ? (
+                                            <FileText className="h-10 w-10 text-primary" />
+                                        ) : (
+                                            <FileImage className="h-10 w-10 text-primary" />
+                                        )}
+                                    </div>
+                                    <div className="space-y-1">
+                                        <h4 className="text-sm font-bold text-foreground">
+                                            {scannedImage.startsWith('data:application/pdf') ? 'Documento PDF Digitalizado' : 'Ficha Técnica Procesada'}
+                                        </h4>
+                                        <p className="text-xs text-muted-foreground max-w-[280px]">
+                                            Los datos fueron leídos correctamente por la inteligencia artificial.
+                                        </p>
+                                    </div>
                                 </div>
                             ) : (
                                 <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
@@ -787,16 +809,37 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
 
                             {/* Contenedor de la Imagen con Efecto Laser */}
                             <div className="relative w-56 h-36 bg-slate-950/80 border border-white/5 rounded-xl overflow-hidden flex items-center justify-center shadow-inner">
-                                {scannedImage ? (
+                                {scannedImage && !scannedImageError && !scannedImage.startsWith('data:application/pdf') ? (
                                     <img
                                         src={scannedImage}
                                         alt="Ficha digitalizada"
                                         className="w-full h-full object-cover opacity-60 grayscale contrast-125"
+                                        onError={() => setScannedImageError(true)}
                                     />
+                                ) : scannedImage ? (
+                                    <div className="flex flex-col items-center gap-3 text-slate-400 z-10">
+                                        <div className="relative flex items-center justify-center">
+                                            {/* Glowing ripple effects */}
+                                            <span className="absolute inline-flex h-12 w-12 rounded-full bg-primary/10 animate-ping opacity-75"></span>
+                                            <span className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-primary/20 border border-primary/30 shadow-md">
+                                                {scannedImage.startsWith('data:application/pdf') ? (
+                                                    <FileText className="h-5 w-5 text-primary" />
+                                                ) : (
+                                                    <FileImage className="h-5 w-5 text-primary" />
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="text-center">
+                                            <span className="text-[10px] uppercase tracking-wider font-bold text-slate-300 block">
+                                                {scannedImage.startsWith('data:application/pdf') ? 'Ficha PDF' : 'Imagen de Ficha'}
+                                            </span>
+                                            <span className="text-[9px] text-slate-500 block mt-0.5">Analizando documento...</span>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <div className="flex flex-col items-center gap-2 opacity-50">
                                         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                        <span className="text-[10px] uppercase tracking-wider text-slate-400">Cargando archivo...</span>
+                                        <span className="text-[10px] uppercase tracking-wider text-slate-400">Procesando archivo...</span>
                                     </div>
                                 )}
                                 
