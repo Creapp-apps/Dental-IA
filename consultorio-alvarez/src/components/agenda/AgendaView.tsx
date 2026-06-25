@@ -1540,10 +1540,9 @@ function TurnoDetailModal({
                     <div class="divider"></div>
                     
                     <div class="footer-msg">
-                        Por favor conserve este comprobante.<br>
-                        Si necesita reprogramar o cancelar, por favor<br>
-                        comuníquese con anticipación.<br>
-                        ¡Gracias por confiar en nosotros!
+                        Recuerde que podrá autogestionar su turno<br>
+                        desde nuestra nueva web:<br>
+                        <strong>www.dentalva.ar</strong>!
                     </div>
                     
                     <script>
