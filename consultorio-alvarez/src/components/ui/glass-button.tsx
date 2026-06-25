@@ -4,10 +4,9 @@ import { forwardRef } from 'react'
 import { Slot } from '@radix-ui/react-slot'
 import { cva, type VariantProps } from 'class-variance-authority'
 import { cn } from '@/lib/utils'
-import { motion, type HTMLMotionProps } from 'framer-motion'
 
 const glassButtonVariants = cva(
-    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none',
+    'inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 cursor-pointer select-none active:scale-[0.97] hover:scale-[1.02] active:opacity-95 transform-gpu',
     {
         variants: {
             variant: {
@@ -44,22 +43,11 @@ const glassButtonVariants = cva(
     }
 )
 
-const motionConfig = {
-    whileHover: { scale: 1.02 },
-    whileTap: { scale: 0.97 },
-    transition: {
-        type: 'spring' as const,
-        stiffness: 400,
-        damping: 17,
-    },
-}
-
 export interface GlassButtonProps
-    extends Omit<HTMLMotionProps<'button'>, 'children'>,
+    extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof glassButtonVariants> {
     asChild?: boolean
     loading?: boolean
-    children?: React.ReactNode
 }
 
 const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
@@ -77,11 +65,10 @@ const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
         }
 
         return (
-            <motion.button
+            <button
                 className={cn(glassButtonVariants({ variant, size, className }))}
                 ref={ref}
                 disabled={disabled || loading}
-                {...motionConfig}
                 {...props}
             >
                 {loading ? (
@@ -92,7 +79,7 @@ const GlassButton = forwardRef<HTMLButtonElement, GlassButtonProps>(
                 ) : (
                     children
                 )}
-            </motion.button>
+            </button>
         )
     }
 )
