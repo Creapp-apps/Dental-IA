@@ -14,7 +14,7 @@ import { GlassSelect } from '@/components/ui/glass-select'
 import { GlassPhotoCapture } from '@/components/ui/glass-photo-capture'
 import { crearPaciente, actualizarPaciente } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
-import { Sparkles, Loader2, Check, X, FileText, FileImage } from 'lucide-react'
+import { Sparkles, Loader2, Check, X, FileText, FileImage, AlertTriangle } from 'lucide-react'
 import { processPatientCardOcr } from '@/lib/actions/ocr'
 
 const schema = z.object({
@@ -117,6 +117,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     const [isPending, startTransition] = useTransition()
     const [isOcrPending, setIsOcrPending] = useState(false)
     const [ocrData, setOcrData] = useState<any>(null)
+    const [geminiErrorModal, setGeminiErrorModal] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' })
     const [scannedImage, setScannedImage] = useState<string | null>(null)
     const [scannedImageError, setScannedImageError] = useState(false)
     const [ocrStep, setOcrStep] = useState(0)
@@ -142,7 +143,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
 
     // Bloquear scroll del fondo cuando el modal de OCR o de carga está activo
     useEffect(() => {
-        if (ocrData || isOcrPending) {
+        if (ocrData || isOcrPending || geminiErrorModal.isOpen) {
             document.body.style.overflow = 'hidden'
             document.body.style.position = 'relative'
         } else {
@@ -153,7 +154,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             document.body.style.overflow = ''
             document.body.style.position = ''
         }
-    }, [ocrData, isOcrPending])
+    }, [ocrData, isOcrPending, geminiErrorModal.isOpen])
 
     function resetOcr() {
         setOcrData(null)
@@ -223,16 +224,17 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                     description: 'Verificá los datos extraídos antes de confirmar.' 
                 })
             } else {
-                glassAlert.error({ 
-                    title: 'Error al escanear', 
-                    description: res.error || 'No se pudieron extraer datos de la imagen.' 
+                // Mostrar modal de error flotante central ante fallos de escaneo
+                setGeminiErrorModal({
+                    isOpen: true,
+                    message: res.error || 'No se pudieron extraer datos de la imagen.'
                 })
             }
         } catch (err: any) {
             console.error('Error detallado en handleOcrFileChange:', err)
-            glassAlert.error({ 
-                title: 'Error de conexión', 
-                description: err.message || 'Error al procesar la imagen.' 
+            setGeminiErrorModal({
+                isOpen: true,
+                message: err.message || 'Error al procesar la imagen.'
             })
         } finally {
             setIsOcrPending(false)
@@ -893,6 +895,82 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                                         transition={{ duration: 15, ease: 'easeOut' }}
                                     />
                                 </div>
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Modal de Error de Gemini / Alta Demanda */}
+            <AnimatePresence>
+                {geminiErrorModal.isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-md p-4"
+                    >
+                        <motion.div
+                            initial={{ scale: 0.95, y: 15 }}
+                            animate={{ scale: 1, y: 0 }}
+                            exit={{ scale: 0.95, y: 15 }}
+                            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+                            className="w-full max-w-md glass border border-white/10 p-6 rounded-2xl shadow-glass flex flex-col items-center text-center space-y-6 relative overflow-hidden"
+                            style={{ background: 'rgba(15, 23, 42, 0.95)' }}
+                        >
+                            {/* Glow decorativo rojo/ámbar */}
+                            <div className="absolute -top-12 -left-12 w-24 h-24 bg-red-500/10 rounded-full blur-xl pointer-events-none" />
+                            <div className="absolute -bottom-12 -right-12 w-24 h-24 bg-amber-500/10 rounded-full blur-xl pointer-events-none" />
+
+                            {/* Icono de advertencia premium */}
+                            <div className="relative flex items-center justify-center">
+                                <span className="absolute inline-flex h-16 w-16 rounded-full bg-amber-500/10 animate-pulse"></span>
+                                <span className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/30 shadow-md">
+                                    <AlertTriangle className="h-6 w-6 text-amber-400" />
+                                </span>
+                            </div>
+
+                            {/* Información */}
+                            <div className="space-y-2">
+                                <h3 className="text-lg font-bold text-white tracking-wide">Servidor de IA Saturado</h3>
+                                <p className="text-sm text-slate-300">
+                                    El motor de inteligencia artificial de Google Gemini está experimentando una alta demanda de solicitudes o ha alcanzado su límite de cuota temporal.
+                                </p>
+                                <div className="p-3 bg-slate-950/60 border border-white/5 rounded-xl text-left">
+                                    <p className="text-[11px] font-mono text-amber-200/75 break-all max-h-[80px] overflow-y-auto">
+                                        Detalle: {geminiErrorModal.message}
+                                    </p>
+                                </div>
+                                <p className="text-xs text-slate-400">
+                                    Para no interrumpir tu trabajo, puedes registrar al paciente manualmente e intentar la digitalización automática con la próxima ficha.
+                                </p>
+                            </div>
+
+                            {/* Botones de acción */}
+                            <div className="flex flex-col sm:flex-row gap-3 w-full pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setGeminiErrorModal({ isOpen: false, message: '' })
+                                        resetOcr()
+                                    }}
+                                    className="flex-1 px-4 py-2.5 rounded-xl text-xs font-semibold bg-white/10 hover:bg-white/15 text-white border border-white/5 transition-all shadow-sm hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                                >
+                                    Completar Manualmente
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setGeminiErrorModal({ isOpen: false, message: '' })
+                                        resetOcr()
+                                        // Simular click en el input file para reintentar con otro archivo
+                                        document.getElementById('ocr-file-upload')?.click()
+                                    }}
+                                    className="flex-1 px-4 py-2.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-bold transition-all shadow-md hover:scale-[1.02] active:scale-[0.98] cursor-pointer flex items-center justify-center gap-1.5"
+                                >
+                                    <Sparkles className="h-3.5 w-3.5" />
+                                    Reintentar escaneo
+                                </button>
                             </div>
                         </motion.div>
                     </motion.div>
