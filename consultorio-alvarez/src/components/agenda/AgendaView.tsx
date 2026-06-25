@@ -1471,7 +1471,7 @@ function TurnoDetailModal({
                             margin: 4px 0;
                         }
                         .footer-msg {
-                            font-size: 8px;
+                            font-size: 11px;
                             margin-top: 12px;
                             text-align: center;
                             line-height: 1.4;
