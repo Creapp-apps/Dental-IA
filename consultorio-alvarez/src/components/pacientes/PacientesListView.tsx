@@ -66,11 +66,6 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
         })
     }, [pacientes, activeQuery])
 
-    function handleNuevoPaciente() {
-        startNavigation(() => {
-            router.push('/pacientes/nuevo')
-        })
-    }
 
     const [isSearching, setIsSearching] = useState(false)
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
@@ -143,9 +138,11 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                         {filteredPacientes.length} paciente{filteredPacientes.length !== 1 ? 's' : ''} {activeQuery ? 'encontrados' : 'registrados'}
                     </p>
                 </div>
-                <GlassButton onClick={handleNuevoPaciente} loading={isNavigating} className="w-full sm:w-auto shrink-0">
-                    {!isNavigating && <Plus className="h-4 w-4 mr-2" />}
-                    {isNavigating ? 'Cargando…' : 'Nuevo paciente'}
+                <GlassButton asChild className="w-full sm:w-auto shrink-0">
+                    <Link href="/pacientes/nuevo">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Nuevo paciente
+                    </Link>
                 </GlassButton>
             </div>
 
