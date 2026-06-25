@@ -152,7 +152,7 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
                             <Menu className="h-6 w-6" />
                             <span className="sr-only">Toggle Menu</span>
                         </SheetTrigger>
-                        <SheetContent side="left" className="p-0 w-72 bg-gradient-to-b from-background to-secondary/10 border-r border-sidebar-border flex flex-col pt-0 gap-0">
+                        <SheetContent side="left" className="p-0 w-72 bg-sidebar border-r border-sidebar-border flex flex-col pt-0 gap-0 text-sidebar-foreground">
                             <SheetTitle className="sr-only">Menú Principal</SheetTitle>
                             <SidebarContent />
                         </SheetContent>
@@ -168,7 +168,7 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
             </div>
 
             {/* Desktop Sidebar */}
-            <aside id="desktop-sidebar" className="hidden lg:flex h-screen w-64 flex-col bg-sidebar/30 backdrop-blur-2xl border-r border-sidebar-border/50 shrink-0">
+            <aside id="desktop-sidebar" className="hidden lg:flex h-screen w-64 flex-col bg-sidebar border-r border-sidebar-border shrink-0 text-sidebar-foreground">
                 <SidebarContent />
             </aside>
         </>
