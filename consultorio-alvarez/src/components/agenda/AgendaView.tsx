@@ -80,6 +80,7 @@ interface AgendaViewProps {
     turnosIniciales: any[]
     pacientes: any[]
     fechaInicial?: string
+    landingConfig?: any
 }
 
 export function AgendaView({
@@ -88,6 +89,7 @@ export function AgendaView({
     turnosIniciales,
     pacientes,
     fechaInicial,
+    landingConfig,
 }: AgendaViewProps) {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -1106,6 +1108,7 @@ export function AgendaView({
                 onNotifyDelay={(t) => setTurnoADemorar(t)}
                 isPending={isPending}
                 onAdd20Minutes={handleExtend20Minutes}
+                landingConfig={landingConfig}
             />
         </div>
     )
@@ -1370,6 +1373,7 @@ interface TurnoDetailModalProps {
     onNotifyDelay: (turno: any) => void
     isPending: boolean
     onAdd20Minutes?: (id: string) => void
+    landingConfig?: any
 }
 
 function TurnoDetailModal({
@@ -1382,13 +1386,14 @@ function TurnoDetailModal({
     onNotifyDelay,
     isPending,
     onAdd20Minutes,
+    landingConfig,
 }: TurnoDetailModalProps) {
     if (!turno) return null
     const estado = turno.estado as EstadoTurno
     const isST = turno.es_sobreturno === true
 
     const handleImprimirTicket = (t: any) => {
-        const printWindow = window.open('', '_blank', 'width=350,height=600');
+        const printWindow = window.open('', '_blank', 'width=350,height=650');
         if (!printWindow) {
             alert('Por favor habilite las ventanas emergentes (popups) para poder imprimir el comprobante.');
             return;
@@ -1403,6 +1408,37 @@ function TurnoDetailModal({
         const profesional = `Dr. ${t.profesional?.nombre || ''} ${t.profesional?.apellido || ''}`;
         const tratamiento = t.tipo_tratamiento?.nombre || 'Consulta General';
         const esST = t.es_sobreturno === true;
+
+        // Parse contact details from landingConfig
+        const address = landingConfig?.footer_address || 'Avenida Maipu 2481, Piso 1 dpto "B", Olivos';
+        
+        let telefonoFijo = '4794-9367';
+        let whatsappSecretaria = '11 6103-9248';
+        let telefonoParticular = '11 3020-1396';
+        
+        if (landingConfig?.footer_phone) {
+            const phones = landingConfig.footer_phone.split(' | ').map((s: string) => {
+                const parts = s.split('::');
+                return { num: parts[0] || '', lbl: parts[1] || '' };
+            });
+            
+            const fijoObj = phones.find((p: any) => p.lbl.toLowerCase().includes('fijo'));
+            if (fijoObj) telefonoFijo = fijoObj.num;
+            
+            const waObj = phones.find((p: any) => p.lbl.toLowerCase().includes('whatsapp') || p.lbl.toLowerCase().includes('secretaria'));
+            if (waObj) whatsappSecretaria = waObj.num;
+            
+            const partObj = phones.find((p: any) => p.lbl.toLowerCase().includes('particular') || p.lbl.toLowerCase().includes('inteligente'));
+            if (partObj) telefonoParticular = partObj.num;
+        }
+
+        const formatPhone = (numStr: string) => {
+            const clean = numStr.replace(/\s+/g, '').replace(/-/g, '');
+            if (clean.length === 10 && clean.startsWith('11')) {
+                return `11 ${clean.slice(2, 6)}-${clean.slice(6)}`;
+            }
+            return numStr;
+        };
 
         let ticketHtml = `
             <!DOCTYPE html>
@@ -1446,6 +1482,12 @@ function TurnoDetailModal({
                             font-size: 11px;
                             margin-bottom: 8px;
                         }
+                        .ticket-logo {
+                            max-width: 140px;
+                            max-height: 55px;
+                            margin-bottom: 8px;
+                            display: inline-block;
+                        }
                         .title-ticket {
                             font-size: 15px;
                             font-weight: bold;
@@ -1470,9 +1512,15 @@ function TurnoDetailModal({
                             font-weight: bold;
                             margin: 4px 0;
                         }
+                        .contact-info {
+                            font-size: 13px;
+                            line-height: 1.4;
+                            margin-top: 8px;
+                            text-align: left;
+                        }
                         .footer-msg {
                             font-size: 14px;
-                            margin-top: 12px;
+                            margin-top: 10px;
                             text-align: center;
                             line-height: 1.4;
                         }
@@ -1488,6 +1536,7 @@ function TurnoDetailModal({
                 </head>
                 <body>
                     <div class="text-center">
+                        <img src="${window.location.origin}/LOGO-ALVAREZ.png" alt="Logo" class="ticket-logo" />
                         <div class="header">CONSULTORIO ALVAREZ</div>
                         <div class="subtitle">Odontología Integral</div>
                     </div>
@@ -1539,6 +1588,16 @@ function TurnoDetailModal({
                     
                     <div class="divider"></div>
                     
+                    <div class="contact-info">
+                        <strong>Contacto:</strong><br>
+                        • Tel. Consultorio: ${formatPhone(telefonoFijo)}<br>
+                        • WhatsApp Sec.: ${formatPhone(whatsappSecretaria)}<br>
+                        • Tel. Particular: ${formatPhone(telefonoParticular)}<br>
+                        • Domicilio: ${address}
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
                     <div class="footer-msg">
                         Recuerde que podrá autogestionar su turno<br>
                         desde nuestra nueva web:<br>
@@ -1550,7 +1609,7 @@ function TurnoDetailModal({
                             setTimeout(function() {
                                 window.print();
                                 window.close();
-                            }, 300);
+                            }, 500);
                         }
                     </script>
                 </body>
