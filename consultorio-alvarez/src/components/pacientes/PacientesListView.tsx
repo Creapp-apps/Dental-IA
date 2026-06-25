@@ -138,13 +138,13 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                         {filteredPacientes.length} paciente{filteredPacientes.length !== 1 ? 's' : ''} {activeQuery ? 'encontrados' : 'registrados'}
                     </p>
                 </div>
-                <Link
+                <a
                     href="/pacientes/nuevo"
-                    className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold h-10 px-5 bg-primary text-primary-foreground cursor-pointer select-none active:opacity-90 transition-none"
+                    className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold h-10 px-5 bg-primary text-primary-foreground cursor-pointer select-none active:opacity-90 transition-none [touch-action:manipulation]"
                 >
                     <Plus className="h-4 w-4 mr-2" />
                     Nuevo paciente
-                </Link>
+                </a>
             </div>
 
             {/* Search */}
