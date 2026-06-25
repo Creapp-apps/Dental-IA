@@ -376,10 +376,16 @@ export async function crearReservaPublica(data: {
     if (error) return { error: error.message }
 
     // --- DISPARAR NOTIFICACION REALTIME ---
+    const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+    const [year, month, day] = data.fecha.split('-').map(Number)
+    const localDate = new Date(year, month - 1, day)
+    const diaSemana = diasSemana[localDate.getDay()]
+    const fechaFormateada = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`
+
     await supabase.from('notificaciones').insert({
         tenant_id: tenant.id,
         titulo: '🌟 Nuevo Turno Web',
-        mensaje: `${data.nombre} ${data.apellido} reservó un turno desde la página pública a las ${data.hora}.`,
+        mensaje: `${data.nombre} ${data.apellido} reservó un turno desde la página pública el día ${diaSemana} ${fechaFormateada} a las ${data.hora}.`,
         tipo: 'turno_nuevo',
         referencia_id: turnoData?.id,
     })
