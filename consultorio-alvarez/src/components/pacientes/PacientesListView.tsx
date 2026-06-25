@@ -140,6 +140,10 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                 </div>
                 <button
                     type="button"
+                    onTouchStart={(e) => {
+                        e.preventDefault()
+                        router.push('/pacientes/nuevo')
+                    }}
                     onClick={() => {
                         router.push('/pacientes/nuevo')
                     }}

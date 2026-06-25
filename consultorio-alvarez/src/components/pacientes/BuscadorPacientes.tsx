@@ -46,6 +46,10 @@ export function BuscadorPacientes({
                 </div>
                 <button
                     type="button"
+                    onTouchStart={(e) => {
+                        e.preventDefault()
+                        router.push('/pacientes/nuevo')
+                    }}
                     onClick={() => router.push('/pacientes/nuevo')}
                     className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer select-none [touch-action:manipulation]"
                 >
