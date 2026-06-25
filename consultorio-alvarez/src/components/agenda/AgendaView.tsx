@@ -1404,7 +1404,7 @@ function TurnoDetailModal({
         const tratamiento = t.tipo_tratamiento?.nombre || 'Consulta General';
         const esST = t.es_sobreturno === true;
 
-        printWindow.document.write(`
+        let ticketHtml = `
             <!DOCTYPE html>
             <html>
                 <head>
@@ -1505,32 +1505,36 @@ function TurnoDetailModal({
                         <div class="section-value bold">${pacienteNombre}</div>
                         
                         <div class="section-title">DNI</div>
-                        <div class="section-value">${dni}</div>
-                        
-                        \${telefono && telefono !== 'No registrado' ? \`
-                            <div class="section-title">Teléfono</div>
-                            <div class="section-value">\${telefono}</div>
-                        \` : ''}
-                        
+                        <div class="section-value">${dni}</div>`;
+
+        if (telefono && telefono !== 'No registrado') {
+            ticketHtml += `
+                        <div class="section-title">Teléfono</div>
+                        <div class="section-value">${telefono}</div>`;
+        }
+
+        ticketHtml += `
                         <div class="divider"></div>
                         
                         <div class="section-title">Fecha</div>
-                        <div class="section-value bold" style="text-transform: capitalize;">\${fechaFormateada}</div>
+                        <div class="section-value bold" style="text-transform: capitalize;">${fechaFormateada}</div>
                         
                         <div class="section-title">Hora</div>
-                        <div class="time-block">\${horaFormateada} hs</div>
-                        
-                        \${esST ? \`
-                            <div class="text-center">
-                                <span class="sobreturno-badge">SOBRETURNO</span>
-                            </div>
-                        \` : ''}
-                        
+                        <div class="time-block">${horaFormateada} hs</div>`;
+
+        if (esST) {
+            ticketHtml += `
+                        <div class="text-center">
+                            <span class="sobreturno-badge">SOBRETURNO</span>
+                        </div>`;
+        }
+
+        ticketHtml += `
                         <div class="section-title">Profesional</div>
-                        <div class="section-value">\${profesional}</div>
+                        <div class="section-value">${profesional}</div>
                         
                         <div class="section-title">Tratamiento</div>
-                        <div class="section-value">\${tratamiento}</div>
+                        <div class="section-value">${tratamiento}</div>
                     </div>
                     
                     <div class="divider"></div>
@@ -1551,8 +1555,9 @@ function TurnoDetailModal({
                         }
                     </script>
                 </body>
-            </html>
-        `);
+            </html>`;
+
+        printWindow.document.write(ticketHtml);
         printWindow.document.close();
     };
 
