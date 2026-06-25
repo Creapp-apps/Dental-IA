@@ -138,8 +138,22 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                 setOcrStep(prev => (prev + 1) % ocrSteps.length)
             }, 1800)
         }
-        return () => clearInterval(interval)
     }, [isOcrPending])
+
+    // Bloquear scroll del fondo cuando el modal de OCR o de carga está activo
+    useEffect(() => {
+        if (ocrData || isOcrPending) {
+            document.body.style.overflow = 'hidden'
+            document.body.style.position = 'relative'
+        } else {
+            document.body.style.overflow = ''
+            document.body.style.position = ''
+        }
+        return () => {
+            document.body.style.overflow = ''
+            document.body.style.position = ''
+        }
+    }, [ocrData, isOcrPending])
 
     function resetOcr() {
         setOcrData(null)
