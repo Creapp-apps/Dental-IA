@@ -9,7 +9,7 @@ import {
     startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -1387,6 +1387,175 @@ function TurnoDetailModal({
     const estado = turno.estado as EstadoTurno
     const isST = turno.es_sobreturno === true
 
+    const handleImprimirTicket = (t: any) => {
+        const printWindow = window.open('', '_blank', 'width=350,height=600');
+        if (!printWindow) {
+            alert('Por favor habilite las ventanas emergentes (popups) para poder imprimir el comprobante.');
+            return;
+        }
+
+        const fechaObj = parseISO(t.fecha_inicio);
+        const fechaFormateada = format(fechaObj, "EEEE d 'de' MMMM 'de' yyyy", { locale: es });
+        const horaFormateada = format(fechaObj, 'HH:mm');
+        const pacienteNombre = `${t.paciente?.apellido || ''}, ${t.paciente?.nombre || ''}`;
+        const dni = t.paciente?.dni || 'No registrado';
+        const telefono = t.paciente?.telefono || 'No registrado';
+        const profesional = `Dr. ${t.profesional?.nombre || ''} ${t.profesional?.apellido || ''}`;
+        const tratamiento = t.tipo_tratamiento?.nombre || 'Consulta General';
+        const esST = t.es_sobreturno === true;
+
+        printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Comprobante de Turno</title>
+                    <style>
+                        @page {
+                            size: 80mm auto;
+                            margin: 0;
+                        }
+                        body {
+                            font-family: 'Courier New', Courier, monospace;
+                            width: 72mm;
+                            margin: 0;
+                            padding: 8px 12px 24px 12px;
+                            font-size: 11px;
+                            color: #000;
+                            line-height: 1.3;
+                            box-sizing: border-box;
+                        }
+                        .text-center {
+                            text-align: center;
+                        }
+                        .bold {
+                            font-weight: bold;
+                        }
+                        .divider {
+                            border-top: 1px dashed #000;
+                            margin: 6px 0;
+                            height: 0;
+                        }
+                        .header {
+                            font-size: 14px;
+                            font-weight: bold;
+                            text-transform: uppercase;
+                            margin-bottom: 2px;
+                        }
+                        .subtitle {
+                            font-size: 9px;
+                            margin-bottom: 8px;
+                        }
+                        .title-ticket {
+                            font-size: 12px;
+                            font-weight: bold;
+                            margin: 6px 0;
+                            text-transform: uppercase;
+                            letter-spacing: 1px;
+                        }
+                        .section-title {
+                            font-size: 8px;
+                            font-weight: bold;
+                            text-transform: uppercase;
+                            margin-top: 5px;
+                            color: #444;
+                        }
+                        .section-value {
+                            font-size: 12px;
+                            margin-bottom: 4px;
+                            word-wrap: break-word;
+                        }
+                        .time-block {
+                            font-size: 15px;
+                            font-weight: bold;
+                            margin: 4px 0;
+                        }
+                        .footer-msg {
+                            font-size: 8px;
+                            margin-top: 12px;
+                            text-align: center;
+                            line-height: 1.4;
+                        }
+                        .sobreturno-badge {
+                            border: 1px solid #000;
+                            padding: 2px 6px;
+                            display: inline-block;
+                            margin: 4px 0;
+                            font-weight: bold;
+                            font-size: 10px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="text-center">
+                        <div class="header">CONSULTORIO ALVAREZ</div>
+                        <div class="subtitle">Odontología Integral</div>
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="text-center title-ticket">
+                        COMPROBANTE DE TURNO
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div>
+                        <div class="section-title">Paciente</div>
+                        <div class="section-value bold">${pacienteNombre}</div>
+                        
+                        <div class="section-title">DNI</div>
+                        <div class="section-value">${dni}</div>
+                        
+                        \${telefono && telefono !== 'No registrado' ? \`
+                            <div class="section-title">Teléfono</div>
+                            <div class="section-value">\${telefono}</div>
+                        \` : ''}
+                        
+                        <div class="divider"></div>
+                        
+                        <div class="section-title">Fecha</div>
+                        <div class="section-value bold" style="text-transform: capitalize;">\${fechaFormateada}</div>
+                        
+                        <div class="section-title">Hora</div>
+                        <div class="time-block">\${horaFormateada} hs</div>
+                        
+                        \${esST ? \`
+                            <div class="text-center">
+                                <span class="sobreturno-badge">SOBRETURNO</span>
+                            </div>
+                        \` : ''}
+                        
+                        <div class="section-title">Profesional</div>
+                        <div class="section-value">\${profesional}</div>
+                        
+                        <div class="section-title">Tratamiento</div>
+                        <div class="section-value">\${tratamiento}</div>
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="footer-msg">
+                        Por favor conserve este comprobante.<br>
+                        Si necesita reprogramar o cancelar, por favor<br>
+                        comuníquese con anticipación.<br>
+                        ¡Gracias por confiar en nosotros!
+                    </div>
+                    
+                    <script>
+                        window.onload = function() {
+                            setTimeout(function() {
+                                window.print();
+                                window.close();
+                            }, 300);
+                        }
+                    </script>
+                </body>
+            </html>
+        `);
+        printWindow.document.close();
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="dark sm:max-w-[425px] bg-black border border-white/15 text-slate-100 shadow-2xl p-6 rounded-2xl overflow-hidden">
@@ -1504,6 +1673,11 @@ function TurnoDetailModal({
 
                     {/* Edit/Delete actions */}
                     <div className="flex gap-2 justify-end mt-2 sm:mt-0">
+                        <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10"
+                            onClick={() => handleImprimirTicket(turno)}>
+                            <Printer className="h-3.5 w-3.5 mr-1" />
+                            Ticket
+                        </GlassButton>
                         <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 text-blue-400 border border-blue-500/20 hover:border-blue-500/50 hover:bg-blue-500/10"
                             onClick={() => { onEdit(turno); onOpenChange(false); }} disabled={isPending}>
                             <Edit2 className="h-3.5 w-3.5 mr-1" />
