@@ -1420,7 +1420,7 @@ function TurnoDetailModal({
                             width: 72mm;
                             margin: 0;
                             padding: 8px 12px 24px 12px;
-                            font-size: 11px;
+                            font-size: 14px;
                             color: #000;
                             line-height: 1.3;
                             box-sizing: border-box;
@@ -1437,41 +1437,41 @@ function TurnoDetailModal({
                             height: 0;
                         }
                         .header {
-                            font-size: 14px;
+                            font-size: 18px;
                             font-weight: bold;
                             text-transform: uppercase;
                             margin-bottom: 2px;
                         }
                         .subtitle {
-                            font-size: 9px;
+                            font-size: 11px;
                             margin-bottom: 8px;
                         }
                         .title-ticket {
-                            font-size: 12px;
+                            font-size: 15px;
                             font-weight: bold;
                             margin: 6px 0;
                             text-transform: uppercase;
                             letter-spacing: 1px;
                         }
                         .section-title {
-                            font-size: 8px;
+                            font-size: 10px;
                             font-weight: bold;
                             text-transform: uppercase;
                             margin-top: 5px;
                             color: #444;
                         }
                         .section-value {
-                            font-size: 12px;
+                            font-size: 15px;
                             margin-bottom: 4px;
                             word-wrap: break-word;
                         }
                         .time-block {
-                            font-size: 15px;
+                            font-size: 19px;
                             font-weight: bold;
                             margin: 4px 0;
                         }
                         .footer-msg {
-                            font-size: 11px;
+                            font-size: 14px;
                             margin-top: 12px;
                             text-align: center;
                             line-height: 1.4;
@@ -1482,7 +1482,7 @@ function TurnoDetailModal({
                             display: inline-block;
                             margin: 4px 0;
                             font-weight: bold;
-                            font-size: 10px;
+                            font-size: 13px;
                         }
                     </style>
                 </head>
