@@ -118,7 +118,6 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     const [isOcrPending, setIsOcrPending] = useState(false)
     const [ocrData, setOcrData] = useState<any>(null)
     const [scannedImage, setScannedImage] = useState<string | null>(null)
-    const [previewUrl, setPreviewUrl] = useState<string | null>(null)
     const [ocrStep, setOcrStep] = useState(0)
     const ocrSteps = [
         "Iniciando digitalización inteligente...",
@@ -144,10 +143,6 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     function resetOcr() {
         setOcrData(null)
         setScannedImage(null)
-        if (previewUrl) {
-            URL.revokeObjectURL(previewUrl)
-            setPreviewUrl(null)
-        }
     }
 
     const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
@@ -199,27 +194,6 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             }
 
             setScannedImage(compressedBase64)
-
-            // Generar una URL de objeto blob local para previsualizar la imagen sin problemas de renderizado
-            if (previewUrl) {
-                URL.revokeObjectURL(previewUrl)
-            }
-            try {
-                const parts = compressedBase64.split(';base64,')
-                const contentType = parts[0].split(':')[1]
-                const raw = window.atob(parts[1])
-                const rawLength = raw.length
-                const uInt8Array = new Uint8Array(rawLength)
-                for (let i = 0; i < rawLength; ++i) {
-                    uInt8Array[i] = raw.charCodeAt(i)
-                }
-                const blob = new Blob([uInt8Array], { type: contentType })
-                const blobUrl = URL.createObjectURL(blob)
-                setPreviewUrl(blobUrl)
-            } catch (blobErr) {
-                console.error('Error generando blob URL para vista previa:', blobErr)
-                setPreviewUrl(compressedBase64)
-            }
             
             console.log('Invocando Server Action processPatientCardOcr...')
             const res = await processPatientCardOcr(compressedBase64)
@@ -563,10 +537,10 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                                 </span>
                                 Ficha Escaneada
                             </div>
-                            {previewUrl ? (
+                            {scannedImage ? (
                                 <div className="flex-1 relative flex items-center justify-center p-6 select-none group">
                                     <img 
-                                        src={previewUrl} 
+                                        src={scannedImage} 
                                         alt="Ficha de Paciente" 
                                         className="max-w-full max-h-[450px] object-contain rounded-lg shadow-lg border border-white/10" 
                                     />
@@ -813,9 +787,9 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
 
                             {/* Contenedor de la Imagen con Efecto Laser */}
                             <div className="relative w-56 h-36 bg-slate-950/80 border border-white/5 rounded-xl overflow-hidden flex items-center justify-center shadow-inner">
-                                {previewUrl ? (
+                                {scannedImage ? (
                                     <img
-                                        src={previewUrl}
+                                        src={scannedImage}
                                         alt="Ficha digitalizada"
                                         className="w-full h-full object-cover opacity-60 grayscale contrast-125"
                                     />
