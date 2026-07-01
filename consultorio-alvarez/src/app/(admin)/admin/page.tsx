@@ -1,17 +1,19 @@
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Calendar, Clock, Users, AlertCircle, DollarSign, Stethoscope } from 'lucide-react'
-import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario } from '@/lib/supabase/queries'
+import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario, getTurnosSinConfirmar } from '@/lib/supabase/queries'
 import { DashboardKPI } from '@/components/dashboard/DashboardKPI'
 import { TurnoCardGlass } from '@/components/dashboard/TurnoCardGlass'
+import { TurnosSinConfirmarSection } from '@/components/dashboard/TurnosSinConfirmarSection'
 
 export default async function DashboardPage() {
     const hoy = new Date()
-    const [stats, turnos, profesionales, usuario] = await Promise.all([
+    const [stats, turnos, profesionales, usuario, turnosSinConfirmar] = await Promise.all([
         getDashboardStats(),
         getTurnosDelDia(hoy),
         getProfesionales(),
         getCurrentUsuario(),
+        getTurnosSinConfirmar(),
     ])
 
     const turnosPendientes = turnos.filter((t: any) => t.estado === 'PENDIENTE')
@@ -80,6 +82,9 @@ export default async function DashboardPage() {
                     delay={0.3}
                 />
             </div>
+
+            {/* Turnos sin confirmar */}
+            <TurnosSinConfirmarSection initialTurnos={turnosSinConfirmar} />
 
             {/* Turnos por profesional */}
             <div className="grid gap-6 lg:grid-cols-2">

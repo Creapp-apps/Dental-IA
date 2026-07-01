@@ -215,3 +215,33 @@ export async function getDashboardStats() {
         montoPendiente,
     }
 }
+
+export async function getTurnosSinConfirmar() {
+    const supabase = getAdmin()
+    const tenantId = await getTenantId()
+    if (!tenantId) return []
+
+    // Obtener fecha de hoy al inicio del día (12:00 AM) para traer todos desde hoy en adelante
+    const hoy = new Date()
+    hoy.setHours(0, 0, 0, 0)
+
+    const { data, error } = await supabase
+        .from('turnos')
+        .select(`
+            *,
+            paciente:pacientes(id, nombre, apellido, telefono),
+            profesional:profesionales(id, nombre, apellido, color_agenda),
+            tipo_tratamiento:tipos_tratamiento(id, nombre, duracion_minutos, prioridad, color),
+            recordatorios(id, created_at, estado_envio)
+        `)
+        .eq('tenant_id', tenantId)
+        .eq('estado', 'PENDIENTE')
+        .gte('fecha_inicio', hoy.toISOString())
+        .order('fecha_inicio', { ascending: true })
+
+    if (error) {
+        console.error('getTurnosSinConfirmar error:', error)
+        return []
+    }
+    return data ?? []
+}
