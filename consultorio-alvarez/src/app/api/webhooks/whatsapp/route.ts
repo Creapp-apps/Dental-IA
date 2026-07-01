@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { normalizarTelefonoArgentino } from '@/lib/utils'
 
 // GET: Webhook Verification (Meta Verification Challenge)
 export async function GET(request: NextRequest) {
@@ -21,6 +22,73 @@ export async function GET(request: NextRequest) {
     return new Response('Forbidden', { status: 403 })
 }
 
+async function logDebug(event: string, detail: any, tenantId?: string) {
+    try {
+        const admin = createAdminClient()
+        // Buscar si existe el registro de logs
+        let query = admin
+            .from('tenant_integrations')
+            .select('*')
+            .eq('provider', 'whatsapp')
+
+        if (tenantId) {
+            query = query.eq('tenant_id', tenantId)
+        }
+
+        const { data: results } = await query.limit(1)
+        const existing = results?.[0]
+
+        let logs = []
+        if (existing && existing.credentials && typeof existing.credentials === 'object' && Array.isArray((existing.credentials as any).logs)) {
+            logs = (existing.credentials as any).logs
+        }
+
+        logs.push({
+            timestamp: new Date().toISOString(),
+            event,
+            detail
+        })
+
+        // Limitar a los últimos 50 logs
+        if (logs.length > 50) {
+            logs = logs.slice(logs.length - 50)
+        }
+
+        // Obtener un tenant_id válido
+        let finalTenantId = tenantId || existing?.tenant_id
+        if (!finalTenantId) {
+            const { data: tenant } = await admin.from('tenants').select('id').limit(1).single()
+            finalTenantId = tenant?.id
+        }
+
+        if (finalTenantId) {
+            if (existing) {
+                // Preservar credenciales existentes y actualizar logs
+                const existingCreds = typeof existing.credentials === 'object' ? existing.credentials : {}
+                const newCredentials = {
+                    ...existingCreds,
+                    logs
+                }
+                await admin
+                    .from('tenant_integrations')
+                    .update({ credentials: newCredentials })
+                    .eq('id', existing.id)
+            } else {
+                await admin
+                    .from('tenant_integrations')
+                    .insert({
+                        tenant_id: finalTenantId,
+                        provider: 'whatsapp',
+                        credentials: { logs },
+                        is_active: false
+                    })
+            }
+        }
+    } catch (err) {
+        console.error('Error logging webhook debug:', err)
+    }
+}
+
 // POST: Recepción de Eventos de Mensajes de Meta
 export async function POST(request: NextRequest) {
     try {
@@ -28,12 +96,14 @@ export async function POST(request: NextRequest) {
         
         // Registrar payload para depuración
         console.log('📬 Webhook WhatsApp recibido:', JSON.stringify(body, null, 2))
+        await logDebug('webhook_received', body)
 
         const change = body.entry?.[0]?.changes?.[0]?.value
         const message = change?.messages?.[0]
 
         // Solo procesamos si hay un mensaje entrante
         if (!message) {
+            await logDebug('no_message_in_payload', change)
             return NextResponse.json({ success: true, message: 'No message in payload' })
         }
 
@@ -80,11 +150,11 @@ export async function POST(request: NextRequest) {
         } 
         // 2. Analizar respuesta de texto manual (ej: "SI", "NO", "SÍ", "CONFIRMO", "REPROGRAMAR")
         else if (textBody) {
-            const cleanPhone = from.replace(/\D/g, '')
+            const cleanPhone = normalizarTelefonoArgentino(from)
             // Encontrar el último recordatorio enviado a este teléfono que esté pendiente de respuesta
             const { data: lastRem } = await admin
                 .from('recordatorios')
-                .select('id, turno_id')
+                .select('id, turno_id, tenant_id')
                 .eq('telefono', cleanPhone)
                 .eq('estado_envio', 'ENVIADO')
                 .order('created_at', { ascending: false })
@@ -111,6 +181,7 @@ export async function POST(request: NextRequest) {
             const { data: turno } = await admin
                 .from('turnos')
                 .select(`
+                    tenant_id,
                     fecha_inicio,
                     profesional_id,
                     paciente:pacientes(nombre, apellido),
@@ -212,11 +283,29 @@ export async function POST(request: NextRequest) {
             // Revalidar las vistas de la agenda
             revalidatePath('/agenda')
             revalidatePath('/admin')
+            
+            await logDebug('webhook_processed_success', {
+                turnoIdToUpdate,
+                respuestaPaciente,
+                paciente: turno?.paciente,
+                fecha_inicio: turno?.fecha_inicio
+            }, turno?.tenant_id)
+        } else {
+            await logDebug('webhook_no_match', {
+                type,
+                buttonPayload,
+                textBody,
+                from
+            })
         }
 
         return NextResponse.json({ success: true })
     } catch (error: any) {
         console.error('❌ Error en webhook handler:', error)
+        await logDebug('webhook_error', {
+            message: error.message,
+            stack: error.stack
+        })
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })
     }
 }

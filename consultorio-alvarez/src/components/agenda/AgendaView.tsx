@@ -9,12 +9,12 @@ import {
     startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { NuevoTurnoModal } from '@/components/agenda/NuevoTurnoModal'
-import { cambiarEstadoTurno, eliminarTurno, moverTurno } from '@/lib/actions/turnos'
+import { cambiarEstadoTurno, eliminarTurno, moverTurno, enviarRecordatorioManual } from '@/lib/actions/turnos'
 import { glassAlert } from '@/components/ui/glass-alert'
 import {
     type EstadoTurno,
@@ -1388,9 +1388,36 @@ function TurnoDetailModal({
     onAdd20Minutes,
     landingConfig,
 }: TurnoDetailModalProps) {
+    const [isSendingReminder, setIsSendingReminder] = useState(false)
+
     if (!turno) return null
     const estado = turno.estado as EstadoTurno
     const isST = turno.es_sobreturno === true
+
+    const handleSendReminder = async () => {
+        setIsSendingReminder(true)
+        try {
+            const res = await enviarRecordatorioManual(turno.id)
+            if (res?.error) {
+                glassAlert.error({
+                    title: 'Error al enviar recordatorio',
+                    description: res.error
+                })
+            } else {
+                glassAlert.success({
+                    title: 'Recordatorio enviado',
+                    description: 'Se envió el recordatorio de WhatsApp correctamente.'
+                })
+            }
+        } catch (err: any) {
+            glassAlert.error({
+                title: 'Error de red/servidor',
+                description: err.message || 'Ocurrió un error inesperado.'
+            })
+        } finally {
+            setIsSendingReminder(false)
+        }
+    }
 
     const handleImprimirTicket = (t: any) => {
         const printWindow = window.open('', '_blank', 'width=350,height=650');
@@ -1730,6 +1757,13 @@ function TurnoDetailModal({
                                 onClick={() => { onNotifyDelay(turno); onOpenChange(false); }} disabled={isPending}>
                                 <MessageSquare className="h-3.5 w-3.5 mr-1" />
                                 Demora
+                            </GlassButton>
+                        )}
+                        {turno.paciente?.telefono && (
+                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border border-sky-500/20 hover:border-sky-500/50 hover:bg-sky-500/10 text-sky-400"
+                                onClick={handleSendReminder} disabled={isSendingReminder || isPending}>
+                                <Bell className="h-3.5 w-3.5 mr-1" />
+                                Recordatorio
                             </GlassButton>
                         )}
                     </div>

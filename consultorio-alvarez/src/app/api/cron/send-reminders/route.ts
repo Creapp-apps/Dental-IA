@@ -29,17 +29,17 @@ async function handleSendReminders(request: NextRequest) {
 
         const admin = createAdminClient()
 
-        // Calcular el rango del día de mañana en huso horario de Argentina
-        const tomorrowStart = new Date()
-        tomorrowStart.setDate(tomorrowStart.getDate() + 1)
-        tomorrowStart.setHours(0, 0, 0, 0)
+        // Calcular el rango de pasado mañana (48hs antes) en huso horario de Argentina
+        const targetStart = new Date()
+        targetStart.setDate(targetStart.getDate() + 2) // +2 días para 48hs de anticipación
+        targetStart.setHours(0, 0, 0, 0)
 
-        const tomorrowEnd = new Date(tomorrowStart)
-        tomorrowEnd.setHours(23, 59, 59, 999)
+        const targetEnd = new Date(targetStart)
+        targetEnd.setHours(23, 59, 59, 999)
 
-        console.log(`🔍 Buscando turnos para mañana entre: ${tomorrowStart.toISOString()} y ${tomorrowEnd.toISOString()}`)
+        console.log(`🔍 Buscando turnos para pasado mañana (48hs antes) entre: ${targetStart.toISOString()} y ${targetEnd.toISOString()}`)
 
-        // 1. Buscar turnos de mañana en estado PENDIENTE
+        // 1. Buscar turnos de pasado mañana en estado PENDIENTE
         const { data: turnos, error: errTurnos } = await admin
             .from('turnos')
             .select(`
@@ -52,18 +52,18 @@ async function handleSendReminders(request: NextRequest) {
                 tipo_treatment:tipos_tratamiento(nombre)
             `)
             .eq('estado', 'PENDIENTE')
-            .gte('fecha_inicio', tomorrowStart.toISOString())
-            .lte('fecha_inicio', tomorrowEnd.toISOString())
+            .gte('fecha_inicio', targetStart.toISOString())
+            .lte('fecha_inicio', targetEnd.toISOString())
 
         if (errTurnos) {
             throw new Error(`Error consultando turnos: ${errTurnos.message}`)
         }
 
         if (!turnos || turnos.length === 0) {
-            return NextResponse.json({ success: true, message: 'No hay turnos pendientes para mañana.' })
+            return NextResponse.json({ success: true, message: 'No hay turnos pendientes para pasado mañana (48hs antes).' })
         }
 
-        console.log(`📅 Se encontraron ${turnos.length} turnos pendientes para mañana.`)
+        console.log(`📅 Se encontraron ${turnos.length} turnos pendientes para pasado mañana (48hs antes).`)
         const results = []
 
         for (const t of turnos) {

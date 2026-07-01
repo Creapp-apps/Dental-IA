@@ -548,3 +548,149 @@ async function notificarTurnoPorWhatsApp(
         console.error(`[WA LOG] ❌ Error al procesar notificación WhatsApp "${templateName}":`, err)
     }
 }
+
+export async function enviarRecordatorioManual(turnoId: string) {
+    console.log(`[WA LOG] Iniciando enviarRecordatorioManual para turnoId: ${turnoId}`)
+    if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
+        return { error: 'Variables de WhatsApp no configuradas en el entorno (META_WA_ACCESS_TOKEN o META_WA_PHONE_NUMBER_ID faltantes).' }
+    }
+
+    try {
+        const admin = createAdminClient()
+
+        const { data: turno, error: fetchErr } = await admin
+            .from('turnos')
+            .select(`
+                id,
+                fecha_inicio,
+                tenant_id,
+                paciente:pacientes(nombre, telefono),
+                profesional:profesionales(nombre, apellido),
+                tipo_treatment:tipos_tratamiento(nombre)
+            `)
+            .eq('id', turnoId)
+            .single()
+
+        if (fetchErr || !turno) {
+            return { error: `Turno no encontrado. Error: ${fetchErr?.message}` }
+        }
+
+        const pct = turno.paciente as any
+        const prof = turno.profesional as any
+        const trat = (turno as any).tipo_treatment?.nombre || 'Consulta'
+
+        if (!pct?.telefono) {
+            return { error: 'El paciente no tiene un teléfono registrado para notificar por WhatsApp.' }
+        }
+
+        // Sanitizar teléfono para Meta API (regla de Argentina) usando helper robusto
+        const cleanPhone = normalizarTelefonoArgentino(pct.telefono)
+
+        const fechaObj = new Date(turno.fecha_inicio)
+        const fechaStr = fechaObj.toLocaleDateString('es-AR', {
+            weekday: 'long',
+            day: 'numeric',
+            month: 'long',
+            timeZone: 'America/Argentina/Buenos_Aires'
+        })
+        const fechaStrFormatted = fechaStr.charAt(0).toUpperCase() + fechaStr.slice(1)
+
+        const horaStr = fechaObj.toLocaleTimeString('es-AR', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+            timeZone: 'America/Argentina/Buenos_Aires'
+        })
+
+        const nombreProf = prof ? `${limpiarTituloProfesional(prof.nombre)} ${prof.apellido.trim()}` : 'el especialista'
+
+        console.log(`📤 Enviando recordatorio manual a ${pct.nombre} (${cleanPhone}) para turno ${turno.id}`)
+
+        const response = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                to: cleanPhone,
+                type: 'template',
+                template: {
+                    name: 'recordatorio_turno',
+                    language: { code: 'es_AR' },
+                    components: [
+                        {
+                            type: 'body',
+                            parameters: [
+                                { type: 'text', text: pct.nombre },
+                                { type: 'text', text: fechaStrFormatted },
+                                { type: 'text', text: horaStr },
+                                { type: 'text', text: nombreProf }
+                            ]
+                        },
+                        {
+                            type: 'button',
+                            sub_type: 'quick_reply',
+                            index: '0',
+                            parameters: [
+                                { type: 'payload', payload: `CONFIRMAR_TURNO_${turno.id}` }
+                            ]
+                        },
+                        {
+                            type: 'button',
+                            sub_type: 'quick_reply',
+                            index: '1',
+                            parameters: [
+                                { type: 'payload', payload: `CANCELAR_TURNO_${turno.id}` }
+                            ]
+                        },
+                        {
+                            type: 'button',
+                            sub_type: 'quick_reply',
+                            index: '2',
+                            parameters: [
+                                { type: 'payload', payload: `REPROGRAMAR_TURNO_${turno.id}` }
+                            ]
+                        }
+                    ]
+                }
+            })
+        })
+
+        const resData = await response.json()
+
+        if (!response.ok) {
+            console.error(`❌ Error de Meta para turno ${turno.id}:`, JSON.stringify(resData, null, 2))
+            
+            // Registrar el fallo en recordatorios
+            await admin.from('recordatorios').insert({
+                tenant_id: turno.tenant_id,
+                turno_id: turno.id,
+                canal: 'WHATSAPP',
+                estado_envio: 'FALLIDO',
+                telefono: cleanPhone,
+                mensaje_enviado: `Nombre: ${pct.nombre}, Fecha: ${fechaStrFormatted}, Hora: ${horaStr}, Profesional: ${nombreProf}`,
+                error_detalle: resData?.error?.message || 'Error al invocar Meta API'
+            })
+
+            return { error: resData?.error?.message || 'Error al invocar Meta API' }
+        }
+
+        // Registrar el envío exitoso
+        await admin.from('recordatorios').insert({
+            tenant_id: turno.tenant_id,
+            turno_id: turno.id,
+            canal: 'WHATSAPP',
+            estado_envio: 'ENVIADO',
+            telefono: cleanPhone,
+            mensaje_enviado: `Nombre: ${pct.nombre}, Fecha: ${fechaStrFormatted}, Hora: ${horaStr}, Profesional: ${nombreProf}`,
+            fecha_envio: new Date().toISOString()
+        })
+
+        return { success: true }
+    } catch (err: any) {
+        console.error(`❌ Excepción al procesar recordatorio manual de turno ${turnoId}:`, err)
+        return { error: err.message || 'Excepción interna' }
+    }
+}
