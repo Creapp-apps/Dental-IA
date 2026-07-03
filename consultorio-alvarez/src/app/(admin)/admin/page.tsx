@@ -36,7 +36,7 @@ export default async function DashboardPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col items-center justify-center text-center md:flex-row md:items-start md:justify-between md:text-left">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">
                         ¡Bienvenido, {nombreUsuario}!

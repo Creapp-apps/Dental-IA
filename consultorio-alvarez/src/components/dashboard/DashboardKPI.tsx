@@ -45,7 +45,7 @@ export function DashboardKPI({ icon, label, value, sub, color, delay = 0 }: Dash
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay, duration: 0.4, ease: 'easeOut' }}
         >
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col-reverse sm:flex-row items-center sm:items-start justify-between text-center sm:text-left gap-3 sm:gap-0">
                 <div>
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                         {label}
@@ -55,7 +55,7 @@ export function DashboardKPI({ icon, label, value, sub, color, delay = 0 }: Dash
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">{sub}</p>
                 </div>
-                <div className={cn('rounded-xl p-2.5', COLOR_MAP[color])}>
+                <div className={cn('rounded-xl p-2.5 shrink-0', COLOR_MAP[color])}>
                     {icon}
                 </div>
             </div>

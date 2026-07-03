@@ -57,7 +57,7 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
                 {TABS.map(t => (
                     <button key={t.id} onClick={() => setTab(t.id)}
                         className={cn(
-                            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center cursor-pointer whitespace-nowrap',
+                            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all sm:flex-1 shrink-0 justify-center cursor-pointer whitespace-nowrap',
                             tab === t.id ? 'bg-primary text-primary-foreground shadow-sm'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                         )}>
@@ -223,32 +223,39 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
                 )}
                 <div className="space-y-1">
                     {tiposTratamiento.map((t: any) => (
-                        <div key={t.id} className="flex items-center gap-3 py-2 px-3 rounded-xl hover:bg-muted/30 transition-colors group">
-                            <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                            <span className="text-sm font-medium text-foreground flex-1">{t.nombre}</span>
-                            <span className="text-xs text-muted-foreground">{t.duracion_minutos}min</span>
+                        <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 py-3 sm:py-2 px-3 rounded-xl hover:bg-muted/30 transition-colors group border-b border-border/10 last:border-b-0 sm:border-0">
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
+                                <span className="text-sm font-medium text-foreground break-words flex-1 min-w-0">
+                                    {t.nombre}
+                                </span>
+                            </div>
                             
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                                <button
-                                    onClick={() => abrirEditarTratamiento(t)}
-                                    className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
-                                    title="Modificar tratamiento"
-                                >
-                                    <Pencil className="h-4 w-4" />
-                                </button>
-                                <button
-                                    onClick={() => borrarTratamiento(t.id)}
-                                    className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                                    title="Eliminar tratamiento"
-                                >
-                                    <Trash className="h-4 w-4" />
+                            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pl-6 sm:pl-0 shrink-0">
+                                <span className="text-xs text-muted-foreground shrink-0">{t.duracion_minutos} min</span>
+                                
+                                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                    <button
+                                        onClick={() => abrirEditarTratamiento(t)}
+                                        className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
+                                        title="Modificar tratamiento"
+                                    >
+                                        <Pencil className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                        onClick={() => borrarTratamiento(t.id)}
+                                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                        title="Eliminar tratamiento"
+                                    >
+                                        <Trash className="h-4 w-4" />
+                                    </button>
+                                </div>
+
+                                <button onClick={() => { startTransition(async () => { await toggleTipoTratamiento(t.id, !t.activo) }) }}
+                                    className={cn('text-xs px-2 py-0.5 rounded-lg cursor-pointer shrink-0', t.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400')}>
+                                    {t.activo ? 'Activo' : 'Inactivo'}
                                 </button>
                             </div>
-
-                            <button onClick={() => { startTransition(async () => { await toggleTipoTratamiento(t.id, !t.activo) }) }}
-                                className={cn('text-xs px-2 py-0.5 rounded-lg cursor-pointer', t.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400')}>
-                                {t.activo ? 'Activo' : 'Inactivo'}
-                            </button>
                         </div>
                     ))}
                 </div>
@@ -448,34 +455,36 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
             )}
             <div className="space-y-2 mt-4">
                 {profesionales.map((p: any) => (
-                    <div key={p.id} className="flex items-center gap-3 glass-subtle rounded-xl p-3 group transition-colors hover:bg-muted/30">
-                        <div className={cn("h-10 w-10 relative overflow-hidden rounded-full flex items-center justify-center text-white font-bold text-sm transition-opacity", !p.activo && "opacity-50")} style={{ backgroundColor: p.color_agenda }}>
-                            {p.avatar_url ? (
-                                <img src={p.avatar_url} alt={p.nombre} className="h-full w-full object-cover" />
-                            ) : (
-                                <>{p.nombre.charAt(0)}{p.apellido.charAt(0)}</>
-                            )}
-                        </div>
-                        <div className={cn("flex-1 min-w-0 transition-opacity", !p.activo && "opacity-50")}>
-                            <div className="flex items-center gap-2 flex-wrap">
-                                <p className="text-sm font-semibold text-foreground">Dr. {p.nombre} {p.apellido}</p>
-                                {p.usuarios && p.usuarios.length > 0 ? (
-                                    <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-medium flex items-center gap-1" title="Tiene cuenta de acceso vinculada">
-                                        <Key className="h-2.5 w-2.5" /> Cuenta activa
-                                    </span>
+                    <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-3 glass-subtle rounded-xl group transition-colors hover:bg-muted/30">
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                            <div className={cn("h-10 w-10 relative overflow-hidden rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 transition-opacity", !p.activo && "opacity-50")} style={{ backgroundColor: p.color_agenda }}>
+                                {p.avatar_url ? (
+                                    <img src={p.avatar_url} alt={p.nombre} className="h-full w-full object-cover" />
                                 ) : (
-                                    <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-medium flex items-center gap-1" title="Sin cuenta de acceso individual">
-                                        Sin cuenta
-                                    </span>
+                                    <>{p.nombre.charAt(0)}{p.apellido.charAt(0)}</>
                                 )}
                             </div>
-                            <p className="text-xs text-muted-foreground">{p.especialidad ?? 'Sin especialidad'} · {p.email}</p>
+                            <div className={cn("flex-1 min-w-0 transition-opacity", !p.activo && "opacity-50")}>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-semibold text-foreground">Dr. {p.nombre} {p.apellido}</p>
+                                    {p.usuarios && p.usuarios.length > 0 ? (
+                                        <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-medium flex items-center gap-1" title="Tiene cuenta de acceso vinculada">
+                                            <Key className="h-2.5 w-2.5" /> Cuenta activa
+                                        </span>
+                                    ) : (
+                                        <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-medium flex items-center gap-1" title="Sin cuenta de acceso individual">
+                                            Sin cuenta
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-muted-foreground truncate">{p.especialidad ?? 'Sin especialidad'} · {p.email}</p>
+                            </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                            {p.matricula && <span className={cn("text-xs glass px-2 py-1 rounded-lg", !p.activo && "opacity-50")}>MP {p.matricula}</span>}
+                        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pl-13 sm:pl-0 shrink-0">
+                            {p.matricula && <span className={cn("text-xs glass px-2 py-1 rounded-lg shrink-0", !p.activo && "opacity-50")}>MP {p.matricula}</span>}
 
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                                 <button
                                     onClick={() => abrirEditar(p)}
                                     className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
@@ -503,7 +512,7 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                                     }
                                 })
                             }}
-                                className={cn('text-xs px-2 py-1.5 ml-1 rounded-lg cursor-pointer transition-colors', p.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-destructive/10 text-destructive dark:bg-destructive/20')}>
+                                className={cn('text-xs px-2 py-1.5 rounded-lg cursor-pointer transition-colors shrink-0', p.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-destructive/10 text-destructive dark:bg-destructive/20')}>
                                 {p.activo ? 'Activo' : 'Desactivado'}
                             </button>
                         </div>
@@ -618,36 +627,38 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
             )}
             <div className="space-y-1">
                 {obrasSociales.map((os: any) => (
-                    <div key={os.id} className="flex items-center justify-between py-2.5 px-3 rounded-xl hover:bg-muted/30 transition-colors group">
-                        <div className="flex-1">
+                    <div key={os.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 py-3 sm:py-2.5 px-3 rounded-xl hover:bg-muted/30 transition-colors group border-b border-border/10 last:border-b-0 sm:border-0">
+                        <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium text-foreground">{os.nombre}</p>
-                            <div className="flex items-center gap-2 mt-0.5">
+                            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                                 {os.codigo && <span className="text-xs font-mono text-muted-foreground bg-white/5 px-1.5 rounded">{os.codigo}</span>}
                                 {os.planes && <span className="text-[10px] font-medium bg-primary/10 text-primary px-1.5 py-0.5 rounded-md border border-primary/20">Planes: {os.planes}</span>}
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity mx-2">
-                            <button
-                                onClick={() => abrirEditar(os)}
-                                className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
-                                title="Modificar obra social"
-                            >
-                                <Pencil className="h-4 w-4" />
-                            </button>
-                            <button
-                                onClick={() => borrarObraSocial(os.id)}
-                                className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                                title="Eliminar obra social"
-                            >
-                                <Trash className="h-4 w-4" />
+                        <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                <button
+                                    onClick={() => abrirEditar(os)}
+                                    className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
+                                    title="Modificar obra social"
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={() => borrarObraSocial(os.id)}
+                                    className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                                    title="Eliminar obra social"
+                                >
+                                    <Trash className="h-4 w-4" />
+                                </button>
+                            </div>
+
+                            <button onClick={() => { startTransition(async () => { await toggleObraSocial(os.id, !os.activo) }) }}
+                                className={cn('text-xs px-2 py-0.5 rounded-lg cursor-pointer shrink-0', os.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400')}>
+                                {os.activo ? 'Activa' : 'Inactiva'}
                             </button>
                         </div>
-
-                        <button onClick={() => { startTransition(async () => { await toggleObraSocial(os.id, !os.activo) }) }}
-                            className={cn('text-xs px-2 py-0.5 rounded-lg cursor-pointer', os.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400')}>
-                            {os.activo ? 'Activa' : 'Inactiva'}
-                        </button>
                     </div>
                 ))}
             </div>

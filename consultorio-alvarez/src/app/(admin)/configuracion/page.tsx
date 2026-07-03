@@ -24,7 +24,7 @@ export default async function ConfiguracionPage() {
 
     return (
         <div className="space-y-6 max-w-4xl">
-            <div>
+            <div className="text-center md:text-left">
                 <h1 className="text-2xl font-bold text-foreground">Configuración</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">
                     Administrá los datos del consultorio, profesionales y horarios

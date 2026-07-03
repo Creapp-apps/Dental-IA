@@ -9,6 +9,7 @@ import { GlassButton } from '@/components/ui/glass-button'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { motion, AnimatePresence } from 'framer-motion'
 import { enviarRecordatorioManual } from '@/lib/actions/turnos'
+import { cn } from '@/lib/utils'
 
 interface Recordatorio {
     id: string
@@ -146,10 +147,10 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <div>
-                    <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5 text-amber-500" />
+            <div className="flex flex-col items-center text-center md:flex-row md:items-start md:text-left justify-between gap-1 md:gap-0">
+                <div className="flex flex-col items-center md:items-start">
+                    <h2 className="text-lg font-bold text-foreground flex items-center justify-center md:justify-start gap-2">
+                        <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
                         Turnos Pendientes de Confirmación
                     </h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
@@ -167,118 +168,214 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                     </p>
                 </div>
             ) : (
-                <div className="glass rounded-2xl shadow-glass overflow-hidden border border-border/40">
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left border-collapse">
-                            <thead>
-                                <tr className="border-b border-border/40 bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                    <th className="py-3 px-4">Fecha y Hora</th>
-                                    <th className="py-3 px-4">Paciente</th>
-                                    <th className="py-3 px-4">Profesional</th>
-                                    <th className="py-3 px-4">Tratamiento</th>
-                                    <th className="py-3 px-4">Último Recordatorio</th>
-                                    <th className="py-3 px-4 text-right">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/20 text-sm">
-                                <AnimatePresence initial={false}>
-                                    {initialTurnos.map((turno) => {
-                                        const dateObj = new Date(turno.fecha_inicio)
-                                        const formattedDate = format(dateObj, "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })
-                                            .replace(/^\w/, (c) => c.toUpperCase())
-                                        const status = getStatusTextAndIcon(turno)
-                                        const isSending = loadingMap[turno.id]
+                <>
+                    {/* Desktop View Table */}
+                    <div className="hidden md:block glass rounded-2xl shadow-glass overflow-hidden border border-border/40">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-border/40 bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                                        <th className="py-3 px-4">Fecha y Hora</th>
+                                        <th className="py-3 px-4">Paciente</th>
+                                        <th className="py-3 px-4">Profesional</th>
+                                        <th className="py-3 px-4">Tratamiento</th>
+                                        <th className="py-3 px-4">Último Recordatorio</th>
+                                        <th className="py-3 px-4 text-right">Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-border/20 text-sm">
+                                    <AnimatePresence initial={false}>
+                                        {initialTurnos.map((turno) => {
+                                            const dateObj = new Date(turno.fecha_inicio)
+                                            const formattedDate = format(dateObj, "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })
+                                                .replace(/^\w/, (c) => c.toUpperCase())
+                                            const status = getStatusTextAndIcon(turno)
+                                            const isSending = loadingMap[turno.id]
 
-                                        return (
-                                            <motion.tr
-                                                key={turno.id}
-                                                className="hover:bg-muted/10 transition-colors"
-                                                initial={{ opacity: 0 }}
-                                                animate={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
-                                            >
-                                                {/* Fecha y Hora */}
-                                                <td className="py-3 px-4 whitespace-nowrap font-medium text-foreground">
-                                                    {formattedDate}
-                                                </td>
+                                            return (
+                                                <motion.tr
+                                                    key={turno.id}
+                                                    className="hover:bg-muted/10 transition-colors"
+                                                    initial={{ opacity: 0 }}
+                                                    animate={{ opacity: 1 }}
+                                                    exit={{ opacity: 0 }}
+                                                >
+                                                    {/* Fecha y Hora */}
+                                                    <td className="py-3 px-4 whitespace-nowrap font-medium text-foreground">
+                                                        {formattedDate}
+                                                    </td>
 
-                                                {/* Paciente */}
-                                                <td className="py-3 px-4">
-                                                    <div>
-                                                        <p className="font-semibold text-foreground">
-                                                            {turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}` : '—'}
-                                                        </p>
-                                                        {turno.paciente?.telefono && (
-                                                            <p className="text-xs text-muted-foreground mt-0.5">
-                                                                {turno.paciente.telefono}
+                                                    {/* Paciente */}
+                                                    <td className="py-3 px-4">
+                                                        <div>
+                                                            <p className="font-semibold text-foreground">
+                                                                {turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}` : '—'}
                                                             </p>
-                                                        )}
-                                                    </div>
-                                                </td>
+                                                            {turno.paciente?.telefono && (
+                                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                                    {turno.paciente.telefono}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </td>
 
-                                                {/* Profesional */}
-                                                <td className="py-3 px-4 whitespace-nowrap">
-                                                    <div className="flex items-center gap-2">
-                                                        <span
-                                                            className="h-2 w-2 rounded-full"
-                                                            style={{ backgroundColor: turno.profesional?.color_agenda }}
-                                                        />
-                                                        <span className="text-foreground">
-                                                            Dr. {turno.profesional?.nombre} {turno.profesional?.apellido}
+                                                    {/* Profesional */}
+                                                    <td className="py-3 px-4 whitespace-nowrap">
+                                                        <div className="flex items-center gap-2">
+                                                            <span
+                                                                className="h-2 w-2 rounded-full"
+                                                                style={{ backgroundColor: turno.profesional?.color_agenda }}
+                                                            />
+                                                            <span className="text-foreground">
+                                                                Dr. {turno.profesional?.nombre} {turno.profesional?.apellido}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+
+                                                    {/* Tratamiento */}
+                                                    <td className="py-3 px-4 whitespace-nowrap">
+                                                        <span className="text-muted-foreground text-xs">
+                                                            {turno.tipo_tratamiento?.nombre || 'Consulta'}
                                                         </span>
-                                                    </div>
-                                                </td>
+                                                    </td>
 
-                                                {/* Tratamiento */}
-                                                <td className="py-3 px-4 whitespace-nowrap">
-                                                    <span className="text-muted-foreground text-xs">
-                                                        {turno.tipo_tratamiento?.nombre || 'Consulta'}
-                                                    </span>
-                                                </td>
+                                                    {/* Estado Recordatorio */}
+                                                    <td className="py-3 px-4 whitespace-nowrap">
+                                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${status.className}`}>
+                                                            {status.icon}
+                                                            {status.label}
+                                                        </span>
+                                                    </td>
 
-                                                {/* Estado Recordatorio */}
-                                                <td className="py-3 px-4 whitespace-nowrap">
-                                                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${status.className}`}>
-                                                        {status.icon}
-                                                        {status.label}
-                                                    </span>
-                                                </td>
-
-                                                {/* Acciones */}
-                                                <td className="py-3 px-4 text-right whitespace-nowrap">
-                                                    <div className="inline-flex items-center gap-2">
-                                                        <GlassButton
-                                                            size="sm"
-                                                            variant="glass"
-                                                            className="h-8 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
-                                                            onClick={() => handleSendReminder(turno.id)}
-                                                            loading={isSending}
-                                                            disabled={isSending || !turno.paciente?.telefono}
-                                                            title={turno.paciente?.telefono ? 'Enviar Recordatorio WhatsApp' : 'Paciente sin Teléfono'}
-                                                        >
-                                                            <Bell className="h-3.5 w-3.5 mr-1 shrink-0" />
-                                                            Recordatorio
-                                                        </GlassButton>
-                                                        <GlassButton
-                                                            size="sm"
-                                                            variant="glass"
-                                                            className="h-8 border-primary/20 hover:border-primary/50 text-primary"
-                                                            onClick={() => router.push(`/agenda?edit=${turno.id}`)}
-                                                            title="Editar turno"
-                                                        >
-                                                            <Edit2 className="h-3.5 w-3.5 mr-1" />
-                                                            Editar
-                                                        </GlassButton>
-                                                    </div>
-                                                </td>
-                                            </motion.tr>
-                                        )
-                                    })}
-                                </AnimatePresence>
-                            </tbody>
-                        </table>
+                                                    {/* Acciones */}
+                                                    <td className="py-3 px-4 text-right whitespace-nowrap">
+                                                        <div className="inline-flex items-center gap-2">
+                                                            <GlassButton
+                                                                size="sm"
+                                                                variant="glass"
+                                                                className="h-8 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
+                                                                onClick={() => handleSendReminder(turno.id)}
+                                                                loading={isSending}
+                                                                disabled={isSending || !turno.paciente?.telefono}
+                                                                title={turno.paciente?.telefono ? 'Enviar Recordatorio WhatsApp' : 'Paciente sin Teléfono'}
+                                                            >
+                                                                <Bell className="h-3.5 w-3.5 mr-1 shrink-0" />
+                                                                Recordatorio
+                                                            </GlassButton>
+                                                            <GlassButton
+                                                                size="sm"
+                                                                variant="glass"
+                                                                className="h-8 border-primary/20 hover:border-primary/50 text-primary"
+                                                                onClick={() => router.push(`/agenda?edit=${turno.id}`)}
+                                                                title="Editar turno"
+                                                            >
+                                                                <Edit2 className="h-3.5 w-3.5 mr-1" />
+                                                                Editar
+                                                            </GlassButton>
+                                                        </div>
+                                                    </td>
+                                                </motion.tr>
+                                            )
+                                        })}
+                                    </AnimatePresence>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
-                </div>
+
+                    {/* Mobile View Cards */}
+                    <div className="block md:hidden space-y-3">
+                        <AnimatePresence initial={false}>
+                            {initialTurnos.map((turno) => {
+                                const dateObj = new Date(turno.fecha_inicio)
+                                const formattedDate = format(dateObj, "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })
+                                    .replace(/^\w/, (c) => c.toUpperCase())
+                                const status = getStatusTextAndIcon(turno)
+                                const isSending = loadingMap[turno.id]
+
+                                return (
+                                    <motion.div
+                                        key={turno.id}
+                                        className="glass rounded-2xl p-4 border border-border/40 space-y-3"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                    >
+                                        {/* Header: Date and status badge */}
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="font-semibold text-foreground text-sm">
+                                                {formattedDate}
+                                            </div>
+                                            <span className={cn(
+                                                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border shrink-0',
+                                                status.className
+                                            )}>
+                                                {status.icon}
+                                                {status.label}
+                                            </span>
+                                        </div>
+
+                                        {/* Details grid: Patient, Professional, Treatment */}
+                                        <div className="grid grid-cols-2 gap-3 text-xs border-y border-border/10 py-3">
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground font-medium uppercase tracking-wider text-[9px]">Paciente</p>
+                                                <p className="font-semibold text-foreground">
+                                                    {turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}` : '—'}
+                                                </p>
+                                                {turno.paciente?.telefono && (
+                                                    <p className="text-muted-foreground text-[11px]">{turno.paciente.telefono}</p>
+                                                )}
+                                            </div>
+                                            <div className="space-y-1">
+                                                <p className="text-muted-foreground font-medium uppercase tracking-wider text-[9px]">Profesional</p>
+                                                <div className="flex items-center gap-1.5">
+                                                    <span
+                                                        className="h-2 w-2 rounded-full shrink-0"
+                                                        style={{ backgroundColor: turno.profesional?.color_agenda }}
+                                                    />
+                                                    <span className="text-foreground font-medium truncate">
+                                                        Dr. {turno.profesional?.nombre} {turno.profesional?.apellido}
+                                                    </span>
+                                                </div>
+                                                {turno.tipo_tratamiento?.nombre && (
+                                                    <p className="text-muted-foreground text-[11px] truncate mt-0.5">
+                                                        {turno.tipo_tratamiento.nombre}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+
+                                        {/* Action Buttons */}
+                                        <div className="flex items-center gap-2 pt-1">
+                                            <GlassButton
+                                                size="sm"
+                                                variant="glass"
+                                                className="flex-1 h-9 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium text-xs justify-center"
+                                                onClick={() => handleSendReminder(turno.id)}
+                                                loading={isSending}
+                                                disabled={isSending || !turno.paciente?.telefono}
+                                                title={turno.paciente?.telefono ? 'Enviar Recordatorio WhatsApp' : 'Paciente sin Teléfono'}
+                                            >
+                                                <Bell className="h-3.5 w-3.5 mr-1 shrink-0" />
+                                                Recordatorio
+                                            </GlassButton>
+                                            <GlassButton
+                                                size="sm"
+                                                variant="glass"
+                                                className="flex-1 h-9 border-primary/20 hover:border-primary/50 text-primary text-xs justify-center"
+                                                onClick={() => router.push(`/agenda?edit=${turno.id}`)}
+                                                title="Editar turno"
+                                            >
+                                                <Edit2 className="h-3.5 w-3.5 mr-1" />
+                                                Editar
+                                            </GlassButton>
+                                        </div>
+                                    </motion.div>
+                                )
+                            })}
+                        </AnimatePresence>
+                    </div>
+                </>
             )}
         </div>
     )

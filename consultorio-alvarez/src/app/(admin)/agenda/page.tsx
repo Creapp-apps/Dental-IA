@@ -60,7 +60,7 @@ export default async function AgendaPage({ searchParams }: PageProps) {
 
     return (
         <div className="space-y-4">
-            <div>
+            <div className="text-center md:text-left">
                 <h1 className="text-2xl font-bold text-foreground">Agenda</h1>
                 <p className="text-sm text-muted-foreground mt-0.5">Vista semanal — todos los profesionales</p>
             </div>

@@ -116,6 +116,12 @@ export function AgendaView({
     const [isPending, startTransition] = useTransition()
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [zoom, setZoom] = useState(100) // Zoom percentage: 80, 100, 120, 150, 200
+    const [filtroProfMobile, setFiltroProfMobile] = useState<string>('todos')
+    const [turnoExpandeMobile, setTurnoExpandeMobile] = useState<string | null>(null)
+
+    const toggleTurnoExpande = (id: string) => {
+        setTurnoExpandeMobile(prev => prev === id ? null : id)
+    }
 
     // Sync fechaInicial prop to local state
     useEffect(() => {
@@ -654,6 +660,243 @@ export function AgendaView({
         setModalOpen(true)
     }
 
+    const handleImprimirTicket = (t: any) => {
+        const printWindow = window.open('', '_blank', 'width=350,height=650');
+        if (!printWindow) {
+            alert('Por favor habilite las ventanas emergentes (popups) para poder imprimir el comprobante.');
+            return;
+        }
+
+        const fechaObj = parseISO(t.fecha_inicio);
+        const fechaFormateada = format(fechaObj, "EEEE d 'de' MMMM 'de' yyyy", { locale: es });
+        const horaFormateada = format(fechaObj, 'HH:mm');
+        const pacienteNombre = `${t.paciente?.apellido || ''}, ${t.paciente?.nombre || ''}`;
+        const dni = t.paciente?.dni || 'No registrado';
+        const telefono = t.paciente?.telefono || 'No registrado';
+        const profesional = `Dr. ${t.profesional?.nombre || ''} ${t.profesional?.apellido || ''}`;
+        const tratamiento = t.tipo_tratamiento?.nombre || 'Consulta General';
+        const esST = t.es_sobreturno === true;
+
+        // Parse contact details from landingConfig
+        const address = landingConfig?.footer_address || 'Avenida Maipu 2481, Piso 1 dpto "B", Olivos';
+        
+        let telefonoFijo = '4794-9367';
+        let whatsappSecretaria = '11 6103-9248';
+        let telefonoParticular = '11 3020-1396';
+        
+        if (landingConfig?.footer_phone) {
+            const phones = landingConfig.footer_phone.split(' | ').map((s: string) => {
+                const parts = s.split('::');
+                return { num: parts[0] || '', lbl: parts[1] || '' };
+            });
+            
+            const fijoObj = phones.find((p: any) => p.lbl.toLowerCase().includes('fijo'));
+            if (fijoObj) telefonoFijo = fijoObj.num;
+            
+            const waObj = phones.find((p: any) => p.lbl.toLowerCase().includes('whatsapp') || p.lbl.toLowerCase().includes('secretaria'));
+            if (waObj) whatsappSecretaria = waObj.num;
+            
+            const partObj = phones.find((p: any) => p.lbl.toLowerCase().includes('particular') || p.lbl.toLowerCase().includes('inteligente'));
+            if (partObj) telefonoParticular = partObj.num;
+        }
+
+        const formatPhone = (numStr: string) => {
+            const clean = numStr.replace(/\s+/g, '').replace(/-/g, '');
+            if (clean.length === 10 && clean.startsWith('11')) {
+                return `11 ${clean.slice(2, 6)}-${clean.slice(6)}`;
+            }
+            return numStr;
+        };
+
+        let ticketHtml = `
+            <!DOCTYPE html>
+            <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Comprobante de Turno</title>
+                    <style>
+                        @page {
+                            size: 80mm auto;
+                            margin: 0;
+                        }
+                        body {
+                            font-family: 'Courier New', Courier, monospace;
+                            width: 72mm;
+                            margin: 0;
+                            padding: 8px 12px 24px 12px;
+                            font-size: 14px;
+                            color: #000;
+                            line-height: 1.3;
+                            box-sizing: border-box;
+                        }
+                        .text-center {
+                            text-align: center;
+                        }
+                        .bold {
+                            font-weight: bold;
+                        }
+                        .divider {
+                            border-top: 1px dashed #000;
+                            margin: 6px 0;
+                            height: 0;
+                        }
+                        .header {
+                            font-size: 18px;
+                            font-weight: bold;
+                            text-transform: uppercase;
+                            margin-bottom: 2px;
+                        }
+                        .subtitle {
+                            font-size: 11px;
+                            margin-bottom: 8px;
+                        }
+                        .ticket-logo {
+                            max-width: 140px;
+                            max-height: 55px;
+                            margin-bottom: 8px;
+                            display: inline-block;
+                        }
+                        .title-ticket {
+                            font-size: 15px;
+                            font-weight: bold;
+                            margin: 6px 0;
+                            text-transform: uppercase;
+                            letter-spacing: 1px;
+                        }
+                        .section-title {
+                            font-size: 10px;
+                            font-weight: bold;
+                            text-transform: uppercase;
+                            margin-top: 5px;
+                            color: #444;
+                        }
+                        .section-value {
+                            font-size: 15px;
+                            margin-bottom: 4px;
+                            word-wrap: break-word;
+                        }
+                        .time-block {
+                            font-size: 19px;
+                            font-weight: bold;
+                            margin: 4px 0;
+                        }
+                        .contact-info {
+                            font-size: 13px;
+                            line-height: 1.4;
+                            margin-top: 8px;
+                            text-align: left;
+                        }
+                        .footer-msg {
+                            font-size: 14px;
+                            margin-top: 10px;
+                            text-align: center;
+                            line-height: 1.4;
+                        }
+                        .sobreturno-badge {
+                            border: 1px solid #000;
+                            padding: 2px 6px;
+                            display: inline-block;
+                            margin: 4px 0;
+                            font-weight: bold;
+                            font-size: 13px;
+                        }
+                    </style>
+                </head>
+                <body>
+                    <div class="text-center">
+                        <img src="${window.location.origin}/LOGO-ALVAREZ.png" alt="Logo" class="ticket-logo" />
+                        <div class="header">CONSULTORIO ALVAREZ</div>
+                        <div class="subtitle">Odontología Integral</div>
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="text-center title-ticket">
+                        COMPROBANTE DE TURNO
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div>
+                        <div class="section-title">Paciente</div>
+                        <div class="section-value bold">${pacienteNombre}</div>
+                        
+                        <div class="section-title">DNI</div>
+                        <div class="section-value">${dni}</div>`;
+
+        if (telefono && telefono !== 'No registrado') {
+            ticketHtml += `
+                        <div class="section-title">Teléfono</div>
+                        <div class="section-value">${telefono}</div>`;
+        }
+
+        ticketHtml += `
+                        <div class="divider"></div>
+                        
+                        <div class="section-title">Fecha</div>
+                        <div class="section-value bold" style="text-transform: capitalize;">${fechaFormateada}</div>
+                        
+                        <div class="section-title">Hora</div>
+                        <div class="time-block">${horaFormateada} hs</div>`;
+
+        if (esST) {
+            ticketHtml += `
+                        <div class="text-center">
+                            <span class="sobreturno-badge">SOBRETURNO</span>
+                        </div>`;
+        }
+
+        ticketHtml += `
+                        <div class="section-title">Profesional</div>
+                        <div class="section-value">${profesional}</div>
+                        
+                        <div class="section-title">Tratamiento</div>
+                        <div class="section-value">${tratamiento}</div>
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="contact-info">
+                        <strong>Contacto:</strong><br>
+                        • Tel. Consultorio: ${formatPhone(telefonoFijo)}<br>
+                        • WhatsApp Sec.: ${formatPhone(whatsappSecretaria)}<br>
+                        • Tel. Particular: ${formatPhone(telefonoParticular)}<br>
+                        • Domicilio: ${address}
+                    </div>
+                    
+                    <div class="divider"></div>
+                    
+                    <div class="footer-msg">
+                        Recuerde que podrá autogestionar su turno<br>
+                        desde nuestra nueva web:<br>
+                        <strong>www.dentalva.ar</strong>!
+                    </div>
+                    
+                    <script>
+                        window.onload = function() {
+                            setTimeout(function() {
+                                window.print();
+                                window.close();
+                            }, 500);
+                        }
+                    </script>
+                </body>
+            </html>`;
+
+        printWindow.document.write(ticketHtml);
+        printWindow.document.close();
+    };
+
+    const turnosMobileFiltrados = useMemo(() => {
+        const turnosDia = turnos.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), diaSeleccionado))
+        if (filtroProfMobile === 'todos') {
+            return turnosDia.sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime())
+        }
+        return turnosDia
+            .filter((t: any) => t.profesional_id === filtroProfMobile)
+            .sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime())
+    }, [turnos, diaSeleccionado, filtroProfMobile])
+
     return (
         <div className="space-y-4 relative">
             {/* Real-time Mutation Overlay Spinner */}
@@ -680,8 +923,8 @@ export function AgendaView({
             </AnimatePresence>
 
             {/* View mode selector + navigation */}
-            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="flex items-center justify-between flex-wrap gap-3">
-                <div className="flex items-center gap-2 flex-wrap">
+            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="flex flex-col md:flex-row items-center justify-center md:justify-between flex-wrap gap-3 w-full">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 w-full md:w-auto">
                     {/* View mode pills */}
                     <div className="flex items-center gap-0.5 glass rounded-xl p-0.5">
                         {VIEW_OPTIONS.map(opt => (
@@ -701,7 +944,7 @@ export function AgendaView({
                     </div>
 
                     {/* Navigation arrows */}
-                    <div className="flex items-center gap-1.5 ml-1">
+                    <div className="flex items-center gap-1.5 ml-0 sm:ml-1.5">
                         <GlassButton variant="glass" size="icon-sm" onClick={navAnterior}>
                             <ChevronLeft className="h-4 w-4" />
                         </GlassButton>
@@ -714,12 +957,12 @@ export function AgendaView({
                     </div>
 
                     {/* Range label */}
-                    <span className="text-sm font-medium text-foreground ml-1 capitalize">
+                    <span className="text-sm font-medium text-foreground ml-0 sm:ml-1.5 capitalize text-center">
                         {getRangeLabel()}
                     </span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto flex-wrap">
                     {usesCustomWidth && (
                         <div className="flex items-center gap-1 glass-subtle rounded-xl p-0.5 border border-white/5 mr-1">
                             <GlassButton
@@ -763,8 +1006,8 @@ export function AgendaView({
             {true && (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible"
                     className={cn(
-                        'flex gap-1.5 overflow-x-auto scrollbar-hide pb-1',
-                        (vistaActiva === 'semana' || vistaActiva === 'hoy') && 'grid grid-cols-7'
+                        'flex gap-2 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory',
+                        (vistaActiva === 'semana' || vistaActiva === 'hoy') && 'md:grid md:grid-cols-7 md:overflow-x-visible md:snap-none'
                     )}
                 >
                     {diasVisibles.map((dia) => {
@@ -776,6 +1019,7 @@ export function AgendaView({
                         return (
                             <motion.button
                                 key={dia.toISOString()}
+                                id={`day-btn-${format(dia, 'yyyy-MM-dd')}`}
                                 onClick={() => {
                                     setDiaSeleccionado(dia)
                                     setBaseDate(dia)
@@ -785,11 +1029,18 @@ export function AgendaView({
                                         if (colEl) {
                                             colEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
                                         }
+                                        const btnId = `day-btn-${format(dia, 'yyyy-MM-dd')}`
+                                        const btnEl = document.getElementById(btnId)
+                                        if (btnEl) {
+                                            btnEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+                                        }
                                     }, 50)
                                 }}
                                 className={cn(
-                                    'relative rounded-xl p-2.5 text-center transition-all cursor-pointer border shrink-0 flex flex-col items-center justify-between',
-                                    vistaActiva !== 'semana' && vistaActiva !== 'hoy' && 'min-w-[4.5rem]',
+                                    'relative rounded-xl p-2 md:p-2.5 text-center transition-all cursor-pointer border flex flex-col items-center justify-between',
+                                    (vistaActiva === 'semana' || vistaActiva === 'hoy')
+                                        ? 'w-14 md:w-auto shrink-0 md:shrink snap-center md:snap-align-none'
+                                        : 'min-w-[4.5rem] shrink-0 snap-center',
                                     isSelected
                                         ? 'bg-primary border-primary text-primary-foreground shadow-glass-lg'
                                         : esHoy
@@ -801,9 +1052,9 @@ export function AgendaView({
                                 whileHover={{ scale: 1.02 }}
                                 whileTap={{ scale: 0.98 }}
                             >
-                                {/* Dot indicator for days with turnos */}
+                                {/* Dot indicator for days with turnos (Desktop) */}
                                 {totalDia > 0 && (
-                                    <span className="absolute top-1.5 right-1.5 flex h-2 w-2">
+                                    <span className="hidden md:flex absolute top-1.5 right-1.5 h-2 w-2">
                                         {pendientesDia > 0 ? (
                                             <>
                                                 <span className={cn(
@@ -828,31 +1079,50 @@ export function AgendaView({
                                         )}
                                     </span>
                                 )}
-                                <p className={cn("text-xs uppercase tracking-wide", isSelected ? "opacity-90" : "opacity-70")}>
+                                <p className={cn("text-[9px] md:text-xs uppercase tracking-wide", isSelected ? "opacity-90" : "opacity-70")}>
                                     {format(dia, 'EEE', { locale: es })}
                                 </p>
-                                <p className="text-xl font-bold leading-tight my-0.5">{format(dia, 'd')}</p>
+                                <p className="text-lg md:text-xl font-bold leading-tight my-0.5">{format(dia, 'd')}</p>
                                 {totalDia > 0 && (
-                                    <div className="flex flex-col gap-1 items-center w-full">
-                                        <p className={cn(
-                                            "text-[10px] font-semibold rounded-full px-1.5 py-0.5 mx-auto w-fit",
-                                            isSelected
-                                                ? 'bg-white/20 text-white'
-                                                : 'bg-primary/10 text-primary'
-                                        )}>
-                                            {totalDia} turno{totalDia > 1 ? 's' : ''}
-                                        </p>
-                                        {pendientesDia > 0 && (
-                                            <span className={cn(
-                                                "text-[9px] font-extrabold rounded-md px-1 py-0.5 w-fit text-center animate-pulse",
+                                    <>
+                                        {/* Desktop verbose count badges */}
+                                        <div className="hidden md:flex flex-col gap-1 items-center w-full">
+                                            <p className={cn(
+                                                "text-[10px] font-semibold rounded-full px-1.5 py-0.5 mx-auto w-fit",
                                                 isSelected
-                                                    ? 'bg-amber-400 text-black shadow-[0_0_8px_rgba(245,158,11,0.4)]'
-                                                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                    ? 'bg-white/20 text-white'
+                                                    : 'bg-primary/10 text-primary'
                                             )}>
-                                                {pendientesDia} sin conf.
-                                            </span>
-                                        )}
-                                    </div>
+                                                {totalDia} turno{totalDia > 1 ? 's' : ''}
+                                            </p>
+                                            {pendientesDia > 0 && (
+                                                <span className={cn(
+                                                    "text-[9px] font-extrabold rounded-md px-1 py-0.5 w-fit text-center animate-pulse",
+                                                    isSelected
+                                                        ? 'bg-amber-400 text-black shadow-[0_0_8px_rgba(245,158,11,0.4)]'
+                                                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                                )}>
+                                                    {pendientesDia} sin conf.
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* Mobile compact dot bar */}
+                                        <div className="flex md:hidden items-center justify-center gap-1 mt-1">
+                                            {totalDia > pendientesDia && (
+                                                <span className={cn(
+                                                    "h-1.5 w-1.5 rounded-full",
+                                                    isSelected ? "bg-white" : "bg-emerald-500"
+                                                )} />
+                                            )}
+                                            {pendientesDia > 0 && (
+                                                <span className={cn(
+                                                    "h-1.5 w-1.5 rounded-full animate-pulse",
+                                                    isSelected ? "bg-amber-300" : "bg-amber-500"
+                                                )} />
+                                            )}
+                                        </div>
+                                    </>
                                 )}
                             </motion.button>
                         )
@@ -866,7 +1136,7 @@ export function AgendaView({
                 variants={sectionVariants} 
                 initial="hidden" 
                 animate="visible" 
-                className="flex flex-col border border-border/40 rounded-2xl bg-card/10 backdrop-blur-xl shadow-glass overflow-hidden"
+                className="hidden md:flex flex-col border border-border/40 rounded-2xl bg-card/10 backdrop-blur-xl shadow-glass overflow-hidden"
             >
                 {/* Single horizontal scroll wrapper */}
                 <div className="flex-1 overflow-x-auto scrollbar-hide flex flex-col min-w-0 w-full">
@@ -1028,6 +1298,261 @@ export function AgendaView({
                 </div>
             </motion.div>
 
+            {/* Mobile Timeline View */}
+            <div className="block md:hidden space-y-4">
+                {/* Professional filter pills */}
+                <div className="flex gap-2 overflow-x-auto justify-center scrollbar-hide py-1 px-0.5 select-none">
+                    <button
+                        onClick={() => setFiltroProfMobile('todos')}
+                        className={cn(
+                            "px-3.5 py-1.5 text-xs font-semibold rounded-full border transition-all duration-200 shrink-0",
+                            filtroProfMobile === 'todos'
+                                ? "bg-primary border-primary text-primary-foreground shadow-[0_0_12px_rgba(59,130,246,0.25)]"
+                                : "glass border-white/10 text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        Todos
+                    </button>
+                    {profesionales.map(prof => (
+                        <button
+                            key={prof.id}
+                            onClick={() => setFiltroProfMobile(prof.id)}
+                            className={cn(
+                                "px-3.5 py-1.5 text-xs font-semibold rounded-full border transition-all duration-200 shrink-0 flex items-center gap-1.5",
+                                filtroProfMobile === prof.id
+                                    ? "border-transparent text-foreground shadow-md"
+                                    : "glass border-white/10 text-muted-foreground hover:text-foreground"
+                            )}
+                            style={
+                                filtroProfMobile === prof.id
+                                    ? { backgroundColor: `${prof.color_agenda}25`, border: `1px solid ${prof.color_agenda}` }
+                                    : undefined
+                            }
+                        >
+                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: prof.color_agenda }} />
+                            Dr. {prof.nombre}
+                        </button>
+                    ))}
+                </div>
+
+                {/* Turnos chronological list */}
+                {turnosMobileFiltrados.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center p-8 text-center glass border border-white/5 rounded-2xl py-12">
+                        <Clock className="h-10 w-10 text-muted-foreground/60 mb-3 animate-pulse" />
+                        <h3 className="text-sm font-semibold text-foreground">No hay turnos</h3>
+                        <p className="text-xs text-muted-foreground mt-1 max-w-[220px] mx-auto">
+                            No se encontraron turnos agendados para este día con los filtros seleccionados.
+                        </p>
+                        <GlassButton
+                            onClick={() => abrirModalConProf(
+                                filtroProfMobile !== 'todos' ? filtroProfMobile : (profesionales[0]?.id ?? ''),
+                                format(diaSeleccionado, 'yyyy-MM-dd'),
+                                '09:00'
+                            )}
+                            variant="glass"
+                            size="sm"
+                            className="mt-4 border border-white/10"
+                        >
+                            <Plus className="h-4 w-4 mr-1.5" />
+                            Nuevo turno
+                        </GlassButton>
+                    </div>
+                ) : (
+                    <div className="space-y-3 pb-16">
+                        {turnosMobileFiltrados.map((turno) => {
+                            const isExpanded = turnoExpandeMobile === turno.id
+                            const horaInicio = format(parseISO(turno.fecha_inicio), 'HH:mm')
+                            const horaFin = format(parseISO(turno.fecha_fin), 'HH:mm')
+                            const duracionMin = Math.round(
+                                (new Date(turno.fecha_fin).getTime() - new Date(turno.fecha_inicio).getTime()) / (1000 * 60)
+                            )
+                            const isST = turno.es_sobreturno === true
+                            const estado = turno.estado as EstadoTurno
+                            const borderLeftColor = isST ? '#ef4444' : (turno.tipo_tratamiento?.color ?? turno.profesional?.color_agenda ?? '#ffffff')
+                            const bgColor = isST ? 'rgba(239, 68, 68, 0.08)' : `${turno.tipo_tratamiento?.color ?? turno.profesional?.color_agenda ?? '#ffffff'}08`
+                            
+                            return (
+                                <motion.div
+                                    key={turno.id}
+                                    layout="position"
+                                    className="flex gap-2.5 items-stretch relative"
+                                >
+                                    {/* Hour label */}
+                                    <div className="w-12 shrink-0 flex flex-col justify-start pt-2.5 text-right pr-1 select-none">
+                                        <span className="text-xs font-bold text-foreground leading-tight">{horaInicio}</span>
+                                        <span className="text-[10px] text-muted-foreground leading-tight">{horaFin}</span>
+                                        <span className="text-[9px] text-muted-foreground/60 font-mono mt-0.5">{duracionMin}m</span>
+                                    </div>
+
+                                    {/* Timeline visual line */}
+                                    <div className="flex flex-col items-center shrink-0 w-3 relative">
+                                        <div 
+                                            className="h-3 w-3 rounded-full border-2 border-background z-10 shrink-0 mt-3"
+                                            style={{ backgroundColor: borderLeftColor }}
+                                        />
+                                        <div className="w-0.5 bg-border/20 absolute top-3.5 bottom-0 -z-0" />
+                                    </div>
+
+                                    {/* Interactive card container */}
+                                    <div 
+                                        onClick={() => toggleTurnoExpande(turno.id)}
+                                        className={cn(
+                                            "flex-1 rounded-xl border border-white/5 p-3.5 transition-all cursor-pointer relative overflow-hidden",
+                                            isExpanded ? "shadow-lg bg-white/[0.04]" : "shadow-sm bg-white/[0.01] hover:bg-white/[0.02]"
+                                        )}
+                                        style={{
+                                            borderLeft: `3px solid ${borderLeftColor}`,
+                                            backgroundColor: isExpanded ? `${borderLeftColor}12` : bgColor
+                                        }}
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-1.5 flex-wrap">
+                                                    <h4 className="text-sm font-bold text-foreground truncate">
+                                                        {turno.paciente?.apellido || 'Sin apellido'}, {turno.paciente?.nombre || 'Sin nombre'}
+                                                    </h4>
+                                                    {isST && (
+                                                        <span className="text-[8px] font-extrabold bg-red-500/20 text-red-400 border border-red-500/30 rounded px-1 leading-none py-0.5 uppercase tracking-wide">
+                                                            ST
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-muted-foreground mt-0.5 font-medium truncate">
+                                                    {turno.tipo_tratamiento?.nombre || 'Consulta General'}
+                                                </p>
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: turno.profesional?.color_agenda }} />
+                                                    <span className="text-[10px] text-muted-foreground">Dr. {turno.profesional?.nombre || 'General'}</span>
+                                                </div>
+                                            </div>
+                                            <div className="shrink-0 scale-95 origin-top-right">
+                                                <StatusBadge status={estado} />
+                                            </div>
+                                        </div>
+
+                                        {/* Expansion panel for actions */}
+                                        <AnimatePresence initial={false}>
+                                            {isExpanded && (
+                                                <motion.div
+                                                    initial={{ height: 0, opacity: 0, marginTop: 0 }}
+                                                    animate={{ height: 'auto', opacity: 1, marginTop: 12 }}
+                                                    exit={{ height: 0, opacity: 0, marginTop: 0 }}
+                                                    transition={{ duration: 0.2, ease: 'easeInOut' }}
+                                                    onClick={(e) => e.stopPropagation()} // Stop bubbling up to toggleTurnoExpande
+                                                    className="overflow-hidden border-t border-white/5 pt-3"
+                                                >
+                                                    {/* Notas section */}
+                                                    {turno.notas && (
+                                                        <div className="mb-3 bg-black/40 p-2.5 rounded-lg border border-white/5">
+                                                            <p className="text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Notas:</p>
+                                                            <p className="text-xs text-slate-300 font-mono whitespace-pre-line leading-relaxed">{turno.notas}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* State changes row */}
+                                                    <div className="flex flex-wrap gap-1 mb-3">
+                                                        {estado === 'PENDIENTE' && (
+                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2.5 border border-white/10 hover:bg-white/10 text-slate-200"
+                                                                onClick={() => { handleCambiarEstado(turno.id, 'CONFIRMADO'); }}>
+                                                                ✓ Confirmar
+                                                            </GlassButton>
+                                                        )}
+                                                        {estado === 'CONFIRMADO' && (
+                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2.5 border-violet-500/20 bg-violet-500/10 text-violet-400 hover:bg-violet-500/25"
+                                                                onClick={() => { handleCambiarEstado(turno.id, 'EN_SALA'); }}>
+                                                                🔔 En sala
+                                                            </GlassButton>
+                                                        )}
+                                                        {estado === 'EN_SALA' && (
+                                                            <GlassButton size="sm" variant="success" className="h-7 text-[10px] px-2.5"
+                                                                onClick={() => { handleCambiarEstado(turno.id, 'ATENDIDO'); }}>
+                                                                ✓ Atendido
+                                                            </GlassButton>
+                                                        )}
+                                                        {!['ATENDIDO', 'CANCELADO', 'AUSENTE'].includes(estado) && (
+                                                            <GlassButton size="sm" variant="ghost" className="h-7 text-[10px] px-2.5 text-red-400 hover:bg-red-500/10 hover:text-red-300 border-transparent"
+                                                                onClick={() => { handleCambiarEstado(turno.id, 'CANCELADO'); }}>
+                                                                Cancelar
+                                                            </GlassButton>
+                                                        )}
+                                                        {estado === 'ATENDIDO' && (
+                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2.5 border border-white/10 hover:bg-white/10 text-slate-200"
+                                                                onClick={() => { handleCambiarEstado(turno.id, 'PENDIENTE'); }}>
+                                                                Revertir
+                                                            </GlassButton>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Secondary actions grid */}
+                                                    <div className="grid grid-cols-2 gap-1.5">
+                                                        {!['ATENDIDO', 'CANCELADO', 'AUSENTE'].includes(estado) && (
+                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-amber-500/20 text-amber-400"
+                                                                onClick={() => handleExtend20Minutes(turno.id)}>
+                                                                <Clock className="h-3.5 w-3.5 mr-1 text-amber-400 shrink-0" />
+                                                                +20 Min
+                                                            </GlassButton>
+                                                        )}
+                                                        {turno.paciente?.telefono && (
+                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-emerald-500/20 text-emerald-400"
+                                                                onClick={() => setTurnoADemorar(turno)}>
+                                                                <MessageSquare className="h-3.5 w-3.5 mr-1 text-emerald-400 shrink-0" />
+                                                                Avisar Demora
+                                                            </GlassButton>
+                                                        )}
+                                                        {turno.paciente?.telefono && (
+                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-sky-500/20 text-sky-400"
+                                                                onClick={async () => {
+                                                                    const res = await enviarRecordatorioManual(turno.id)
+                                                                    if (res?.error) glassAlert.error({ title: 'Error', description: res.error })
+                                                                    else glassAlert.success({ title: 'Recordatorio enviado' })
+                                                                }}>
+                                                                <Bell className="h-3.5 w-3.5 mr-1 text-sky-400 shrink-0" />
+                                                                Recordar
+                                                            </GlassButton>
+                                                        )}
+                                                        <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-emerald-500/20 text-emerald-400"
+                                                            onClick={() => handleImprimirTicket(turno)}>
+                                                            <Printer className="h-3.5 w-3.5 mr-1 text-emerald-400 shrink-0" />
+                                                            Comprobante
+                                                        </GlassButton>
+                                                        <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-blue-500/20 text-blue-400"
+                                                            onClick={() => handleEditTurno(turno)}>
+                                                            <Edit2 className="h-3.5 w-3.5 mr-1 text-blue-400 shrink-0" />
+                                                            Editar
+                                                        </GlassButton>
+                                                        <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-red-500/20 text-red-400 hover:bg-red-500/10"
+                                                            onClick={() => handleDeleteTurno(turno.id)}>
+                                                            <Trash2 className="h-3.5 w-3.5 mr-1 text-red-400 shrink-0" />
+                                                            Eliminar
+                                                        </GlassButton>
+                                                    </div>
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                </motion.div>
+                            )
+                        })}
+                    </div>
+                )}
+            </div>
+
+            {/* Mobile FAB button */}
+            <div className="fixed bottom-6 right-6 z-40 md:hidden">
+                <GlassButton
+                    onClick={() => {
+                        setTurnoAEditar(null)
+                        setModalProfId(profesionales[0]?.id ?? '')
+                        setModalOpen(true)
+                    }}
+                    variant="default"
+                    className="h-14 w-14 rounded-full flex items-center justify-center shadow-lg p-0 border border-white/10"
+                    title="Nuevo turno"
+                >
+                    <Plus className="h-6 w-6 text-primary-foreground" />
+                </GlassButton>
+            </div>
+
             {/* Modal nuevo turno */}
             <NuevoTurnoModal
                 open={modalOpen}
@@ -1109,6 +1634,7 @@ export function AgendaView({
                 isPending={isPending}
                 onAdd20Minutes={handleExtend20Minutes}
                 landingConfig={landingConfig}
+                onImprimirTicket={handleImprimirTicket}
             />
         </div>
     )
@@ -1374,6 +1900,7 @@ interface TurnoDetailModalProps {
     isPending: boolean
     onAdd20Minutes?: (id: string) => void
     landingConfig?: any
+    onImprimirTicket: (turno: any) => void
 }
 
 function TurnoDetailModal({
@@ -1387,6 +1914,7 @@ function TurnoDetailModal({
     isPending,
     onAdd20Minutes,
     landingConfig,
+    onImprimirTicket,
 }: TurnoDetailModalProps) {
     const [isSendingReminder, setIsSendingReminder] = useState(false)
 
@@ -1418,233 +1946,6 @@ function TurnoDetailModal({
             setIsSendingReminder(false)
         }
     }
-
-    const handleImprimirTicket = (t: any) => {
-        const printWindow = window.open('', '_blank', 'width=350,height=650');
-        if (!printWindow) {
-            alert('Por favor habilite las ventanas emergentes (popups) para poder imprimir el comprobante.');
-            return;
-        }
-
-        const fechaObj = parseISO(t.fecha_inicio);
-        const fechaFormateada = format(fechaObj, "EEEE d 'de' MMMM 'de' yyyy", { locale: es });
-        const horaFormateada = format(fechaObj, 'HH:mm');
-        const pacienteNombre = `${t.paciente?.apellido || ''}, ${t.paciente?.nombre || ''}`;
-        const dni = t.paciente?.dni || 'No registrado';
-        const telefono = t.paciente?.telefono || 'No registrado';
-        const profesional = `Dr. ${t.profesional?.nombre || ''} ${t.profesional?.apellido || ''}`;
-        const tratamiento = t.tipo_tratamiento?.nombre || 'Consulta General';
-        const esST = t.es_sobreturno === true;
-
-        // Parse contact details from landingConfig
-        const address = landingConfig?.footer_address || 'Avenida Maipu 2481, Piso 1 dpto "B", Olivos';
-        
-        let telefonoFijo = '4794-9367';
-        let whatsappSecretaria = '11 6103-9248';
-        let telefonoParticular = '11 3020-1396';
-        
-        if (landingConfig?.footer_phone) {
-            const phones = landingConfig.footer_phone.split(' | ').map((s: string) => {
-                const parts = s.split('::');
-                return { num: parts[0] || '', lbl: parts[1] || '' };
-            });
-            
-            const fijoObj = phones.find((p: any) => p.lbl.toLowerCase().includes('fijo'));
-            if (fijoObj) telefonoFijo = fijoObj.num;
-            
-            const waObj = phones.find((p: any) => p.lbl.toLowerCase().includes('whatsapp') || p.lbl.toLowerCase().includes('secretaria'));
-            if (waObj) whatsappSecretaria = waObj.num;
-            
-            const partObj = phones.find((p: any) => p.lbl.toLowerCase().includes('particular') || p.lbl.toLowerCase().includes('inteligente'));
-            if (partObj) telefonoParticular = partObj.num;
-        }
-
-        const formatPhone = (numStr: string) => {
-            const clean = numStr.replace(/\s+/g, '').replace(/-/g, '');
-            if (clean.length === 10 && clean.startsWith('11')) {
-                return `11 ${clean.slice(2, 6)}-${clean.slice(6)}`;
-            }
-            return numStr;
-        };
-
-        let ticketHtml = `
-            <!DOCTYPE html>
-            <html>
-                <head>
-                    <meta charset="utf-8">
-                    <title>Comprobante de Turno</title>
-                    <style>
-                        @page {
-                            size: 80mm auto;
-                            margin: 0;
-                        }
-                        body {
-                            font-family: 'Courier New', Courier, monospace;
-                            width: 72mm;
-                            margin: 0;
-                            padding: 8px 12px 24px 12px;
-                            font-size: 14px;
-                            color: #000;
-                            line-height: 1.3;
-                            box-sizing: border-box;
-                        }
-                        .text-center {
-                            text-align: center;
-                        }
-                        .bold {
-                            font-weight: bold;
-                        }
-                        .divider {
-                            border-top: 1px dashed #000;
-                            margin: 6px 0;
-                            height: 0;
-                        }
-                        .header {
-                            font-size: 18px;
-                            font-weight: bold;
-                            text-transform: uppercase;
-                            margin-bottom: 2px;
-                        }
-                        .subtitle {
-                            font-size: 11px;
-                            margin-bottom: 8px;
-                        }
-                        .ticket-logo {
-                            max-width: 140px;
-                            max-height: 55px;
-                            margin-bottom: 8px;
-                            display: inline-block;
-                        }
-                        .title-ticket {
-                            font-size: 15px;
-                            font-weight: bold;
-                            margin: 6px 0;
-                            text-transform: uppercase;
-                            letter-spacing: 1px;
-                        }
-                        .section-title {
-                            font-size: 10px;
-                            font-weight: bold;
-                            text-transform: uppercase;
-                            margin-top: 5px;
-                            color: #444;
-                        }
-                        .section-value {
-                            font-size: 15px;
-                            margin-bottom: 4px;
-                            word-wrap: break-word;
-                        }
-                        .time-block {
-                            font-size: 19px;
-                            font-weight: bold;
-                            margin: 4px 0;
-                        }
-                        .contact-info {
-                            font-size: 13px;
-                            line-height: 1.4;
-                            margin-top: 8px;
-                            text-align: left;
-                        }
-                        .footer-msg {
-                            font-size: 14px;
-                            margin-top: 10px;
-                            text-align: center;
-                            line-height: 1.4;
-                        }
-                        .sobreturno-badge {
-                            border: 1px solid #000;
-                            padding: 2px 6px;
-                            display: inline-block;
-                            margin: 4px 0;
-                            font-weight: bold;
-                            font-size: 13px;
-                        }
-                    </style>
-                </head>
-                <body>
-                    <div class="text-center">
-                        <img src="${window.location.origin}/LOGO-ALVAREZ.png" alt="Logo" class="ticket-logo" />
-                        <div class="header">CONSULTORIO ALVAREZ</div>
-                        <div class="subtitle">Odontología Integral</div>
-                    </div>
-                    
-                    <div class="divider"></div>
-                    
-                    <div class="text-center title-ticket">
-                        COMPROBANTE DE TURNO
-                    </div>
-                    
-                    <div class="divider"></div>
-                    
-                    <div>
-                        <div class="section-title">Paciente</div>
-                        <div class="section-value bold">${pacienteNombre}</div>
-                        
-                        <div class="section-title">DNI</div>
-                        <div class="section-value">${dni}</div>`;
-
-        if (telefono && telefono !== 'No registrado') {
-            ticketHtml += `
-                        <div class="section-title">Teléfono</div>
-                        <div class="section-value">${telefono}</div>`;
-        }
-
-        ticketHtml += `
-                        <div class="divider"></div>
-                        
-                        <div class="section-title">Fecha</div>
-                        <div class="section-value bold" style="text-transform: capitalize;">${fechaFormateada}</div>
-                        
-                        <div class="section-title">Hora</div>
-                        <div class="time-block">${horaFormateada} hs</div>`;
-
-        if (esST) {
-            ticketHtml += `
-                        <div class="text-center">
-                            <span class="sobreturno-badge">SOBRETURNO</span>
-                        </div>`;
-        }
-
-        ticketHtml += `
-                        <div class="section-title">Profesional</div>
-                        <div class="section-value">${profesional}</div>
-                        
-                        <div class="section-title">Tratamiento</div>
-                        <div class="section-value">${tratamiento}</div>
-                    </div>
-                    
-                    <div class="divider"></div>
-                    
-                    <div class="contact-info">
-                        <strong>Contacto:</strong><br>
-                        • Tel. Consultorio: ${formatPhone(telefonoFijo)}<br>
-                        • WhatsApp Sec.: ${formatPhone(whatsappSecretaria)}<br>
-                        • Tel. Particular: ${formatPhone(telefonoParticular)}<br>
-                        • Domicilio: ${address}
-                    </div>
-                    
-                    <div class="divider"></div>
-                    
-                    <div class="footer-msg">
-                        Recuerde que podrá autogestionar su turno<br>
-                        desde nuestra nueva web:<br>
-                        <strong>www.dentalva.ar</strong>!
-                    </div>
-                    
-                    <script>
-                        window.onload = function() {
-                            setTimeout(function() {
-                                window.print();
-                                window.close();
-                            }, 500);
-                        }
-                    </script>
-                </body>
-            </html>`;
-
-        printWindow.document.write(ticketHtml);
-        printWindow.document.close();
-    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1771,7 +2072,7 @@ function TurnoDetailModal({
                     {/* Edit/Delete actions */}
                     <div className="flex gap-2 justify-end mt-2 sm:mt-0">
                         <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 text-emerald-400 border border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10"
-                            onClick={() => handleImprimirTicket(turno)}>
+                            onClick={() => onImprimirTicket(turno)}>
                             <Printer className="h-3.5 w-3.5 mr-1" />
                             Ticket
                         </GlassButton>
