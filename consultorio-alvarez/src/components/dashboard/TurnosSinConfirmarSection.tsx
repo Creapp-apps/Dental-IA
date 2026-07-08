@@ -191,18 +191,47 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 .replace(/^\w/, (c) => c.toUpperCase())
                                             const status = getStatusTextAndIcon(turno)
                                             const isSending = loadingMap[turno.id]
+                                            const isUrgent = (dateObj.getTime() - Date.now()) <= 48 * 60 * 60 * 1000
 
                                             return (
                                                 <motion.tr
                                                     key={turno.id}
-                                                    className="hover:bg-muted/10 transition-colors"
+                                                    className="hover:bg-muted/10 transition-colors relative"
                                                     initial={{ opacity: 0 }}
-                                                    animate={{ opacity: 1 }}
+                                                    animate={{
+                                                        opacity: 1,
+                                                        ...(isUrgent && {
+                                                            backgroundColor: [
+                                                                "rgba(239, 68, 68, 0.02)",
+                                                                "rgba(239, 68, 68, 0.08)",
+                                                                "rgba(239, 68, 68, 0.02)"
+                                                            ]
+                                                        })
+                                                    }}
+                                                    transition={{
+                                                        opacity: { duration: 0.2 },
+                                                        backgroundColor: {
+                                                            duration: 2,
+                                                            repeat: Infinity,
+                                                            ease: "easeInOut"
+                                                        }
+                                                    }}
                                                     exit={{ opacity: 0 }}
                                                 >
                                                     {/* Fecha y Hora */}
-                                                    <td className="py-3 px-4 whitespace-nowrap font-medium text-foreground">
-                                                        {formattedDate}
+                                                    <td className={cn(
+                                                        "py-3 px-4 whitespace-nowrap font-medium text-foreground transition-all",
+                                                        isUrgent && "border-l-[4px] border-l-red-500"
+                                                    )}>
+                                                        <div className="flex items-center gap-2">
+                                                            {isUrgent && (
+                                                                <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold text-[10px] bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
+                                                                    <AlertCircle className="h-3 w-3 shrink-0" />
+                                                                    &lt; 48hs
+                                                                </span>
+                                                            )}
+                                                            <span>{formattedDate}</span>
+                                                        </div>
                                                     </td>
 
                                                     {/* Paciente */}
@@ -292,19 +321,43 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                     .replace(/^\w/, (c) => c.toUpperCase())
                                 const status = getStatusTextAndIcon(turno)
                                 const isSending = loadingMap[turno.id]
+                                const isUrgent = (dateObj.getTime() - Date.now()) <= 48 * 60 * 60 * 1000
 
                                 return (
                                     <motion.div
                                         key={turno.id}
-                                        className="glass rounded-2xl p-4 border border-border/40 space-y-3"
+                                        className="glass rounded-2xl p-4 border border-border/40 space-y-3 transition-shadow"
                                         initial={{ opacity: 0 }}
-                                        animate={{ opacity: 1 }}
+                                        animate={{
+                                            opacity: 1,
+                                            ...(isUrgent && {
+                                                borderColor: ["rgba(239, 68, 68, 0.2)", "rgba(239, 68, 68, 0.6)", "rgba(239, 68, 68, 0.2)"],
+                                                boxShadow: [
+                                                    "0 4px 16px rgba(0, 0, 0, 0.06), 0 0 0 2px rgba(239, 68, 68, 0.05)",
+                                                    "0 8px 32px rgba(239, 68, 68, 0.15), 0 0 0 4px rgba(239, 68, 68, 0.2)",
+                                                    "0 4px 16px rgba(0, 0, 0, 0.06), 0 0 0 2px rgba(239, 68, 68, 0.05)"
+                                                ],
+                                                backgroundColor: ["rgba(239, 68, 68, 0.02)", "rgba(239, 68, 68, 0.08)", "rgba(239, 68, 68, 0.02)"]
+                                            })
+                                        }}
+                                        transition={{
+                                            opacity: { duration: 0.2 },
+                                            borderColor: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                                            boxShadow: { duration: 2, repeat: Infinity, ease: "easeInOut" },
+                                            backgroundColor: { duration: 2, repeat: Infinity, ease: "easeInOut" }
+                                        }}
                                         exit={{ opacity: 0 }}
                                     >
                                         {/* Header: Date and status badge */}
                                         <div className="flex items-start justify-between gap-2">
-                                            <div className="font-semibold text-foreground text-sm">
-                                                {formattedDate}
+                                            <div className="font-semibold text-foreground text-sm flex items-center gap-2">
+                                                {isUrgent && (
+                                                    <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold text-[10px] bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
+                                                        <AlertCircle className="h-3 w-3 shrink-0" />
+                                                        &lt; 48hs
+                                                    </span>
+                                                )}
+                                                <span>{formattedDate}</span>
                                             </div>
                                             <span className={cn(
                                                 'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border shrink-0',

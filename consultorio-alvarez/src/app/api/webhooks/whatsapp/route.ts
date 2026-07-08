@@ -89,6 +89,15 @@ async function logDebug(event: string, detail: any, tenantId?: string) {
     }
 }
 
+function normalizeTextForMatch(text: string): string {
+    return text
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()?]/g, '')
+        .trim()
+}
+
 // POST: Recepción de Eventos de Mensajes de Meta
 export async function POST(request: NextRequest) {
     try {
@@ -114,16 +123,19 @@ export async function POST(request: NextRequest) {
         const type = message.type
         let buttonPayload = ''
         let textBody = ''
+        let buttonTextFallback = ''
 
         if (type === 'button') {
             buttonPayload = message.button?.payload || ''
+            buttonTextFallback = message.button?.text || ''
         } else if (type === 'interactive') {
             buttonPayload = message.interactive?.button_reply?.id || ''
+            buttonTextFallback = message.interactive?.button_reply?.title || ''
         } else if (type === 'text') {
-            textBody = message.text?.body?.trim().toUpperCase() || ''
+            textBody = message.text?.body?.trim() || ''
         }
 
-        console.log(`📱 Mensaje recibido de ${from}. Tipo: ${type}. Payload: "${buttonPayload}". Texto: "${textBody}"`)
+        console.log(`📱 Mensaje recibido de ${from}. Tipo: ${type}. Payload: "${buttonPayload}". Texto: "${textBody}". Fallback de botón: "${buttonTextFallback}"`)
 
         // Instanciar cliente administrador para eludir RLS y operar en base de datos
         const admin = createAdminClient()
@@ -148,29 +160,65 @@ export async function POST(request: NextRequest) {
                 respuestaPaciente = 'REPROGRAMAR'
             }
         } 
-        // 2. Analizar respuesta de texto manual (ej: "SI", "NO", "SÍ", "CONFIRMO", "REPROGRAMAR")
-        else if (textBody) {
-            const cleanPhone = normalizarTelefonoArgentino(from)
-            // Encontrar el último recordatorio enviado a este teléfono que esté pendiente de respuesta
-            const { data: lastRem } = await admin
-                .from('recordatorios')
-                .select('id, turno_id, tenant_id')
-                .eq('telefono', cleanPhone)
-                .eq('estado_envio', 'ENVIADO')
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle()
 
-            if (lastRem?.turno_id) {
-                if (['SI', 'SÍ', 'OK', 'CONFIRMO', 'CONFIRMAR'].includes(textBody)) {
-                    turnoIdToUpdate = lastRem.turno_id
-                    respuestaPaciente = 'CONFIRMAR'
-                } else if (['NO', 'CANCELO', 'CANCELAR', 'RECHAZO'].includes(textBody)) {
-                    turnoIdToUpdate = lastRem.turno_id
-                    respuestaPaciente = 'CANCELAR'
-                } else if (['REPROGRAMAR', 'CAMBIAR', 'MODIFICAR', 'REPROGRAMO', 'OTRO HORARIO', 'OTRO DIA', 'OTRO DÍA'].includes(textBody)) {
-                    turnoIdToUpdate = lastRem.turno_id
-                    respuestaPaciente = 'REPROGRAMAR'
+        // 2. Si no se identificó por payload, intentar deducir por texto (mensaje de texto o texto del botón clickeado)
+        if (!turnoIdToUpdate || !respuestaPaciente) {
+            const textToAnalyze = textBody || buttonTextFallback
+            if (textToAnalyze) {
+                const normalized = normalizeTextForMatch(textToAnalyze)
+                console.log(`🔍 Intentando deducir acción de texto normalizado: "${normalized}"`)
+
+                const cleanPhone = normalizarTelefonoArgentino(from)
+                // Encontrar el último recordatorio enviado a este teléfono que esté pendiente de respuesta
+                const { data: lastRem } = await admin
+                    .from('recordatorios')
+                    .select('id, turno_id, tenant_id')
+                    .eq('telefono', cleanPhone)
+                    .eq('estado_envio', 'ENVIADO')
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+
+                if (lastRem?.turno_id) {
+                    const matchesConfirm = 
+                        normalized === 'si' || 
+                        normalized === 'ok' || 
+                        normalized === 'si confirmo' ||
+                        normalized === 'confirmo' ||
+                        normalized === 'confirmar' ||
+                        normalized === 'confirmado' ||
+                        normalized.includes('confirm') ||
+                        (normalized.startsWith('si ') && normalized.length <= 15);
+
+                    const matchesCancel = 
+                        normalized === 'no' || 
+                        normalized === 'no cancelar' ||
+                        normalized === 'cancelar' ||
+                        normalized === 'cancelo' ||
+                        normalized.includes('cancel') ||
+                        normalized.includes('no asisto') ||
+                        normalized.includes('no voy') ||
+                        (normalized.startsWith('no ') && normalized.length <= 15);
+
+                    const matchesReprogram = 
+                        normalized.includes('reprogram') ||
+                        normalized.includes('cambi') ||
+                        normalized.includes('modif') ||
+                        normalized.includes('otro horario') ||
+                        normalized.includes('otro dia') ||
+                        normalized.includes('otra fecha') ||
+                        normalized.includes('reprogramar el turno');
+
+                    if (matchesConfirm) {
+                        turnoIdToUpdate = lastRem.turno_id
+                        respuestaPaciente = 'CONFIRMAR'
+                    } else if (matchesCancel) {
+                        turnoIdToUpdate = lastRem.turno_id
+                        respuestaPaciente = 'CANCELAR'
+                    } else if (matchesReprogram) {
+                        turnoIdToUpdate = lastRem.turno_id
+                        respuestaPaciente = 'REPROGRAMAR'
+                    }
                 }
             }
         }
