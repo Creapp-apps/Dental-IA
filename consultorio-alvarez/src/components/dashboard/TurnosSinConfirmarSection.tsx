@@ -9,7 +9,7 @@ import { GlassButton } from '@/components/ui/glass-button'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { motion, AnimatePresence } from 'framer-motion'
 import { enviarRecordatorioManual } from '@/lib/actions/turnos'
-import { cn } from '@/lib/utils'
+import { cn, normalizarTelefonoArgentino } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 
 interface Recordatorio {
@@ -44,6 +44,16 @@ interface TurnoSinConfirmar {
     } | null
     recordatorios: Recordatorio[]
 }
+
+const WhatsAppIcon = (props: React.SVGProps<SVGSVGElement>) => (
+    <svg
+        viewBox="0 0 24 24"
+        fill="currentColor"
+        {...props}
+    >
+        <path d="M12.012 2c-5.506 0-9.988 4.482-9.988 9.988 0 1.76.459 3.477 1.332 4.992l-1.417 5.176 5.297-1.39c1.463.798 3.111 1.218 4.774 1.219h.004c5.505 0 9.987-4.482 9.987-9.989 0-2.67-1.039-5.18-2.926-7.069C17.202 3.039 14.686 2 12.012 2zm6.657 14.156c-.274.772-1.34 1.408-1.854 1.488-.475.074-.954.121-2.99-.706-2.607-1.058-4.267-3.714-4.397-3.887-.13-.173-1.053-1.401-1.053-2.673 0-1.272.663-1.897.902-2.148.239-.251.52-.314.693-.314.173 0 .346.002.498.01.156.008.365-.06.572.441.214.52.733 1.785.798 1.916.065.13.108.281.022.455-.087.173-.13.282-.26.433-.13.152-.272.339-.39.455-.13.13-.266.27-.115.53.152.259.673 1.111 1.442 1.796.993.883 1.826 1.156 2.086 1.286.26.13.411.108.563-.065.152-.173.65-.758.823-1.017.173-.259.346-.216.584-.13.238.086 1.516.714 1.776.844.26.13.433.195.498.303.065.108.065.627-.209 1.399z" />
+    </svg>
+)
 
 interface TurnosSinConfirmarSectionProps {
     initialTurnos: TurnoSinConfirmar[]
@@ -324,6 +334,21 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                                 size="sm"
                                                                 variant="glass"
                                                                 className="h-8 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
+                                                                onClick={() => {
+                                                                    const normalized = normalizarTelefonoArgentino(turno.paciente?.telefono || '')
+                                                                    const waPhone = normalized.startsWith('54') ? `549${normalized.substring(2)}` : normalized
+                                                                    window.open(`https://wa.me/${waPhone}`, '_blank')
+                                                                }}
+                                                                disabled={!turno.paciente?.telefono}
+                                                                title={turno.paciente?.telefono ? 'Abrir chat de WhatsApp' : 'Paciente sin Teléfono'}
+                                                            >
+                                                                <WhatsAppIcon className="h-3.5 w-3.5 mr-1 shrink-0 text-emerald-500" />
+                                                                WhatsApp
+                                                            </GlassButton>
+                                                            <GlassButton
+                                                                size="sm"
+                                                                variant="glass"
+                                                                className="h-8 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
                                                                 onClick={() => handleSendReminder(turno.id)}
                                                                 loading={isSending}
                                                                 disabled={isSending || !turno.paciente?.telefono || turno.estado === 'CONFIRMADO'}
@@ -456,6 +481,21 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
 
                                         {/* Action Buttons */}
                                         <div className="flex items-center gap-2 pt-1">
+                                            <GlassButton
+                                                size="sm"
+                                                variant="glass"
+                                                className="flex-1 h-9 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium text-xs justify-center"
+                                                onClick={() => {
+                                                    const normalized = normalizarTelefonoArgentino(turno.paciente?.telefono || '')
+                                                    const waPhone = normalized.startsWith('54') ? `549${normalized.substring(2)}` : normalized
+                                                    window.open(`https://wa.me/${waPhone}`, '_blank')
+                                                }}
+                                                disabled={!turno.paciente?.telefono}
+                                                title={turno.paciente?.telefono ? 'Abrir chat de WhatsApp' : 'Paciente sin Teléfono'}
+                                            >
+                                                <WhatsAppIcon className="h-3.5 w-3.5 mr-1 shrink-0 text-emerald-500" />
+                                                WhatsApp
+                                            </GlassButton>
                                             <GlassButton
                                                 size="sm"
                                                 variant="glass"
