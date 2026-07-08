@@ -15,7 +15,7 @@ async function main() {
         .limit(10)
 
     if (error) {
-        console.error('Error fetching recordatorios:', error)
+        console.error('Error fetching data:', error)
         process.exit(1)
     }
 

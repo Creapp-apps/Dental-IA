@@ -176,10 +176,10 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                 <div className="flex flex-col items-center md:items-start">
                     <h2 className="text-lg font-bold text-foreground flex items-center justify-center md:justify-start gap-2">
                         <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
-                        Turnos Pendientes de Confirmación
+                        Control de Confirmación de Turnos
                     </h2>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                        Pacientes que aún no respondieron a las plantillas de confirmación.
+                        Próximos turnos y sus estados de confirmación vía WhatsApp.
                     </p>
                 </div>
             </div>
@@ -204,6 +204,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                         <th className="py-3 px-4">Paciente</th>
                                         <th className="py-3 px-4">Profesional</th>
                                         <th className="py-3 px-4">Tratamiento</th>
+                                        <th className="py-3 px-4">Estado</th>
                                         <th className="py-3 px-4">Último Recordatorio</th>
                                         <th className="py-3 px-4 text-right">Acciones</th>
                                     </tr>
@@ -216,7 +217,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 .replace(/^\w/, (c) => c.toUpperCase())
                                             const status = getStatusTextAndIcon(turno)
                                             const isSending = loadingMap[turno.id]
-                                            const isUrgent = (dateObj.getTime() - Date.now()) <= 48 * 60 * 60 * 1000
+                                            const isUrgent = turno.estado === 'PENDIENTE' && (dateObj.getTime() - Date.now()) <= 48 * 60 * 60 * 1000
 
                                             return (
                                                 <motion.tr
@@ -293,6 +294,21 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                         </span>
                                                     </td>
 
+                                                    {/* Estado de Confirmación */}
+                                                    <td className="py-3 px-4 whitespace-nowrap">
+                                                        {turno.estado === 'CONFIRMADO' ? (
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.05)]">
+                                                                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                                                Turno confirmado
+                                                            </span>
+                                                        ) : (
+                                                            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.05)]">
+                                                                <AlertCircle className={cn("h-3.5 w-3.5 text-red-500", isUrgent && "animate-pulse")} />
+                                                                Turno sin confirmar
+                                                            </span>
+                                                        )}
+                                                    </td>
+
                                                     {/* Estado Recordatorio */}
                                                     <td className="py-3 px-4 whitespace-nowrap">
                                                         <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${status.className}`}>
@@ -310,8 +326,8 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                                 className="h-8 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
                                                                 onClick={() => handleSendReminder(turno.id)}
                                                                 loading={isSending}
-                                                                disabled={isSending || !turno.paciente?.telefono}
-                                                                title={turno.paciente?.telefono ? 'Enviar Recordatorio WhatsApp' : 'Paciente sin Teléfono'}
+                                                                disabled={isSending || !turno.paciente?.telefono || turno.estado === 'CONFIRMADO'}
+                                                                title={turno.estado === 'CONFIRMADO' ? 'Turno ya confirmado' : turno.paciente?.telefono ? 'Enviar Recordatorio WhatsApp' : 'Paciente sin Teléfono'}
                                                             >
                                                                 <Bell className="h-3.5 w-3.5 mr-1 shrink-0" />
                                                                 Recordatorio
@@ -346,7 +362,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                     .replace(/^\w/, (c) => c.toUpperCase())
                                 const status = getStatusTextAndIcon(turno)
                                 const isSending = loadingMap[turno.id]
-                                const isUrgent = (dateObj.getTime() - Date.now()) <= 48 * 60 * 60 * 1000
+                                const isUrgent = turno.estado === 'PENDIENTE' && (dateObj.getTime() - Date.now()) <= 48 * 60 * 60 * 1000
 
                                 return (
                                     <motion.div
@@ -393,6 +409,21 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                             </span>
                                         </div>
 
+                                        {/* Estado de Confirmación (Mobile) */}
+                                        <div className="mt-1">
+                                            {turno.estado === 'CONFIRMADO' ? (
+                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                                                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
+                                                    Turno confirmado
+                                                </span>
+                                            ) : (
+                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20">
+                                                    <AlertCircle className={cn("h-3.5 w-3.5 text-red-500", isUrgent && "animate-pulse")} />
+                                                    Turno sin confirmar
+                                                </span>
+                                            )}
+                                        </div>
+
                                         {/* Details grid: Patient, Professional, Treatment */}
                                         <div className="grid grid-cols-2 gap-3 text-xs border-y border-border/10 py-3">
                                             <div className="space-y-1">
@@ -431,8 +462,8 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 className="flex-1 h-9 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium text-xs justify-center"
                                                 onClick={() => handleSendReminder(turno.id)}
                                                 loading={isSending}
-                                                disabled={isSending || !turno.paciente?.telefono}
-                                                title={turno.paciente?.telefono ? 'Enviar Recordatorio WhatsApp' : 'Paciente sin Teléfono'}
+                                                disabled={isSending || !turno.paciente?.telefono || turno.estado === 'CONFIRMADO'}
+                                                title={turno.estado === 'CONFIRMADO' ? 'Turno ya confirmado' : turno.paciente?.telefono ? 'Enviar Recordatorio WhatsApp' : 'Paciente sin Teléfono'}
                                             >
                                                 <Bell className="h-3.5 w-3.5 mr-1 shrink-0" />
                                                 Recordatorio

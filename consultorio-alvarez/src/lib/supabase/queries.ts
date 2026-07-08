@@ -235,7 +235,7 @@ export async function getTurnosSinConfirmar() {
             recordatorios(id, created_at, estado_envio)
         `)
         .eq('tenant_id', tenantId)
-        .eq('estado', 'PENDIENTE')
+        .in('estado', ['PENDIENTE', 'CONFIRMADO'])
         .gte('fecha_inicio', hoy.toISOString())
         .order('fecha_inicio', { ascending: true })
 

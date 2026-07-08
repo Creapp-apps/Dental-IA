@@ -117,6 +117,7 @@ export async function POST(request: NextRequest) {
         }
 
         const from = message.from // Número del paciente (ej: 5491130174859)
+        const cleanPhone = normalizarTelefonoArgentino(from)
         const messageId = message.id
         
         // Identificar tipo de mensaje
@@ -168,7 +169,6 @@ export async function POST(request: NextRequest) {
                 const normalized = normalizeTextForMatch(textToAnalyze)
                 console.log(`🔍 Intentando deducir acción de texto normalizado: "${normalized}"`)
 
-                const cleanPhone = normalizarTelefonoArgentino(from)
                 // Encontrar el último recordatorio enviado a este teléfono que esté pendiente de respuesta
                 const { data: lastRem } = await admin
                     .from('recordatorios')
@@ -274,7 +274,7 @@ export async function POST(request: NextRequest) {
                 }
 
                 try {
-                    await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+                    const waRes = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
@@ -282,11 +282,17 @@ export async function POST(request: NextRequest) {
                         },
                         body: JSON.stringify({
                             messaging_product: 'whatsapp',
-                            to: from,
+                            to: cleanPhone,
                             type: 'text',
                             text: { body: replyText }
                         })
                     })
+                    const waResult = await waRes.json()
+                    if (!waRes.ok) {
+                        console.error('❌ Error de Meta API al enviar respuesta de confirmación:', JSON.stringify(waResult, null, 2))
+                    } else {
+                        console.log('✅ Respuesta de confirmación enviada con éxito a WhatsApp:', JSON.stringify(waResult))
+                    }
                 } catch (waErr) {
                     console.error('❌ Error al enviar respuesta de confirmación a WhatsApp:', waErr)
                 }
