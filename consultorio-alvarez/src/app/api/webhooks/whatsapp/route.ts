@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { normalizarTelefonoArgentino } from '@/lib/utils'
+import { notificarTurnoPorWhatsApp } from '@/lib/actions/turnos'
+
 
 // GET: Webhook Verification (Meta Verification Challenge)
 export async function GET(request: NextRequest) {
@@ -260,39 +262,20 @@ export async function POST(request: NextRequest) {
                 })
                 .eq('turno_id', turnoIdToUpdate)
 
-            // --- Enviar mensaje de respuesta automática de WhatsApp al paciente ---
+            // --- Enviar mensaje de respuesta automática (Plantilla de WhatsApp) al paciente ---
             if (process.env.META_WA_ACCESS_TOKEN && process.env.META_WA_PHONE_NUMBER_ID) {
-                const nombrePaciente = (turno?.paciente as any)?.nombre || ''
-                let replyText = ''
-
-                if (respuestaPaciente === 'CONFIRMAR') {
-                    replyText = `¡Muchas gracias, ${nombrePaciente}! Tu turno ha sido confirmado con éxito. Te esperamos.`
-                } else if (respuestaPaciente === 'CANCELAR') {
-                    replyText = `Hola ${nombrePaciente}, registramos la cancelación de tu turno. Si querés agendar uno nuevo, podés hacerlo ingresando a nuestra web. ¡Saludos!`
-                } else {
-                    replyText = `Hola ${nombrePaciente}, registramos tu solicitud de reprogramación. Nos pondremos en contacto a la brevedad para coordinar un nuevo horario. ¡Saludos!`
-                }
-
                 try {
-                    const waRes = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
-                            'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                            messaging_product: 'whatsapp',
-                            to: cleanPhone,
-                            type: 'text',
-                            text: { body: replyText }
-                        })
-                    })
-                    const waResult = await waRes.json()
-                    if (!waRes.ok) {
-                        console.error('❌ Error de Meta API al enviar respuesta de confirmación:', JSON.stringify(waResult, null, 2))
-                    } else {
-                        console.log('✅ Respuesta de confirmación enviada con éxito a WhatsApp:', JSON.stringify(waResult))
+                    let templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' = 'turno_confirmado'
+                    if (respuestaPaciente === 'CONFIRMAR') {
+                        templateName = 'turno_confirmado'
+                    } else if (respuestaPaciente === 'CANCELAR') {
+                        templateName = 'turno_cancelado'
+                    } else if (respuestaPaciente === 'REPROGRAMAR') {
+                        templateName = 'turno_reprogramado'
                     }
+
+                    console.log(`[WA WEBHOOK] Despachando plantilla automática "${templateName}" para turno ${turnoIdToUpdate}`)
+                    await notificarTurnoPorWhatsApp(turnoIdToUpdate, templateName)
                 } catch (waErr) {
                     console.error('❌ Error al enviar respuesta de confirmación a WhatsApp:', waErr)
                 }

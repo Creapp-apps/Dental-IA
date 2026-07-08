@@ -165,17 +165,23 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
         }
 
         const dateStr = format(new Date(last.created_at), 'dd/MM HH:mm')
-        if (last.estado_envio === 'ENVIADO') {
+        if (last.estado_envio === 'RESPONDIDO') {
+            return {
+                label: `Respondido (${dateStr})`,
+                className: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.02)]',
+                icon: <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />
+            }
+        } else if (last.estado_envio === 'ENVIADO') {
             return {
                 label: `Enviado (${dateStr})`,
-                className: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
-                icon: <CheckCircle2 className="h-3 w-3 shrink-0" />
+                className: 'text-blue-500 bg-blue-500/10 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.02)]',
+                icon: <CheckCircle2 className="h-3 w-3 shrink-0 text-blue-500" />
             }
         } else {
             return {
                 label: `Fallo (${dateStr})`,
-                className: 'text-red-500 bg-red-500/10 border-red-500/20',
-                icon: <XCircle className="h-3 w-3 shrink-0" />
+                className: 'text-red-500 bg-red-500/10 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.02)]',
+                icon: <XCircle className="h-3 w-3 shrink-0 text-red-500" />
             }
         }
     }

@@ -419,7 +419,7 @@ export async function eliminarTurno(turnoId: string) {
 // ==========================================
 // FUNCIÓN AUXILIAR PARA NOTIFICACIONES WHATSAPP
 // ==========================================
-async function notificarTurnoPorWhatsApp(
+export async function notificarTurnoPorWhatsApp(
     turnoId: string, 
     templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' | 'aviso_ausencia' | 'solicitud_turnos'
 ) {
