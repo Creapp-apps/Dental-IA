@@ -435,6 +435,7 @@ async function notificarTurnoPorWhatsApp(
         const { data: turno, error: fetchErr } = await admin
             .from('turnos')
             .select(`
+                tenant_id,
                 fecha_inicio,
                 paciente:pacientes(nombre, telefono),
                 profesional:profesionales(nombre, apellido),
@@ -541,8 +542,26 @@ async function notificarTurnoPorWhatsApp(
         const wpResult = await wpResponse.json()
         if (!wpResponse.ok) {
             console.error(`[WA LOG] ❌ Error Meta WhatsApp API "${templateName}" (Status ${wpResponse.status}):`, JSON.stringify(wpResult, null, 2))
+            await admin.from('recordatorios').insert({
+                tenant_id: turno.tenant_id,
+                turno_id: turnoId,
+                canal: 'WHATSAPP',
+                estado_envio: 'FALLIDO',
+                telefono: cleanPhone,
+                mensaje_enviado: `Plantilla: ${templateName}. Parámetros: ${JSON.stringify(parameters)}`,
+                error_detalle: wpResult?.error?.message || 'Error al invocar Meta API'
+            })
         } else {
             console.log(`[WA LOG] ✅ WhatsApp "${templateName}" enviado con éxito a ${cleanPhone}. Result:`, JSON.stringify(wpResult, null, 2))
+            await admin.from('recordatorios').insert({
+                tenant_id: turno.tenant_id,
+                turno_id: turnoId,
+                canal: 'WHATSAPP',
+                estado_envio: 'ENVIADO',
+                telefono: cleanPhone,
+                mensaje_enviado: `Plantilla: ${templateName}. Parámetros: ${JSON.stringify(parameters)}`,
+                fecha_envio: new Date().toISOString()
+            })
         }
     } catch (err) {
         console.error(`[WA LOG] ❌ Error al procesar notificación WhatsApp "${templateName}":`, err)

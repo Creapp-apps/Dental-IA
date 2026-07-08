@@ -6,24 +6,22 @@ const supabase = createClient(
     process.env.SUPABASE_SERVICE_ROLE_KEY
 )
 
-async function inspect() {
-    try {
-        console.log("=== INSPECTING RECORDATORIOS ===")
-        const { data, error } = await supabase
-            .from('recordatorios')
-            .select('*')
-            .order('created_at', { ascending: false })
-            .limit(10)
+async function main() {
+    console.log('Querying recordatorios...')
+    const { data, error } = await supabase
+        .from('recordatorios')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(10)
 
-        if (error) {
-            console.error("Error fetching recordatorios:", error)
-            return
-        }
-
-        console.log(JSON.stringify(data, null, 2))
-    } catch (err) {
-        console.error("Error in inspect:", err)
+    if (error) {
+        console.error('Error fetching recordatorios:', error)
+        process.exit(1)
     }
+
+    console.log(JSON.stringify(data, null, 2))
 }
 
-inspect()
+main().catch(err => {
+    console.error('Unhandled error:', err)
+})
