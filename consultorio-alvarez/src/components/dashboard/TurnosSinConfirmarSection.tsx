@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
@@ -10,6 +10,7 @@ import { glassAlert } from '@/components/ui/glass-alert'
 import { motion, AnimatePresence } from 'framer-motion'
 import { enviarRecordatorioManual } from '@/lib/actions/turnos'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 interface Recordatorio {
     id: string
@@ -53,6 +54,30 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
     const [isPending, startTransition] = useTransition()
     const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({})
     const [localSentMap, setLocalSentMap] = useState<Record<string, { timestamp: string; status: string }>>({})
+
+    useEffect(() => {
+        const supabase = createClient()
+        const channel = supabase
+            .channel('turnos-changes')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'turnos'
+                },
+                (payload) => {
+                    startTransition(() => {
+                        router.refresh()
+                    })
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [router])
 
     const handleSendReminder = async (turnoId: string) => {
         setLoadingMap(prev => ({ ...prev, [turnoId]: true }))
