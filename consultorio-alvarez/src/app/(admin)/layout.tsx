@@ -6,6 +6,8 @@ import { AdminBackground } from '@/components/ui/admin-background'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
 import { NotificationProvider } from '@/components/providers/NotificationProvider'
 import { getCurrentUsuario } from '@/lib/supabase/queries'
+import { getBillingConfig } from '@/lib/actions/billing'
+import { BillingGuard } from '@/components/providers/BillingGuard'
 
 export default async function AdminLayout({
     children,
@@ -23,6 +25,41 @@ export default async function AdminLayout({
     const usuario = await getCurrentUsuario()
     if (!usuario) {
         redirect(`/api/auth/logout?redirectTo=/login`)
+    }
+
+    // Obtener la configuración de cobros/abono para verificar suspensiones
+    const billing = await getBillingConfig(usuario.tenant_id)
+    const settings = billing?.settings
+
+    let isBlocked = false
+    let showSidebarAlert = false
+
+    const isSuperadmin = 
+        usuario.rol === 'superadmin' || 
+        user.email === 'creapp.ar@gmail.com' ||
+        user.email === 'mazasebastian@hotmail.com' || 
+        user.email?.endsWith('@creapp.com') || 
+        user.email?.endsWith('@dental-ia.com')
+
+    if (settings?.fecha_vencimiento && !isSuperadmin) {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        
+        const [year, month, day] = settings.fecha_vencimiento.split('-').map(Number)
+        const expiry = new Date(year, month - 1, day)
+        expiry.setHours(0, 0, 0, 0)
+
+        const diffTime = expiry.getTime() - today.getTime()
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+        const hasActivePayment = settings.estado === 'ACTIVO'
+
+        // Bloqueo: si pasó la fecha y no pagó, o estado suspendido/vencido
+        const expired = diffDays < 0 && !hasActivePayment
+        const suspended = settings.estado === 'SUSPENDIDO' || settings.estado === 'VENCIDO'
+
+        isBlocked = expired || suspended
+        showSidebarAlert = diffDays <= 7 && !hasActivePayment
     }
 
     const config = await getLandingConfigAdmin()
@@ -46,10 +83,17 @@ export default async function AdminLayout({
                 <AdminBackground colorHex={primaryStr} />
                 <div className="relative z-10 flex w-full h-full flex-col lg:flex-row">
                     <NotificationProvider>
-                        <Sidebar userEmail={user.email} themeColor={primaryStr} logoConfig={config?.logo_config} />
+                        <Sidebar 
+                            userEmail={user.email} 
+                            themeColor={primaryStr} 
+                            logoConfig={config?.logo_config} 
+                            showBillingAlert={showSidebarAlert}
+                        />
                         <main className="flex-1 overflow-y-auto">
                             <div className="min-h-full p-4 sm:p-6 lg:p-8 overflow-x-hidden">
-                                {children}
+                                <BillingGuard isBlocked={isBlocked}>
+                                    {children}
+                                </BillingGuard>
                             </div>
                         </main>
                     </NotificationProvider>
@@ -58,3 +102,4 @@ export default async function AdminLayout({
         </>
     )
 }
+

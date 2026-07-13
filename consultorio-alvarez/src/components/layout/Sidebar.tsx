@@ -25,7 +25,7 @@ const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { label: 'Agenda', href: '/agenda', icon: Calendar },
     { label: 'Pacientes', href: '/pacientes', icon: Users },
-    // { label: 'Cobros', href: '/cobros', icon: CreditCard },
+    { label: 'Mis Pagos', href: '/mis-pagos', icon: CreditCard },
     { label: 'Configuración', href: '/configuracion', icon: Settings },
 ]
 
@@ -33,9 +33,10 @@ interface SidebarProps {
     userEmail?: string
     themeColor?: string
     logoConfig?: any
+    showBillingAlert?: boolean
 }
 
-export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
+export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert }: SidebarProps) {
     const pathname = usePathname()
     const { theme, setTheme } = useTheme()
     const [mounted, setMounted] = useState(false)
@@ -91,7 +92,12 @@ export function Sidebar({ userEmail, themeColor, logoConfig }: SidebarProps) {
                             style={isActive ? { backgroundColor: themeColor || 'var(--sidebar-primary)' } : undefined}
                         >
                             <item.icon className="h-4 w-4 shrink-0" />
-                            {item.label}
+                            <span className="flex-1">{item.label}</span>
+                            {item.href === '/mis-pagos' && showBillingAlert && (
+                                <span className="animate-breathing text-sm flex items-center justify-center select-none" title="Abono próximo a vencer">
+                                    ⚠️
+                                </span>
+                            )}
                         </Link>
                     )
                 })}

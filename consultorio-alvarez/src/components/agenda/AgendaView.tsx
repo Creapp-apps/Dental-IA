@@ -384,7 +384,7 @@ export function AgendaView({
         if (diasVisibles.length === 0) return ''
         const first = diasVisibles[0]
         const last = diasVisibles[diasVisibles.length - 1]
-        if (vistaActiva === 'hoy') return format(first, "EEEE d 'de' MMMM yyyy", { locale: es })
+        if (vistaActiva === 'hoy') return format(diaSeleccionado, "EEEE d 'de' MMMM yyyy", { locale: es })
         if (vistaActiva === 'mes') return format(first, "MMMM yyyy", { locale: es })
         return `${format(first, 'd MMM', { locale: es })} — ${format(last, "d MMM yyyy", { locale: es })}`
     }
@@ -1023,12 +1023,8 @@ export function AgendaView({
                                 onClick={() => {
                                     setDiaSeleccionado(dia)
                                     setBaseDate(dia)
+                                    setVistaActiva('hoy')
                                     setTimeout(() => {
-                                        const colId = `agenda-col-${format(dia, 'yyyy-MM-dd')}`
-                                        const colEl = document.getElementById(colId)
-                                        if (colEl) {
-                                            colEl.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-                                        }
                                         const btnId = `day-btn-${format(dia, 'yyyy-MM-dd')}`
                                         const btnEl = document.getElementById(btnId)
                                         if (btnEl) {
@@ -1267,6 +1263,7 @@ export function AgendaView({
                                                             colorProf={col.colorProf || turno.profesional?.color_agenda}
                                                             onSelect={() => setSelectedTurnoDetail(turno)}
                                                             onDragEnd={() => setDraggedOverTime(null)}
+                                                            vistaActiva={vistaActiva}
                                                         />
                                                     )
                                                 })
@@ -1744,6 +1741,7 @@ interface TurnoCalendarCardProps {
     onDragEnd?: () => void
     left?: string
     width?: string
+    vistaActiva?: ViewMode
 }
 
 function TurnoCalendarCard({
@@ -1755,6 +1753,7 @@ function TurnoCalendarCard({
     onDragEnd,
     left,
     width,
+    vistaActiva,
 }: TurnoCalendarCardProps) {
     const estado = turno.estado as EstadoTurno
     const isST = turno.es_sobreturno === true
@@ -1771,6 +1770,7 @@ function TurnoCalendarCard({
 
     const borderLeftColor = isST ? '#ef4444' : (turno.tipo_tratamiento?.color ?? colorProf)
     const bgColor = isST ? 'rgba(239, 68, 68, 0.15)' : `${turno.tipo_tratamiento?.color ?? colorProf}20`
+    const badgeColor = turno.tipo_tratamiento?.color ?? colorProf
     
     return (
         <motion.div
@@ -1796,41 +1796,128 @@ function TurnoCalendarCard({
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
         >
             {height < 50 ? (
-                <div className="flex items-center justify-between w-full min-w-0 gap-1.5">
-                    <div className="flex items-center gap-1 min-w-0">
-                        <span className="text-[10px] font-bold text-foreground truncate">
-                            {format(parseISO(turno.fecha_inicio), 'HH:mm')} {turno.paciente?.apellido}, {turno.paciente?.nombre?.charAt(0)}.
-                        </span>
-                        {isST && <span className="text-[8px] bg-red-500/20 text-red-400 font-bold px-0.5 rounded leading-none">ST</span>}
-                    </div>
-                    <div className="shrink-0 flex items-center scale-75 origin-right">
-                        <StatusBadge status={estado} />
-                    </div>
-                </div>
-            ) : (
-                <div className="flex flex-col h-full justify-between min-w-0">
-                    <div className="min-w-0">
-                        <div className="flex items-center justify-between gap-1.5">
-                            <span className="text-[10px] font-semibold text-muted-foreground">
-                                {format(parseISO(turno.fecha_inicio), 'HH:mm')} — {format(parseISO(turno.fecha_fin), 'HH:mm')}
-                            </span>
-                            <div className="shrink-0 scale-75 origin-top-right">
-                                <StatusBadge status={estado} />
+                vistaActiva === 'hoy' ? (
+                    <div className="flex items-center justify-between w-full min-w-0 gap-2 h-full py-0.5">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                            {/* Fecha y Hora del Turno */}
+                            <div className="flex items-center gap-1 shrink-0 text-[10px] font-bold text-foreground bg-white/10 dark:bg-white/5 px-2 py-0.5 rounded border border-white/10">
+                                <Clock className="h-3 w-3 text-muted-foreground shrink-0" />
+                                <span>
+                                    {format(parseISO(turno.fecha_inicio), 'dd/MM')} - {format(parseISO(turno.fecha_inicio), 'HH:mm')} hs
+                                </span>
                             </div>
+                            
+                            {/* Nombre del Paciente */}
+                            <div className="font-bold text-foreground text-xs truncate max-w-[200px] shrink-0">
+                                {turno.paciente ? `${turno.paciente.apellido}, ${turno.paciente.nombre}` : '—'}
+                            </div>
+
+                            {/* Tipo de Tratamiento */}
+                            {turno.tipo_tratamiento?.nombre && (
+                                <div 
+                                    className="text-[10px] font-bold px-2 py-0.5 rounded border select-none shrink-0 truncate max-w-[200px]"
+                                    style={{
+                                        backgroundColor: `${badgeColor}18`,
+                                        borderColor: `${badgeColor}50`,
+                                        color: badgeColor
+                                    }}
+                                >
+                                    {turno.tipo_tratamiento.nombre}
+                                </div>
+                            )}
+
+                            {isST && (
+                                <span className="text-[8px] bg-red-500/20 text-red-400 font-bold px-1 rounded py-0.5 shrink-0 leading-none">
+                                    ST
+                                </span>
+                            )}
                         </div>
-                        <p className="text-xs font-bold text-foreground truncate mt-0.5 leading-snug group-hover:text-primary transition-colors">
-                            {turno.paciente?.apellido}, {turno.paciente?.nombre}
-                        </p>
-                        <p className="text-[10px] text-muted-foreground truncate leading-normal">
-                            {turno.tipo_tratamiento?.nombre}
-                        </p>
+
+                        {/* Status badge */}
+                        <div className="shrink-0 flex items-center scale-75 origin-right">
+                            <StatusBadge status={estado} />
+                        </div>
                     </div>
-                    {isST && (
-                        <div className="w-fit text-[8px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 border border-red-500/25 rounded px-1 leading-none mt-1">
-                            Sobreturno
+                ) : (
+                    <div className="flex items-center justify-between w-full min-w-0 gap-1.5">
+                        <div className="flex items-center gap-1 min-w-0">
+                            <span className="text-[10px] font-bold text-foreground truncate">
+                                {format(parseISO(turno.fecha_inicio), 'HH:mm')} {turno.paciente?.apellido}, {turno.paciente?.nombre?.charAt(0)}.
+                            </span>
+                            {isST && <span className="text-[8px] bg-red-500/20 text-red-400 font-bold px-0.5 rounded leading-none">ST</span>}
                         </div>
-                    )}
-                </div>
+                        <div className="shrink-0 flex items-center scale-75 origin-right">
+                            <StatusBadge status={estado} />
+                        </div>
+                    </div>
+                )
+            ) : (
+                vistaActiva === 'hoy' ? (
+                    <div className="flex flex-col h-full justify-between min-w-0">
+                        <div className="min-w-0 space-y-1">
+                            {/* Row 1: Date & Time + Status Badge */}
+                            <div className="flex items-center justify-between gap-1.5">
+                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground">
+                                    <Clock className="h-3 w-3 shrink-0" />
+                                    <span>
+                                        {format(parseISO(turno.fecha_inicio), 'dd/MM')} - {format(parseISO(turno.fecha_inicio), 'HH:mm')} hs
+                                    </span>
+                                </div>
+                                <div className="shrink-0 scale-75 origin-top-right">
+                                    <StatusBadge status={estado} />
+                                </div>
+                            </div>
+
+                            {/* Row 2: Patient Name */}
+                            <p className="text-xs font-bold text-foreground truncate mt-0.5 leading-snug group-hover:text-primary transition-colors">
+                                {turno.paciente ? `${turno.paciente.apellido}, ${turno.paciente.nombre}` : '—'}
+                            </p>
+
+                            {/* Row 3: Treatment Type */}
+                            {turno.tipo_tratamiento?.nombre && (
+                                <p 
+                                    className="text-[10px] font-bold px-2 py-0.5 rounded border select-none w-fit mt-1"
+                                    style={{
+                                        backgroundColor: `${badgeColor}18`,
+                                        borderColor: `${badgeColor}50`,
+                                        color: badgeColor
+                                    }}
+                                >
+                                    {turno.tipo_tratamiento.nombre}
+                                </p>
+                            )}
+                        </div>
+                        {isST && (
+                            <div className="w-fit text-[8px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 border border-red-500/25 rounded px-1 leading-none mt-1">
+                                Sobreturno
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div className="flex flex-col h-full justify-between min-w-0">
+                        <div className="min-w-0">
+                            <div className="flex items-center justify-between gap-1.5">
+                                <span className="text-[10px] font-semibold text-muted-foreground">
+                                    {format(parseISO(turno.fecha_inicio), 'HH:mm')} — {format(parseISO(turno.fecha_fin), 'HH:mm')}
+                                </span>
+                                <div className="shrink-0 scale-75 origin-top-right">
+                                    <StatusBadge status={estado} />
+                                </div>
+                            </div>
+                            <p className="text-xs font-bold text-foreground truncate mt-0.5 leading-snug group-hover:text-primary transition-colors">
+                                {turno.paciente?.apellido}, {turno.paciente?.nombre}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground truncate leading-normal">
+                                {turno.tipo_tratamiento?.nombre}
+                            </p>
+                        </div>
+                        {isST && (
+                            <div className="w-fit text-[8px] font-bold uppercase tracking-wider bg-red-500/15 text-red-400 border border-red-500/25 rounded px-1 leading-none mt-1">
+                                Sobreturno
+                            </div>
+                        )}
+                    </div>
+                )
             )}
         </motion.div>
     )

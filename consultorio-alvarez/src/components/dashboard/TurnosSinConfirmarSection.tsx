@@ -137,13 +137,15 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
             const timeStr = format(new Date(local.timestamp), 'HH:mm')
             if (local.status === 'ENVIADO') {
                 return {
-                    label: `Enviado hoy ${timeStr}`,
+                    label: 'Enviado',
+                    subLabel: `hoy ${timeStr}`,
                     className: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20',
                     icon: <CheckCircle2 className="h-3 w-3 shrink-0" />
                 }
             } else {
                 return {
-                    label: `Fallo hoy ${timeStr}`,
+                    label: 'Fallo',
+                    subLabel: `hoy ${timeStr}`,
                     className: 'text-red-500 bg-red-500/10 border-red-500/20',
                     icon: <XCircle className="h-3 w-3 shrink-0" />
                 }
@@ -159,6 +161,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
         if (!last) {
             return {
                 label: 'Sin notificar',
+                subLabel: null,
                 className: 'text-amber-500 bg-amber-500/10 border-amber-500/20',
                 icon: <AlertCircle className="h-3 w-3 shrink-0" />
             }
@@ -167,19 +170,22 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
         const dateStr = format(new Date(last.created_at), 'dd/MM HH:mm')
         if (last.estado_envio === 'RESPONDIDO') {
             return {
-                label: `Respondido (${dateStr})`,
+                label: 'Respondido',
+                subLabel: dateStr,
                 className: 'text-emerald-500 bg-emerald-500/10 border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.02)]',
                 icon: <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />
             }
         } else if (last.estado_envio === 'ENVIADO') {
             return {
-                label: `Enviado (${dateStr})`,
+                label: 'Enviado',
+                subLabel: dateStr,
                 className: 'text-blue-500 bg-blue-500/10 border-blue-500/20 shadow-[0_0_10px_rgba(59,130,246,0.02)]',
                 icon: <CheckCircle2 className="h-3 w-3 shrink-0 text-blue-500" />
             }
         } else {
             return {
-                label: `Fallo (${dateStr})`,
+                label: 'Fallo',
+                subLabel: dateStr,
                 className: 'text-red-500 bg-red-500/10 border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.02)]',
                 icon: <XCircle className="h-3 w-3 shrink-0 text-red-500" />
             }
@@ -216,21 +222,21 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="border-b border-border/40 bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                                        <th className="py-3 px-4">Fecha y Hora</th>
-                                        <th className="py-3 px-4">Paciente</th>
-                                        <th className="py-3 px-4">Profesional</th>
-                                        <th className="py-3 px-4">Tratamiento</th>
-                                        <th className="py-3 px-4">Estado</th>
-                                        <th className="py-3 px-4">Último Recordatorio</th>
-                                        <th className="py-3 px-4 text-right">Acciones</th>
+                                        <th className="py-3 px-2 lg:px-4">Fecha / Hora</th>
+                                        <th className="py-3 px-2 lg:px-4">Paciente</th>
+                                        <th className="py-3 px-2 lg:px-4">Profesional</th>
+                                        <th className="py-3 px-2 lg:px-4">Tratamiento</th>
+                                        <th className="py-3 px-2 lg:px-4">Estado</th>
+                                        <th className="py-3 px-2 lg:px-4">Recordatorio</th>
+                                        <th className="py-3 px-2 lg:px-4 text-right">Acciones</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-border/20 text-sm">
                                     <AnimatePresence initial={false}>
                                         {initialTurnos.map((turno) => {
                                             const dateObj = new Date(turno.fecha_inicio)
-                                            const formattedDate = format(dateObj, "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })
-                                                .replace(/^\w/, (c) => c.toUpperCase())
+                                            const dayDateStr = format(dateObj, "EEEE d 'de' MMMM", { locale: es }).replace(/^\w/, (c) => c.toUpperCase())
+                                            const timeStr = format(dateObj, "HH:mm 'hs'")
                                             const status = getStatusTextAndIcon(turno)
                                             const isSending = loadingMap[turno.id]
                                             const isUrgent = turno.estado === 'PENDIENTE' && (dateObj.getTime() - Date.now()) <= 48 * 60 * 60 * 1000
@@ -262,28 +268,35 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 >
                                                     {/* Fecha y Hora */}
                                                     <td className={cn(
-                                                        "py-3 px-4 whitespace-nowrap font-medium text-foreground transition-all",
+                                                        "py-3 px-2 lg:px-4 font-medium text-foreground transition-all",
                                                         isUrgent && "border-l-[4px] border-l-red-500"
                                                     )}>
-                                                        <div className="flex items-center gap-2">
+                                                        <div className="flex items-start gap-2">
                                                             {isUrgent && (
-                                                                <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold text-[10px] bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-full animate-pulse shrink-0">
+                                                                <span className="inline-flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold text-[10px] bg-red-500/10 border border-red-500/20 px-1.5 py-0.5 rounded-full animate-pulse shrink-0 mt-0.5">
                                                                     <AlertCircle className="h-3 w-3 shrink-0" />
                                                                     &lt; 48hs
                                                                 </span>
                                                             )}
-                                                            <span>{formattedDate}</span>
+                                                            <div>
+                                                                <p className="font-semibold text-foreground whitespace-nowrap">
+                                                                    {dayDateStr}
+                                                                </p>
+                                                                <p className="text-xs text-muted-foreground mt-0.5 whitespace-nowrap">
+                                                                    {timeStr}
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     </td>
 
                                                     {/* Paciente */}
-                                                    <td className="py-3 px-4">
+                                                    <td className="py-3 px-2 lg:px-4">
                                                         <div>
                                                             <p className="font-semibold text-foreground">
                                                                 {turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}` : '—'}
                                                             </p>
                                                             {turno.paciente?.telefono && (
-                                                                <p className="text-xs text-muted-foreground mt-0.5">
+                                                                <p className="text-xs text-muted-foreground mt-0.5 whitespace-nowrap">
                                                                     {turno.paciente.telefono}
                                                                 </p>
                                                             )}
@@ -291,55 +304,69 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                     </td>
 
                                                     {/* Profesional */}
-                                                    <td className="py-3 px-4 whitespace-nowrap">
+                                                    <td className="py-3 px-2 lg:px-4">
                                                         <div className="flex items-center gap-2">
                                                             <span
-                                                                className="h-2 w-2 rounded-full"
+                                                                className="h-2 w-2 rounded-full shrink-0"
                                                                 style={{ backgroundColor: turno.profesional?.color_agenda }}
                                                             />
-                                                            <span className="text-foreground">
-                                                                Dr. {turno.profesional?.nombre} {turno.profesional?.apellido}
-                                                            </span>
+                                                            <div className="flex flex-col">
+                                                                <span className="text-foreground font-medium text-sm whitespace-nowrap">
+                                                                    Dr. {turno.profesional?.apellido}
+                                                                </span>
+                                                                {turno.profesional?.nombre && (
+                                                                    <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                                                        {turno.profesional.nombre}
+                                                                    </span>
+                                                                )}
+                                                            </div>
                                                         </div>
                                                     </td>
 
                                                     {/* Tratamiento */}
-                                                    <td className="py-3 px-4 whitespace-nowrap">
-                                                        <span className="text-muted-foreground text-xs">
+                                                    <td className="py-3 px-2 lg:px-4">
+                                                        <span className="text-muted-foreground text-xs block max-w-[100px] xl:max-w-[140px] truncate" title={turno.tipo_tratamiento?.nombre || 'Consulta'}>
                                                             {turno.tipo_tratamiento?.nombre || 'Consulta'}
                                                         </span>
                                                     </td>
 
                                                     {/* Estado de Confirmación */}
-                                                    <td className="py-3 px-4 whitespace-nowrap">
+                                                    <td className="py-3 px-2 lg:px-4 whitespace-nowrap">
                                                         {turno.estado === 'CONFIRMADO' ? (
                                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 shadow-[0_0_10px_rgba(16,185,129,0.05)]">
                                                                 <CheckCircle2 className="h-3.5 w-3.5 text-emerald-500" />
-                                                                Turno confirmado
+                                                                Confirmado
                                                             </span>
                                                         ) : (
                                                             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-500/10 text-red-600 dark:text-red-400 border border-red-500/20 shadow-[0_0_10px_rgba(239,68,68,0.05)]">
                                                                 <AlertCircle className={cn("h-3.5 w-3.5 text-red-500", isUrgent && "animate-pulse")} />
-                                                                Turno sin confirmar
+                                                                Sin confirmar
                                                             </span>
                                                         )}
                                                     </td>
 
                                                     {/* Estado Recordatorio */}
-                                                    <td className="py-3 px-4 whitespace-nowrap">
-                                                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${status.className}`}>
-                                                            {status.icon}
-                                                            {status.label}
-                                                        </span>
+                                                    <td className="py-3 px-2 lg:px-4">
+                                                        <div className="flex flex-col items-start">
+                                                            <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium border ${status.className}`}>
+                                                                {status.icon}
+                                                                {status.label}
+                                                            </span>
+                                                            {status.subLabel && (
+                                                                <span className="text-[10px] text-muted-foreground mt-1 ml-1 whitespace-nowrap">
+                                                                    {status.subLabel}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
 
                                                     {/* Acciones */}
-                                                    <td className="py-3 px-4 text-right whitespace-nowrap">
-                                                        <div className="inline-flex items-center gap-2">
+                                                    <td className="py-3 px-2 lg:px-4 text-right">
+                                                        <div className="inline-flex items-center gap-1 justify-end">
                                                             <GlassButton
                                                                 size="sm"
                                                                 variant="glass"
-                                                                className="h-8 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
+                                                                className="h-8 px-2 2xl:px-3 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium shrink-0"
                                                                 onClick={() => {
                                                                     const normalized = normalizarTelefonoArgentino(turno.paciente?.telefono || '')
                                                                     const waPhone = normalized.startsWith('54') ? `549${normalized.substring(2)}` : normalized
@@ -348,30 +375,30 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                                 disabled={!turno.paciente?.telefono}
                                                                 title={turno.paciente?.telefono ? 'Abrir chat de WhatsApp' : 'Paciente sin Teléfono'}
                                                             >
-                                                                <WhatsAppIcon className="h-3.5 w-3.5 mr-1 shrink-0 text-emerald-500" />
-                                                                WhatsApp
+                                                                <WhatsAppIcon className="h-3.5 w-3.5 2xl:mr-1 shrink-0 text-emerald-500" />
+                                                                <span className="hidden 2xl:inline">WhatsApp</span>
                                                             </GlassButton>
                                                             <GlassButton
                                                                 size="sm"
                                                                 variant="glass"
-                                                                className="h-8 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium"
+                                                                className="h-8 px-2 2xl:px-3 border-emerald-500/20 hover:border-emerald-500/50 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium shrink-0"
                                                                 onClick={() => handleSendReminder(turno.id)}
                                                                 loading={isSending}
                                                                 disabled={isSending || !turno.paciente?.telefono || turno.estado === 'CONFIRMADO'}
                                                                 title={turno.estado === 'CONFIRMADO' ? 'Turno ya confirmado' : turno.paciente?.telefono ? 'Enviar Recordatorio WhatsApp' : 'Paciente sin Teléfono'}
                                                             >
-                                                                <Bell className="h-3.5 w-3.5 mr-1 shrink-0" />
-                                                                Recordatorio
+                                                                <Bell className="h-3.5 w-3.5 2xl:mr-1 shrink-0" />
+                                                                <span className="hidden 2xl:inline">Recordatorio</span>
                                                             </GlassButton>
                                                             <GlassButton
                                                                 size="sm"
                                                                 variant="glass"
-                                                                className="h-8 border-primary/20 hover:border-primary/50 text-primary"
+                                                                className="h-8 px-2 2xl:px-3 border-primary/20 hover:border-primary/50 text-primary shrink-0"
                                                                 onClick={() => router.push(`/agenda?edit=${turno.id}`)}
                                                                 title="Editar turno"
                                                             >
-                                                                <Edit2 className="h-3.5 w-3.5 mr-1" />
-                                                                Editar
+                                                                <Edit2 className="h-3.5 w-3.5 2xl:mr-1 shrink-0" />
+                                                                <span className="hidden 2xl:inline">Editar</span>
                                                             </GlassButton>
                                                         </div>
                                                     </td>
@@ -431,13 +458,20 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 )}
                                                 <span>{formattedDate}</span>
                                             </div>
-                                            <span className={cn(
-                                                'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border shrink-0',
-                                                status.className
-                                            )}>
-                                                {status.icon}
-                                                {status.label}
-                                            </span>
+                                            <div className="flex flex-col items-end">
+                                                <span className={cn(
+                                                    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border shrink-0',
+                                                    status.className
+                                                )}>
+                                                    {status.icon}
+                                                    {status.label}
+                                                </span>
+                                                {status.subLabel && (
+                                                    <span className="text-[9px] text-muted-foreground mt-0.5 whitespace-nowrap">
+                                                        {status.subLabel}
+                                                    </span>
+                                                )}
+                                            </div>
                                         </div>
 
                                         {/* Estado de Confirmación (Mobile) */}

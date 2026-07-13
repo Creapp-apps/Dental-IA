@@ -5,6 +5,7 @@ import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario
 import { DashboardKPI } from '@/components/dashboard/DashboardKPI'
 import { TurnoCardGlass } from '@/components/dashboard/TurnoCardGlass'
 import { TurnosSinConfirmarSection } from '@/components/dashboard/TurnosSinConfirmarSection'
+import { getBillingConfig } from '@/lib/actions/billing'
 
 export default async function DashboardPage() {
     const hoy = new Date()
@@ -15,6 +16,10 @@ export default async function DashboardPage() {
         getCurrentUsuario(),
         getTurnosSinConfirmar(),
     ])
+
+    // Obtener configuración de cobros para banners de vencimiento
+    const billing = usuario ? await getBillingConfig(usuario.tenant_id) : null
+    const settings = billing?.settings
 
     const turnosPendientes = turnos.filter((t: any) => t.estado === 'PENDIENTE')
     const turnosUrgentes = turnos.filter(
@@ -33,6 +38,45 @@ export default async function DashboardPage() {
 
     const rolTexto = usuario?.rol === 'admin' ? 'Administración' : 'Profesional'
 
+    // Calcular banner de alerta de vencimiento
+    let alertBanner = null
+    const isSuperadmin = usuario?.rol === 'superadmin' || usuario?.email === 'creapp.ar@gmail.com'
+
+    if (settings?.fecha_vencimiento && !isSuperadmin) {
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const [year, month, day] = settings.fecha_vencimiento.split('-').map(Number)
+        const expiry = new Date(year, month - 1, day)
+        expiry.setHours(0, 0, 0, 0)
+
+        const diffTime = expiry.getTime() - today.getTime()
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+
+        const hasActivePayment = settings.estado === 'ACTIVO'
+
+        if (!hasActivePayment && diffDays >= 0) {
+            if (diffDays === 5 || diffDays === 4) {
+                alertBanner = (
+                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center gap-3 text-sm">
+                        <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                        <span className="font-medium flex-1">
+                            En {diffDays} días deberá renovar su abono mensual, por favor dirigirse a <a href="/mis-pagos" className="underline font-bold hover:opacity-80">Mis Pagos</a>.
+                        </span>
+                    </div>
+                )
+            } else if (diffDays <= 3) {
+                alertBanner = (
+                    <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 flex items-center gap-3 text-sm animate-red-banner-pulse">
+                        <AlertCircle className="h-5 w-5 shrink-0 text-rose-500 animate-[bounce_2s_infinite]" />
+                        <span className="font-medium flex-1">
+                            Por favor, renovar el abono en la sección <a href="/mis-pagos" className="underline font-bold hover:opacity-80">Mis Pagos</a> para evitar la suspensión del servicio.
+                        </span>
+                    </div>
+                )
+            }
+        }
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -46,6 +90,10 @@ export default async function DashboardPage() {
                     </p>
                 </div>
             </div>
+
+            {/* Banner de Cobro */}
+            {alertBanner}
+
 
             {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

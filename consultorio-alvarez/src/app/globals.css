@@ -338,3 +338,35 @@
 .animate-pulse-red {
   animation: pulse-red 1.6s infinite ease-in-out;
 }
+
+/* Billing Warning & Pulse Animations */
+@keyframes breathing-pulse {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 0.8;
+  }
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+    filter: drop-shadow(0 0 5px rgba(245, 158, 11, 0.7));
+  }
+}
+
+@keyframes red-banner-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    opacity: 0.95;
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    opacity: 1;
+  }
+}
+
+.animate-breathing {
+  animation: breathing-pulse 2s infinite ease-in-out;
+}
+
+.animate-red-banner-pulse {
+  animation: red-banner-pulse 1.8s infinite ease-in-out;
+}

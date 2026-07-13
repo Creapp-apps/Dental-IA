@@ -32,6 +32,15 @@ export default async function AgendaPage({ searchParams }: PageProps) {
 
     const vistaParam = (resolvedSearchParams?.vista as string) || 'semana'
 
+    let subtitle = 'Vista semanal — todos los profesionales'
+    if (vistaParam === 'hoy') {
+        subtitle = 'Vista diaria — todos los profesionales'
+    } else if (vistaParam === '15dias') {
+        subtitle = 'Vista de 15 días — todos los profesionales'
+    } else if (vistaParam === 'mes') {
+        subtitle = 'Vista mensual — todos los profesionales'
+    }
+
     let inicio = startOfWeek(focusDate, { weekStartsOn: 1 })
     let fin = endOfWeek(focusDate, { weekStartsOn: 1 })
 
@@ -62,7 +71,7 @@ export default async function AgendaPage({ searchParams }: PageProps) {
         <div className="space-y-4">
             <div className="text-center md:text-left">
                 <h1 className="text-2xl font-bold text-foreground">Agenda</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">Vista semanal — todos los profesionales</p>
+                <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
             </div>
             <AgendaView
                 profesionales={profesionales}

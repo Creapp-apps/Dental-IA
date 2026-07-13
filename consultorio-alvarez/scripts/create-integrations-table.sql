@@ -3,7 +3,7 @@
 CREATE TABLE IF NOT EXISTS public.tenant_integrations (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   tenant_id uuid NOT NULL REFERENCES public.tenants(id) ON DELETE CASCADE,
-  provider text NOT NULL CHECK (provider IN ('whatsapp', 'mercadopago', 'arca')),
+  provider text NOT NULL CHECK (provider IN ('whatsapp', 'mercadopago', 'arca', 'billing_settings', 'billing_payments')),
   is_active boolean DEFAULT false,
   credentials jsonb DEFAULT '{}'::jsonb,
   created_at timestamp with time zone DEFAULT now(),
