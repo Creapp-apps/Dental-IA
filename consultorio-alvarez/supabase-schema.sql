@@ -154,6 +154,7 @@ CREATE TABLE turnos (
   prioridad_override prioridad_tratamiento,
   notas TEXT,
   origen origen_turno NOT NULL DEFAULT 'SECRETARIA',
+  numero_pieza TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT fecha_coherente CHECK (fecha_fin > fecha_inicio)

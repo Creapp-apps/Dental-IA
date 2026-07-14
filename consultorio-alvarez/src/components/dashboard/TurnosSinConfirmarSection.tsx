@@ -23,6 +23,7 @@ interface TurnoSinConfirmar {
     fecha_inicio: string
     estado: string
     notas: string | null
+    numero_pieza: string | null
     paciente: {
         id: string
         nombre: string
@@ -325,9 +326,16 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
 
                                                     {/* Tratamiento */}
                                                     <td className="py-3 px-2 lg:px-4">
-                                                        <span className="text-muted-foreground text-xs block max-w-[100px] xl:max-w-[140px] truncate" title={turno.tipo_tratamiento?.nombre || 'Consulta'}>
-                                                            {turno.tipo_tratamiento?.nombre || 'Consulta'}
-                                                        </span>
+                                                        <div className="flex items-center gap-1.5 max-w-[120px] xl:max-w-[160px]">
+                                                            <span className="text-muted-foreground text-xs truncate" title={turno.tipo_tratamiento?.nombre || 'Consulta'}>
+                                                                {turno.tipo_tratamiento?.nombre || 'Consulta'}
+                                                            </span>
+                                                            {turno.numero_pieza && (
+                                                                <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30 shrink-0 whitespace-nowrap">
+                                                                    Pza. {turno.numero_pieza}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     </td>
 
                                                     {/* Estado de Confirmación */}
@@ -512,9 +520,16 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                     </span>
                                                 </div>
                                                 {turno.tipo_tratamiento?.nombre && (
-                                                    <p className="text-muted-foreground text-[11px] truncate mt-0.5">
-                                                        {turno.tipo_tratamiento.nombre}
-                                                    </p>
+                                                    <div className="flex items-center gap-1 mt-0.5 min-w-0">
+                                                        <span className="text-muted-foreground text-[11px] truncate">
+                                                            {turno.tipo_tratamiento.nombre}
+                                                        </span>
+                                                        {turno.numero_pieza && (
+                                                            <span className="text-[9px] font-bold px-1 py-0.2 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30 shrink-0 whitespace-nowrap">
+                                                                Pza. {turno.numero_pieza}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>

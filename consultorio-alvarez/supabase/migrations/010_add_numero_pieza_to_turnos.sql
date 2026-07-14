@@ -1,0 +1,1 @@
+ALTER TABLE turnos ADD COLUMN IF NOT EXISTS numero_pieza TEXT;

@@ -20,6 +20,7 @@ interface TurnoCardGlassProps {
         estado: string
         prioridad_override: string | null
         notas: string | null
+        numero_pieza: string | null
         paciente?: { nombre: string; apellido: string; telefono?: string | null } | null
         tipo_tratamiento?: {
             nombre: string
@@ -89,9 +90,16 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
                         </span>
                     )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {turno.tipo_tratamiento?.nombre ?? '—'}
-                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                    <p className="text-xs text-muted-foreground truncate">
+                        {turno.tipo_tratamiento?.nombre ?? '—'}
+                    </p>
+                    {turno.numero_pieza && (
+                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30 whitespace-nowrap">
+                            Pza. {turno.numero_pieza}
+                        </span>
+                    )}
+                </div>
             </div>
 
             {/* Badge & Actions */}

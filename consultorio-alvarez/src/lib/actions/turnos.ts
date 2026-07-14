@@ -35,6 +35,7 @@ export async function crearTurno(formData: {
     notas?: string
     prioridad_override?: string
     es_sobreturno?: boolean
+    numero_pieza?: string
 }) {
     const supabase = await createClient()
     const tenantId = await getTenantId()
@@ -54,6 +55,7 @@ export async function crearTurno(formData: {
             estado: 'PENDIENTE',
             origen: 'SECRETARIA',
             es_sobreturno: formData.es_sobreturno ?? false,
+            numero_pieza: formData.numero_pieza || null,
         })
         .select()
         .single()
@@ -321,6 +323,7 @@ export async function editarTurno(turnoId: string, formData: {
     notas?: string
     prioridad_override?: string
     es_sobreturno?: boolean
+    numero_pieza?: string
 }) {
     const supabase = await createClient()
 
@@ -342,6 +345,7 @@ export async function editarTurno(turnoId: string, formData: {
             notas: formData.notas || null,
             prioridad_override: formData.prioridad_override || null,
             es_sobreturno: formData.es_sobreturno ?? false,
+            numero_pieza: formData.numero_pieza || null,
         })
         .eq('id', turnoId)
         .select()

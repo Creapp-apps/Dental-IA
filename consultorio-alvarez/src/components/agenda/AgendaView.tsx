@@ -1438,6 +1438,14 @@ export function AgendaView({
                                                     onClick={(e) => e.stopPropagation()} // Stop bubbling up to toggleTurnoExpande
                                                     className="overflow-hidden border-t border-white/5 pt-3"
                                                 >
+                                                    {/* Numero de Pieza section */}
+                                                    {turno.numero_pieza && (
+                                                        <div className="mb-3 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20">
+                                                            <p className="text-[9px] font-bold text-amber-400 mb-1 uppercase tracking-wider">Número de Pieza:</p>
+                                                            <p className="text-xs text-amber-200 font-mono font-bold">Pieza {turno.numero_pieza}</p>
+                                                        </div>
+                                                    )}
+
                                                     {/* Notas section */}
                                                     {turno.notas && (
                                                         <div className="mb-3 bg-black/40 p-2.5 rounded-lg border border-white/5">
@@ -2080,6 +2088,13 @@ function TurnoDetailModal({
                             <Activity className="h-4 w-4 text-purple-400 shrink-0" />
                             <span className="text-xs font-medium text-slate-200">Tratamiento: {turno.tipo_tratamiento?.nombre}</span>
                         </div>
+                        {turno.numero_pieza && (
+                            <div className="flex items-center gap-2 pl-6">
+                                <span className="text-xs font-semibold text-amber-400 bg-amber-500/10 py-1 px-2.5 rounded-lg border border-amber-500/20">
+                                    Pieza Dental: {turno.numero_pieza}
+                                </span>
+                            </div>
+                        )}
                         <div className="flex items-center gap-2">
                             <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: turno.profesional?.color_agenda }} />
                             <span className="text-xs font-medium text-slate-200">Dr. {turno.profesional?.nombre} {turno.profesional?.apellido}</span>

@@ -134,9 +134,16 @@ function TabTurnos({ turnos }: { turnos: any[] }) {
                     {turnos.map((t: any) => (
                         <div key={t.id} className="flex items-start justify-between gap-2 py-2.5 px-3 rounded-xl hover:bg-muted/30 transition-colors">
                             <div className="min-w-0">
-                                <p className="text-sm font-medium text-foreground truncate">
-                                    {t.tipo_tratamiento?.nombre ?? '—'}
-                                </p>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                    <p className="text-sm font-medium text-foreground truncate">
+                                        {t.tipo_tratamiento?.nombre ?? '—'}
+                                    </p>
+                                    {t.numero_pieza && (
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 border border-amber-500/30 whitespace-nowrap">
+                                            Pza. {t.numero_pieza}
+                                        </span>
+                                    )}
+                                </div>
                                 <p className="text-xs text-muted-foreground">
                                     {format(new Date(t.fecha_inicio), "d MMM yyyy, HH:mm", { locale: es })}
                                     {' · Dr. '}{t.profesional?.nombre} {t.profesional?.apellido}

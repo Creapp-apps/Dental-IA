@@ -135,6 +135,7 @@ export interface Turno {
   notas: string | null
   origen: OrigenTurno
   es_sobreturno: boolean
+  numero_pieza?: string | null
   created_at: string
   updated_at?: string
   // Joins

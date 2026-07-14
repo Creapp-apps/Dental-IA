@@ -121,6 +121,12 @@ export function NuevoTurnoModal({
     const [esSobreturno, setEsSobreturno] = useState(false)
     const [ocupacion, setOcupacion] = useState<{fecha_inicio: string, fecha_fin: string}[]>([])
     const [extraMinutes, setExtraMinutes] = useState(0)
+    const [numeroPieza, setNumeroPieza] = useState('')
+
+    const esTratamientoConducto = useMemo(() => {
+        const selected = tiposTratamiento.find((t: any) => String(t.id) === String(tratId))
+        return selected?.nombre?.toUpperCase().trim() === 'TRATAMIENTO DE CONDUCTO'
+    }, [tratId, tiposTratamiento])
 
     // Quick add patient states
     const [modoNuevoPaciente, setModoNuevoPaciente] = useState(false)
@@ -147,6 +153,7 @@ export function NuevoTurnoModal({
                 setNotas(turnoAEditar.notas || '')
                 setPrioridad(turnoAEditar.prioridad_override || '')
                 setEsSobreturno(turnoAEditar.es_sobreturno || false)
+                setNumeroPieza(turnoAEditar.numero_pieza || '')
 
                 // Calcular minutos extra originales
                 const duracionOriginal = (new Date(turnoAEditar.fecha_fin).getTime() - new Date(turnoAEditar.fecha_inicio).getTime()) / 60000
@@ -164,6 +171,7 @@ export function NuevoTurnoModal({
                 setPrioridad('')
                 setEsSobreturno(false)
                 setExtraMinutes(0)
+                setNumeroPieza('')
             }
         }
     }, [open, defaultProfesionalId, defaultFecha, defaultHora, profesionales, turnoAEditar, tiposTratamiento])
@@ -321,6 +329,7 @@ export function NuevoTurnoModal({
                     notas: notas || undefined,
                     prioridad_override: prioridad || undefined,
                     es_sobreturno: esSobreturno,
+                    numero_pieza: esTratamientoConducto ? (numeroPieza.trim() || undefined) : undefined,
                 })
 
                 if (result.error) {
@@ -342,6 +351,7 @@ export function NuevoTurnoModal({
                     notas: notas || undefined,
                     prioridad_override: prioridad || undefined,
                     es_sobreturno: esSobreturno,
+                    numero_pieza: esTratamientoConducto ? (numeroPieza.trim() || undefined) : undefined,
                 })
 
                 if (result.error) {
@@ -567,6 +577,26 @@ export function NuevoTurnoModal({
                             )}
                         </div>
                     </div>
+
+                    <AnimatePresence>
+                        {esTratamientoConducto && (
+                            <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: 'auto' }}
+                                exit={{ opacity: 0, height: 0 }}
+                                transition={{ duration: 0.2 }}
+                                className="space-y-1.5 overflow-hidden"
+                            >
+                                <Label htmlFor="numero_pieza">Número de Pieza</Label>
+                                <Input
+                                    id="numero_pieza"
+                                    placeholder="Ej: 14, 26, 46..."
+                                    value={numeroPieza}
+                                    onChange={(e) => setNumeroPieza(e.target.value)}
+                                />
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     {/* Controles de Minutos Extra (+20 Min) */}
                     <div className="flex items-center justify-between bg-white/[0.03] p-3 rounded-lg border border-white/5 mt-1">
