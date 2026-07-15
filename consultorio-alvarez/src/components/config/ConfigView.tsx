@@ -711,6 +711,14 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
     const [selectedProfId, setSelectedProfId] = useState<string | null>(null)
     const ordered = [1, 2, 3, 4, 5, 6, 0]
 
+    const targetOptions = [
+        { id: 'general', label: 'General (Consultorio)' },
+        ...profesionales.filter(p => p.activo).map(p => ({
+            id: p.id,
+            label: `Dr/a. ${p.nombre} ${p.apellido}`
+        }))
+    ]
+
     const getHorariosFor = (profId: string | null) => {
         const filtered = initialHorarios ? initialHorarios.filter((x: any) => profId ? x.profesional_id === profId : !x.profesional_id) : []
         
@@ -820,22 +828,17 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
                     <h3 className="text-sm font-semibold text-foreground">Horarios de atención</h3>
                     <p className="text-xs text-muted-foreground">Configurá la disponibilidad semanal general de la clínica o de un profesional en particular.</p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 text-foreground">
                     <Label htmlFor="target-select" className="text-xs shrink-0 text-foreground">Configurar para:</Label>
-                    <select
-                        id="target-select"
-                        value={selectedProfId || 'general'}
-                        onChange={(e) => {
-                            const val = e.target.value
-                            setSelectedProfId(val === 'general' ? null : val)
-                        }}
-                        className="bg-background/50 border border-border rounded-lg text-xs px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary w-48 text-foreground"
-                    >
-                        <option value="general" className="text-foreground bg-background">General (Consultorio)</option>
-                        {profesionales.filter(p => p.activo).map(p => (
-                            <option key={p.id} value={p.id} className="text-foreground bg-background">Dr/a. {p.nombre} {p.apellido}</option>
-                        ))}
-                    </select>
+                    <div className="w-48 relative">
+                        <GlassSelect
+                            value={selectedProfId || 'general'}
+                            onChange={(val) => {
+                                setSelectedProfId(val === 'general' ? null : val)
+                            }}
+                            options={targetOptions}
+                        />
+                    </div>
                 </div>
             </div>
             <div className="space-y-2">

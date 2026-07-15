@@ -109,6 +109,7 @@ export function NuevoTurnoModal({
     onSuccess,
 }: NuevoTurnoModalProps) {
     const [isPending, startTransition] = useTransition()
+    const [isLoadingOcupacion, setIsLoadingOcupacion] = useState(false)
     const [pacienteId, setPacienteId] = useState('')
     const [pacienteSearch, setPacienteSearch] = useState('')
     const [profId, setProfId] = useState(defaultProfesionalId || (profesionales[0]?.id ?? ''))
@@ -177,11 +178,27 @@ export function NuevoTurnoModal({
     }, [open, defaultProfesionalId, defaultFecha, defaultHora, profesionales, turnoAEditar, tiposTratamiento])
 
     useEffect(() => {
+        let active = true
         if (open && profId && fecha) {
-            startTransition(async () => {
-                const data = await getOcupacionProfesionalDia(profId, fecha)
-                setOcupacion(data)
-            })
+            const fetchOcupacion = async () => {
+                setIsLoadingOcupacion(true)
+                try {
+                    const data = await getOcupacionProfesionalDia(profId, fecha)
+                    if (active) {
+                        setOcupacion(data)
+                    }
+                } catch (error) {
+                    console.error("Error fetching ocupacion:", error)
+                } finally {
+                    if (active) {
+                        setIsLoadingOcupacion(false)
+                    }
+                }
+            }
+            fetchOcupacion()
+        }
+        return () => {
+            active = false
         }
     }, [open, profId, fecha])
 
@@ -674,14 +691,14 @@ export function NuevoTurnoModal({
                                     <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-red-500"></span> Ocupado</span>
                                 </span>
                             </div>
-                            <div className="flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-muted/50 dark:bg-black/20 border border-border dark:border-white/5 max-h-[135px] overflow-y-auto custom-scrollbar">
+                            <div className={`flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-muted/50 dark:bg-black/20 border border-border dark:border-white/5 max-h-[135px] overflow-y-auto custom-scrollbar transition-opacity duration-200 ${isLoadingOcupacion ? 'opacity-60 pointer-events-none' : ''}`}>
                                 {slots.map(s => {
                                     const ocupado = isSlotOccupied(s)
                                     return (
                                         <button
                                             key={s}
                                             type="button"
-                                            disabled={ocupado}
+                                            disabled={ocupado || isLoadingOcupacion}
                                             onClick={() => setHora(s)}
                                             className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-colors border ${
                                                 ocupado 

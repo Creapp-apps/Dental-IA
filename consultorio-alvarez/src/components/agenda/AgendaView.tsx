@@ -1414,8 +1414,13 @@ export function AgendaView({
                                                         </span>
                                                     )}
                                                 </div>
-                                                <p className="text-xs text-muted-foreground mt-0.5 font-medium truncate">
-                                                    {turno.tipo_tratamiento?.nombre || 'Consulta General'}
+                                                <p className="text-xs text-muted-foreground mt-0.5 font-medium truncate flex items-center gap-1.5 flex-wrap">
+                                                    <span>{turno.tipo_tratamiento?.nombre || 'Consulta General'}</span>
+                                                    {turno.numero_pieza && (
+                                                        <span className="text-[10px] font-extrabold tracking-wide bg-amber-100/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/60 px-1.5 py-0.5 rounded shrink-0">
+                                                            Pieza {turno.numero_pieza}
+                                                        </span>
+                                                    )}
                                                 </p>
                                                 <div className="flex items-center gap-1.5 mt-1">
                                                     <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: turno.profesional?.color_agenda }} />
@@ -1740,6 +1745,89 @@ function calculateOverlappingStyle(turnos: any[]) {
     return styles
 }
 
+function hexToHsl(hex: string): { h: number; s: number; l: number } {
+    hex = hex.replace(/^#/, '');
+    if (hex.length === 3) {
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+    }
+    
+    if (!/^[0-9a-fA-F]{6}$/.test(hex)) {
+        const lower = hex.toLowerCase();
+        if (lower === 'yellow' || lower === 'amarillo') return { h: 60, s: 100, l: 50 };
+        if (lower === 'red' || lower === 'rojo') return { h: 0, s: 100, l: 50 };
+        if (lower === 'blue' || lower === 'azul') return { h: 240, s: 100, l: 50 };
+        if (lower === 'green' || lower === 'verde') return { h: 120, s: 100, l: 40 };
+        return { h: 0, s: 0, l: 50 };
+    }
+    
+    let r = parseInt(hex.substring(0, 2), 16) / 255;
+    let g = parseInt(hex.substring(2, 4), 16) / 255;
+    let b = parseInt(hex.substring(4, 6), 16) / 255;
+    
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+    
+    if (max !== min) {
+        const d = max - min;
+        s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+        switch (max) {
+            case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+            case g: h = (b - r) / d + 2; break;
+            case b: h = (r - g) / d + 4; break;
+        }
+        h /= 6;
+    }
+    
+    return {
+        h: Math.round(h * 360),
+        s: Math.round(s * 100),
+        l: Math.round(l * 100)
+    };
+}
+
+function hslToHex(h: number, s: number, l: number): string {
+    s /= 100;
+    l /= 100;
+    
+    const k = (n: number) => (n + h / 30) % 12;
+    const a = s * Math.min(l, 1 - l);
+    const f = (n: number) => {
+        const x = Math.min(k(n) - 3, 9 - k(n));
+        const color = l - a * Math.max(Math.min(x, 1), -1);
+        const hexVal = Math.round(255 * color).toString(16).padStart(2, '0');
+        return hexVal;
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+}
+
+function getReadableTextColor(hexColor: string, isDark: boolean): string {
+    try {
+        const { h, s, l } = hexToHsl(hexColor);
+        if (isDark) {
+            // In dark mode, ensure text is bright enough on dark background (minimum 75% lightness)
+            if (l < 55) {
+                const targetL = 75;
+                return hslToHex(h, s, targetL);
+            }
+            return hexColor;
+        } else {
+            // In light mode, guarantee high contrast by capping text lightness to very dark levels (12%-16%)
+            let targetL = 16;
+            if (h >= 40 && h <= 180) { // yellow, lime, green, cyan
+                targetL = 12; // ultra-dark contrast
+            }
+            if (l > targetL) {
+                return hslToHex(h, s, targetL);
+            }
+            return hexColor;
+        }
+    } catch (e) {
+        return hexColor;
+    }
+}
+
 interface TurnoCalendarCardProps {
     turno: any
     top: number
@@ -1779,6 +1867,8 @@ function TurnoCalendarCard({
     const borderLeftColor = isST ? '#ef4444' : (turno.tipo_tratamiento?.color ?? colorProf)
     const bgColor = isST ? 'rgba(239, 68, 68, 0.15)' : `${turno.tipo_tratamiento?.color ?? colorProf}20`
     const badgeColor = turno.tipo_tratamiento?.color ?? colorProf
+    const badgeColorLight = getReadableTextColor(badgeColor, false)
+    const badgeColorDark = getReadableTextColor(badgeColor, true)
     
     return (
         <motion.div
@@ -1789,7 +1879,8 @@ function TurnoCalendarCard({
             className={cn(
                 "absolute rounded-lg shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow select-none group",
                 isST ? "border border-red-500/30 animate-pulse-subtle" : "border border-white/5",
-                height < 50 ? "py-1 px-1.5 flex items-center justify-between" : "p-2"
+                height < 65 ? "py-1 px-1.5 flex items-center justify-between" : 
+                height < 85 ? "py-1 px-1.5" : "p-2"
             )}
             style={{
                 top: `${top}px`,
@@ -1803,7 +1894,7 @@ function TurnoCalendarCard({
             animate={{ opacity: 1, scale: 1 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
         >
-            {height < 50 ? (
+            {height < 65 ? (
                 vistaActiva === 'hoy' ? (
                     <div className="flex items-center justify-between w-full min-w-0 gap-2 h-full py-0.5">
                         <div className="flex items-center gap-3 min-w-0 flex-1">
@@ -1822,15 +1913,24 @@ function TurnoCalendarCard({
 
                             {/* Tipo de Tratamiento */}
                             {turno.tipo_tratamiento?.nombre && (
-                                <div 
-                                    className="text-[10px] font-bold px-2 py-0.5 rounded border select-none shrink-0 truncate max-w-[200px]"
-                                    style={{
-                                        backgroundColor: `${badgeColor}18`,
-                                        borderColor: `${badgeColor}50`,
-                                        color: badgeColor
-                                    }}
-                                >
-                                    {turno.tipo_tratamiento.nombre}
+                                <div className="flex items-center gap-1.5 shrink-0 min-w-0">
+                                    <div 
+                                        className="text-[11px] font-extrabold tracking-wide px-2 py-0.5 rounded border select-none truncate max-w-[200px] text-[var(--badge-text-light)] dark:text-[var(--badge-text-dark)] border-[var(--badge-border-light)] dark:border-[var(--badge-border-dark)]"
+                                        style={{
+                                            backgroundColor: `${badgeColor}20`,
+                                            ['--badge-text-light' as any]: badgeColorLight,
+                                            ['--badge-text-dark' as any]: badgeColorDark,
+                                            ['--badge-border-light' as any]: `${badgeColorLight}60`,
+                                            ['--badge-border-dark' as any]: `${badgeColorDark}60`
+                                        }}
+                                    >
+                                        {turno.tipo_tratamiento.nombre}
+                                    </div>
+                                    {turno.numero_pieza && (
+                                        <span className="text-[11px] font-extrabold tracking-wide bg-amber-100/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/60 px-1.5 py-0.5 rounded shrink-0" title={`Pieza Dental: ${turno.numero_pieza}`}>
+                                            Pieza {turno.numero_pieza}
+                                        </span>
+                                    )}
                                 </div>
                             )}
 
@@ -1852,6 +1952,11 @@ function TurnoCalendarCard({
                             <span className="text-[10px] font-bold text-foreground truncate">
                                 {format(parseISO(turno.fecha_inicio), 'HH:mm')} {turno.paciente?.apellido}, {turno.paciente?.nombre?.charAt(0)}.
                             </span>
+                            {turno.numero_pieza && (
+                                        <span className="text-[9px] font-extrabold bg-amber-100/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/60 px-1 rounded leading-none shrink-0" title={`Pieza Dental: ${turno.numero_pieza}`}>
+                                            Pieza {turno.numero_pieza}
+                                        </span>
+                                    )}
                             {isST && <span className="text-[8px] bg-red-500/20 text-red-400 font-bold px-0.5 rounded leading-none">ST</span>}
                         </div>
                         <div className="shrink-0 flex items-center scale-75 origin-right">
@@ -1862,37 +1967,66 @@ function TurnoCalendarCard({
             ) : (
                 vistaActiva === 'hoy' ? (
                     <div className="flex flex-col h-full justify-between min-w-0">
-                        <div className="min-w-0 space-y-1">
+                        <div className={cn("min-w-0", height < 85 ? "space-y-0.5" : "space-y-1")}>
                             {/* Row 1: Date & Time + Status Badge */}
                             <div className="flex items-center justify-between gap-1.5">
-                                <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground">
-                                    <Clock className="h-3 w-3 shrink-0" />
+                                <div className="flex items-center gap-1 text-[10px] font-bold text-muted-foreground">
+                                    <Clock className="h-2.5 w-2.5 shrink-0" />
                                     <span>
                                         {format(parseISO(turno.fecha_inicio), 'dd/MM')} - {format(parseISO(turno.fecha_inicio), 'HH:mm')} hs
                                     </span>
                                 </div>
-                                <div className="shrink-0 scale-75 origin-top-right">
-                                    <StatusBadge status={estado} />
-                                </div>
+                                {height < 85 ? (
+                                    <StatusBadge 
+                                        status={estado} 
+                                        className="text-[9px] px-1.5 py-0 h-4.5 min-h-0 shrink-0 border-neutral-200/50 dark:border-neutral-800/50 font-bold gap-0.5" 
+                                        showIcon={false} 
+                                    />
+                                ) : (
+                                    <div className="shrink-0 scale-75 origin-top-right">
+                                        <StatusBadge status={estado} />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Row 2: Patient Name */}
-                            <p className="text-xs font-bold text-foreground truncate mt-0.5 leading-snug group-hover:text-primary transition-colors">
+                            <p className={cn(
+                                "font-bold text-foreground truncate leading-tight group-hover:text-primary transition-colors", 
+                                height < 85 ? "text-[11px] mt-0" : "text-xs mt-0.5"
+                            )}>
                                 {turno.paciente ? `${turno.paciente.apellido}, ${turno.paciente.nombre}` : '—'}
                             </p>
 
                             {/* Row 3: Treatment Type */}
                             {turno.tipo_tratamiento?.nombre && (
-                                <p 
-                                    className="text-[10px] font-bold px-2 py-0.5 rounded border select-none w-fit mt-1"
-                                    style={{
-                                        backgroundColor: `${badgeColor}18`,
-                                        borderColor: `${badgeColor}50`,
-                                        color: badgeColor
-                                    }}
-                                >
-                                    {turno.tipo_tratamiento.nombre}
-                                </p>
+                                <div className={cn("flex items-center gap-1 min-w-0 overflow-hidden shrink-0", height < 85 ? "mt-0.5" : "mt-1")}>
+                                    <p 
+                                        className={cn(
+                                            "font-extrabold tracking-wide rounded border select-none truncate text-[var(--badge-text-light)] dark:text-[var(--badge-text-dark)] border-[var(--badge-border-light)] dark:border-[var(--badge-border-dark)] shrink-0",
+                                            height < 85 ? "text-[9.5px] px-1 py-0.5 max-w-[120px]" : "text-[11px] px-2 py-0.5 max-w-[160px]"
+                                        )}
+                                        style={{
+                                            backgroundColor: `${badgeColor}20`,
+                                            ['--badge-text-light' as any]: badgeColorLight,
+                                            ['--badge-text-dark' as any]: badgeColorDark,
+                                            ['--badge-border-light' as any]: `${badgeColorLight}60`,
+                                            ['--badge-border-dark' as any]: `${badgeColorDark}60`
+                                        }}
+                                    >
+                                        {turno.tipo_tratamiento.nombre}
+                                    </p>
+                                    {turno.numero_pieza && (
+                                        <span 
+                                            className={cn(
+                                                "font-extrabold tracking-wide bg-amber-100/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/60 rounded shrink-0",
+                                                height < 85 ? "text-[9.5px] px-1 py-0.5" : "text-[11px] px-1.5 py-0.5"
+                                            )} 
+                                            title={`Pieza Dental: ${turno.numero_pieza}`}
+                                        >
+                                            Pieza {turno.numero_pieza}
+                                        </span>
+                                    )}
+                                </div>
                             )}
                         </div>
                         {isST && (
@@ -1903,20 +2037,42 @@ function TurnoCalendarCard({
                     </div>
                 ) : (
                     <div className="flex flex-col h-full justify-between min-w-0">
-                        <div className="min-w-0">
+                        <div className={cn("min-w-0", height < 85 ? "space-y-0.5" : "space-y-1")}>
                             <div className="flex items-center justify-between gap-1.5">
                                 <span className="text-[10px] font-semibold text-muted-foreground">
                                     {format(parseISO(turno.fecha_inicio), 'HH:mm')} — {format(parseISO(turno.fecha_fin), 'HH:mm')}
                                 </span>
-                                <div className="shrink-0 scale-75 origin-top-right">
-                                    <StatusBadge status={estado} />
-                                </div>
+                                {height < 85 ? (
+                                    <StatusBadge 
+                                        status={estado} 
+                                        className="text-[9px] px-1.5 py-0 h-4.5 min-h-0 shrink-0 border-neutral-200/50 dark:border-neutral-800/50 font-bold gap-0.5" 
+                                        showIcon={false} 
+                                    />
+                                ) : (
+                                    <div className="shrink-0 scale-75 origin-top-right">
+                                        <StatusBadge status={estado} />
+                                    </div>
+                                )}
                             </div>
-                            <p className="text-xs font-bold text-foreground truncate mt-0.5 leading-snug group-hover:text-primary transition-colors">
+                            <p className={cn(
+                                "font-bold text-foreground truncate leading-tight group-hover:text-primary transition-colors", 
+                                height < 85 ? "text-[11px] mt-0" : "text-xs mt-0.5"
+                            )}>
                                 {turno.paciente?.apellido}, {turno.paciente?.nombre}
                             </p>
-                            <p className="text-[10px] text-muted-foreground truncate leading-normal">
-                                {turno.tipo_tratamiento?.nombre}
+                            <p className={cn("text-[10px] text-muted-foreground truncate leading-normal flex items-center gap-1 min-w-0 overflow-hidden", height < 85 ? "mt-0" : "mt-0.5")}>
+                                <span className="truncate">{turno.tipo_tratamiento?.nombre || 'Consulta General'}</span>
+                                {turno.numero_pieza && (
+                                    <span 
+                                        className={cn(
+                                            "font-extrabold tracking-wide bg-amber-100/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/60 rounded shrink-0",
+                                            height < 85 ? "text-[9.5px] px-1 py-0.5" : "text-[10px] px-1.5 py-0.5"
+                                        )} 
+                                        title={`Pieza Dental: ${turno.numero_pieza}`}
+                                    >
+                                        Pieza {turno.numero_pieza}
+                                    </span>
+                                )}
                             </p>
                         </div>
                         {isST && (
