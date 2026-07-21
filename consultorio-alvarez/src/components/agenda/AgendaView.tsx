@@ -47,10 +47,11 @@ const sectionVariants = {
     }),
 }
 
-type ViewMode = 'hoy' | 'semana' | '15dias' | 'mes'
+type ViewMode = 'hoy' | 'semana' | '15dias' | 'mes' | '3dias'
 
 const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
-    { key: 'hoy', label: 'Hoy' },
+    { key: 'hoy', label: 'Día' },
+    { key: '3dias', label: '3 días' },
     { key: 'semana', label: 'Semana' },
     { key: '15dias', label: '15 días' },
     { key: 'mes', label: 'Mes' },
@@ -72,6 +73,18 @@ function getCardPosition(fechaInicioStr: string, fechaFinStr: string) {
     const height = Math.max(30, (endHour - startHour) * HOUR_HEIGHT)
     
     return { top, height }
+}
+
+function getMonthGridDays(date: Date) {
+    const start = startOfWeek(startOfMonth(date), { weekStartsOn: 1 })
+    const end = endOfWeek(endOfMonth(date), { weekStartsOn: 1 })
+    const days = []
+    let curr = start
+    while (curr <= end) {
+        days.push(new Date(curr))
+        curr = addDays(curr, 1)
+    }
+    return days
 }
 
 interface AgendaViewProps {
@@ -118,6 +131,7 @@ export function AgendaView({
     const [zoom, setZoom] = useState(100) // Zoom percentage: 80, 100, 120, 150, 200
     const [filtroProfMobile, setFiltroProfMobile] = useState<string>('todos')
     const [turnoExpandeMobile, setTurnoExpandeMobile] = useState<string | null>(null)
+    const [dropdownOpen, setDropdownOpen] = useState(false)
 
     const toggleTurnoExpande = (id: string) => {
         setTurnoExpandeMobile(prev => prev === id ? null : id)
@@ -300,6 +314,8 @@ export function AgendaView({
                 const inicio = startOfWeek(baseDate, { weekStartsOn: 1 })
                 return Array.from({ length: 7 }, (_, i) => addDays(inicio, i))
             }
+            case '3dias':
+                return Array.from({ length: 3 }, (_, i) => addDays(baseDate, i))
             case 'semana': {
                 const inicio = startOfWeek(baseDate, { weekStartsOn: 1 })
                 return Array.from({ length: 7 }, (_, i) => addDays(inicio, i))
@@ -312,6 +328,8 @@ export function AgendaView({
                 const count = Math.round((fin.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24)) + 1
                 return Array.from({ length: count }, (_, i) => addDays(inicio, i))
             }
+            default:
+                return []
         }
     }, [vistaActiva, baseDate])
 
@@ -320,6 +338,12 @@ export function AgendaView({
         switch (vistaActiva) {
             case 'hoy': {
                 const prev = subDays(baseDate, 1)
+                setBaseDate(prev)
+                setDiaSeleccionado(prev)
+                break
+            }
+            case '3dias': {
+                const prev = subDays(baseDate, 3)
                 setBaseDate(prev)
                 setDiaSeleccionado(prev)
                 break
@@ -349,6 +373,12 @@ export function AgendaView({
         switch (vistaActiva) {
             case 'hoy': {
                 const next = addDays(baseDate, 1)
+                setBaseDate(next)
+                setDiaSeleccionado(next)
+                break
+            }
+            case '3dias': {
+                const next = addDays(baseDate, 3)
                 setBaseDate(next)
                 setDiaSeleccionado(next)
                 break
@@ -448,6 +478,62 @@ export function AgendaView({
             })
         }
     }, [vistaActiva, profesionales, turnos, diaSeleccionado, diasVisibles])
+
+    const mobileColumns = useMemo(() => {
+        if (vistaActiva === 'hoy') {
+            const profsToShow = filtroProfMobile === 'todos' 
+                ? profesionales 
+                : profesionales.filter(p => p.id === filtroProfMobile)
+
+            return profsToShow.map(prof => {
+                const turnosDiaProf = turnos.filter(
+                    (t: any) => t.profesional_id === prof.id && isSameDay(parseISO(t.fecha_inicio), diaSeleccionado)
+                )
+                return {
+                    header: (
+                        <div className="flex items-center gap-1 justify-center py-1 max-w-full">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: prof.color_agenda }} />
+                            <span className="text-[10px] font-bold text-foreground truncate">Dr. {prof.nombre}</span>
+                        </div>
+                    ),
+                    date: diaSeleccionado,
+                    profesionalId: prof.id,
+                    colorProf: prof.color_agenda,
+                    turnos: turnosDiaProf
+                }
+            })
+        } else {
+            const filteredDays = vistaActiva === '3dias' ? diasVisibles.slice(0, 3) : diasVisibles
+            return filteredDays.map(dia => {
+                let turnosDia = turnos.filter(
+                    (t: any) => isSameDay(parseISO(t.fecha_inicio), dia)
+                )
+                if (filtroProfMobile !== 'todos') {
+                    turnosDia = turnosDia.filter((t: any) => t.profesional_id === filtroProfMobile)
+                }
+                const esHoy = isToday(dia)
+                return {
+                    header: (
+                        <div className="flex flex-col items-center py-0.5">
+                            <span className="text-[9px] font-bold uppercase tracking-wider text-muted-foreground">
+                                {format(dia, 'EEE', { locale: es })}
+                            </span>
+                            <span className={cn(
+                                "text-[11px] font-extrabold mt-0.5 h-5 w-5 rounded-full flex items-center justify-center",
+                                esHoy ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground"
+                            )}>
+                                {format(dia, 'd')}
+                            </span>
+                        </div>
+                    ),
+                    date: dia,
+                    profesionalId: undefined,
+                    colorProf: undefined,
+                    turnos: turnosDia
+                }
+            })
+        }
+    }, [vistaActiva, profesionales, turnos, diaSeleccionado, diasVisibles, filtroProfMobile])
 
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>, colIdx: number) => {
         e.preventDefault()
@@ -923,7 +1009,7 @@ export function AgendaView({
             </AnimatePresence>
 
             {/* View mode selector + navigation */}
-            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="flex flex-col md:flex-row items-center justify-center md:justify-between flex-wrap gap-3 w-full">
+            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="hidden md:flex items-center justify-between flex-wrap gap-3 w-full">
                 <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 w-full md:w-auto">
                     {/* View mode pills */}
                     <div className="flex items-center gap-0.5 glass rounded-xl p-0.5">
@@ -1003,7 +1089,7 @@ export function AgendaView({
             </motion.div>
 
             {/* Selector de día (strip) */}
-            {true && (
+            {vistaActiva !== 'mes' && (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible"
                     className={cn(
                         'flex gap-2 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory',
@@ -1295,273 +1381,381 @@ export function AgendaView({
                 </div>
             </motion.div>
 
-            {/* Mobile Timeline View */}
-            <div className="block md:hidden space-y-4">
-                {/* Professional filter pills */}
-                <div className="flex gap-2 overflow-x-auto justify-center scrollbar-hide py-1 px-0.5 select-none">
-                    <button
-                        onClick={() => setFiltroProfMobile('todos')}
-                        className={cn(
-                            "px-3.5 py-1.5 text-xs font-semibold rounded-full border transition-all duration-200 shrink-0",
-                            filtroProfMobile === 'todos'
-                                ? "bg-primary border-primary text-primary-foreground shadow-[0_0_12px_rgba(59,130,246,0.25)]"
-                                : "glass border-white/10 text-muted-foreground hover:text-foreground"
-                        )}
-                    >
-                        Todos
-                    </button>
-                    {profesionales.map(prof => (
+            {/* Mobile Timeline & Grid View (Google Calendar Style) */}
+            <div className="block md:hidden space-y-3">
+                {/* Mobile View selector & Sticky Navigation header */}
+                <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-xl border-b border-border/30 pb-2.5 pt-1 px-1 select-none space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                        {/* Navigation arrows & Hoy button */}
+                        <div className="flex items-center gap-1">
+                            <GlassButton 
+                                variant="glass" 
+                                size="icon-sm" 
+                                onClick={navAnterior}
+                                className="h-8 w-8 rounded-xl border-white/10"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </GlassButton>
+                            <GlassButton 
+                                variant="glass" 
+                                size="sm" 
+                                onClick={irAHoy}
+                                className="h-8 px-2.5 text-xs font-extrabold rounded-xl border-white/10"
+                            >
+                                Hoy
+                            </GlassButton>
+                            <GlassButton 
+                                variant="glass" 
+                                size="icon-sm" 
+                                onClick={navSiguiente}
+                                className="h-8 w-8 rounded-xl border-white/10"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </GlassButton>
+                        </div>
+
+                        {/* Current Date Range Label */}
+                        <div className="text-center font-extrabold text-xs text-foreground capitalize truncate max-w-[130px]">
+                            {getRangeLabel()}
+                        </div>
+
+                        {/* View Mode Selector Dropdown */}
+                        <div className="relative">
+                            <button
+                                onClick={() => setDropdownOpen(!dropdownOpen)}
+                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold rounded-xl border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-all shadow-sm"
+                            >
+                                <span className="capitalize">
+                                    {vistaActiva === 'hoy' ? 'Día' : 
+                                     vistaActiva === '3dias' ? '3 Días' : 
+                                     vistaActiva === 'semana' ? 'Semana' : 
+                                     vistaActiva === '15dias' ? '15 Días' : 'Mes'}
+                                </span>
+                                <span className="text-[10px] opacity-80">▼</span>
+                            </button>
+
+                            <AnimatePresence>
+                                {dropdownOpen && (
+                                    <>
+                                        <div 
+                                            className="fixed inset-0 z-40" 
+                                            onClick={() => setDropdownOpen(false)} 
+                                        />
+                                        <motion.div
+                                            initial={{ opacity: 0, scale: 0.95, y: -5 }}
+                                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                                            exit={{ opacity: 0, scale: 0.95, y: -5 }}
+                                            transition={{ duration: 0.1 }}
+                                            className="absolute right-0 mt-1.5 w-36 rounded-2xl border border-white/15 bg-card/95 backdrop-blur-2xl shadow-2xl p-1 z-50 overflow-hidden"
+                                        >
+                                            {[
+                                                { key: 'hoy', label: 'Día' },
+                                                { key: '3dias', label: '3 Días' },
+                                                { key: 'semana', label: 'Semana' },
+                                                { key: '15dias', label: '15 Días' },
+                                                { key: 'mes', label: 'Mes' }
+                                            ].map((opt) => (
+                                                <button
+                                                    key={opt.key}
+                                                    onClick={() => {
+                                                        setVistaActiva(opt.key as ViewMode)
+                                                        setDropdownOpen(false)
+                                                    }}
+                                                    className={cn(
+                                                        "w-full text-left px-3 py-2 text-xs font-bold rounded-xl transition-colors flex items-center justify-between",
+                                                        vistaActiva === opt.key 
+                                                            ? "bg-primary text-primary-foreground" 
+                                                            : "text-muted-foreground hover:bg-white/10 hover:text-foreground"
+                                                    )}
+                                                >
+                                                    <span>{opt.label}</span>
+                                                    {vistaActiva === opt.key && <span className="text-xs">✓</span>}
+                                                </button>
+                                            ))}
+                                        </motion.div>
+                                    </>
+                                )}
+                            </AnimatePresence>
+                        </div>
+                    </div>
+
+                    {/* Professional filter pills horizontal bar */}
+                    <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5 select-none w-full">
                         <button
-                            key={prof.id}
-                            onClick={() => setFiltroProfMobile(prof.id)}
+                            onClick={() => setFiltroProfMobile('todos')}
                             className={cn(
-                                "px-3.5 py-1.5 text-xs font-semibold rounded-full border transition-all duration-200 shrink-0 flex items-center gap-1.5",
-                                filtroProfMobile === prof.id
-                                    ? "border-transparent text-foreground shadow-md"
+                                "px-3 py-1 text-[11px] font-bold rounded-full border transition-all duration-200 shrink-0",
+                                filtroProfMobile === 'todos'
+                                    ? "bg-primary border-primary text-primary-foreground shadow-sm"
                                     : "glass border-white/10 text-muted-foreground hover:text-foreground"
                             )}
-                            style={
-                                filtroProfMobile === prof.id
-                                    ? { backgroundColor: `${prof.color_agenda}25`, border: `1px solid ${prof.color_agenda}` }
-                                    : undefined
-                            }
                         >
-                            <span className="h-2 w-2 rounded-full" style={{ backgroundColor: prof.color_agenda }} />
-                            Dr. {prof.nombre}
+                            Todos
                         </button>
-                    ))}
+                        {profesionales.map(prof => (
+                            <button
+                                key={prof.id}
+                                onClick={() => setFiltroProfMobile(prof.id)}
+                                className={cn(
+                                    "px-3 py-1 text-[11px] font-bold rounded-full border transition-all duration-200 shrink-0 flex items-center gap-1.5",
+                                    filtroProfMobile === prof.id
+                                        ? "border-transparent text-foreground shadow-sm"
+                                        : "glass border-white/10 text-muted-foreground hover:text-foreground"
+                                )}
+                                style={
+                                    filtroProfMobile === prof.id
+                                        ? { backgroundColor: `${prof.color_agenda}35`, border: `1px solid ${prof.color_agenda}` }
+                                        : undefined
+                                }
+                            >
+                                <span className="h-2 w-2 rounded-full shadow-sm" style={{ backgroundColor: prof.color_agenda }} />
+                                Dr. {prof.nombre}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
-                {/* Turnos chronological list */}
-                {turnosMobileFiltrados.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center p-8 text-center glass border border-white/5 rounded-2xl py-12">
-                        <Clock className="h-10 w-10 text-muted-foreground/60 mb-3 animate-pulse" />
-                        <h3 className="text-sm font-semibold text-foreground">No hay turnos</h3>
-                        <p className="text-xs text-muted-foreground mt-1 max-w-[220px] mx-auto">
-                            No se encontraron turnos agendados para este día con los filtros seleccionados.
-                        </p>
-                        <GlassButton
-                            onClick={() => abrirModalConProf(
-                                filtroProfMobile !== 'todos' ? filtroProfMobile : (profesionales[0]?.id ?? ''),
-                                format(diaSeleccionado, 'yyyy-MM-dd'),
-                                '09:00'
-                            )}
-                            variant="glass"
-                            size="sm"
-                            className="mt-4 border border-white/10"
-                        >
-                            <Plus className="h-4 w-4 mr-1.5" />
-                            Nuevo turno
-                        </GlassButton>
-                    </div>
-                ) : (
-                    <div className="space-y-3 pb-16">
-                        {turnosMobileFiltrados.map((turno) => {
-                            const isExpanded = turnoExpandeMobile === turno.id
-                            const horaInicio = format(parseISO(turno.fecha_inicio), 'HH:mm')
-                            const horaFin = format(parseISO(turno.fecha_fin), 'HH:mm')
-                            const duracionMin = Math.round(
-                                (new Date(turno.fecha_fin).getTime() - new Date(turno.fecha_inicio).getTime()) / (1000 * 60)
-                            )
-                            const isST = turno.es_sobreturno === true
-                            const estado = turno.estado as EstadoTurno
-                            const borderLeftColor = isST ? '#ef4444' : (turno.tipo_tratamiento?.color ?? turno.profesional?.color_agenda ?? '#ffffff')
-                            const bgColor = isST ? 'rgba(239, 68, 68, 0.08)' : `${turno.tipo_tratamiento?.color ?? turno.profesional?.color_agenda ?? '#ffffff'}08`
-                            
-                            return (
-                                <motion.div
-                                    key={turno.id}
-                                    layout="position"
-                                    className="flex gap-2.5 items-stretch relative"
-                                >
-                                    {/* Hour label */}
-                                    <div className="w-12 shrink-0 flex flex-col justify-start pt-2.5 text-right pr-1 select-none">
-                                        <span className="text-xs font-bold text-foreground leading-tight">{horaInicio}</span>
-                                        <span className="text-[10px] text-muted-foreground leading-tight">{horaFin}</span>
-                                        <span className="text-[9px] text-muted-foreground/60 font-mono mt-0.5">{duracionMin}m</span>
-                                    </div>
+                {/* Main mobile view renderer */}
+                {vistaActiva === 'mes' ? (
+                    <div className="pb-20 select-none">
+                        <div className="grid grid-cols-7 border-t border-l border-border/30 rounded-2xl overflow-hidden glass shadow-glass w-full">
+                            {/* Day names headers */}
+                            {['L', 'M', 'M', 'J', 'V', 'S', 'D'].map((d, i) => (
+                                <div key={i} className="py-2 text-center text-[10px] font-black text-muted-foreground border-b border-r border-border/30 bg-white/[0.03] uppercase">
+                                    {d}
+                                </div>
+                            ))}
+                            {/* Day cells (Google Calendar 7-column grid) */}
+                            {getMonthGridDays(baseDate).map((dia, idx) => {
+                                const turnosDia = turnos.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), dia))
+                                const turnosDiaFiltrados = filtroProfMobile === 'todos'
+                                    ? turnosDia
+                                    : turnosDia.filter((t: any) => t.profesional_id === filtroProfMobile)
+                                const isCurrentMonth = dia.getMonth() === baseDate.getMonth()
+                                const esHoy = isToday(dia)
+                                const isSelected = isSameDay(dia, diaSeleccionado)
 
-                                    {/* Timeline visual line */}
-                                    <div className="flex flex-col items-center shrink-0 w-3 relative">
-                                        <div 
-                                            className="h-3 w-3 rounded-full border-2 border-background z-10 shrink-0 mt-3"
-                                            style={{ backgroundColor: borderLeftColor }}
-                                        />
-                                        <div className="w-0.5 bg-border/20 absolute top-3.5 bottom-0 -z-0" />
-                                    </div>
-
-                                    {/* Interactive card container */}
-                                    <div 
-                                        onClick={() => toggleTurnoExpande(turno.id)}
-                                        className={cn(
-                                            "flex-1 rounded-xl border border-white/5 p-3.5 transition-all cursor-pointer relative overflow-hidden",
-                                            isExpanded ? "shadow-lg bg-white/[0.04]" : "shadow-sm bg-white/[0.01] hover:bg-white/[0.02]"
-                                        )}
-                                        style={{
-                                            borderLeft: `3px solid ${borderLeftColor}`,
-                                            backgroundColor: isExpanded ? `${borderLeftColor}12` : bgColor
+                                return (
+                                    <div
+                                        key={idx}
+                                        onClick={() => {
+                                            setDiaSeleccionado(dia)
+                                            setBaseDate(dia)
+                                            setVistaActiva('hoy')
                                         }}
+                                        className={cn(
+                                            "min-h-[85px] p-1 border-b border-r border-border/30 flex flex-col justify-start cursor-pointer transition-colors hover:bg-white/[0.03]",
+                                            !isCurrentMonth && "opacity-35 bg-black/20",
+                                            isSelected && "bg-primary/10 border-primary/40",
+                                            esHoy && "bg-primary/5"
+                                        )}
                                     >
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0">
-                                                <div className="flex items-center gap-1.5 flex-wrap">
-                                                    <h4 className="text-sm font-bold text-foreground truncate">
-                                                        {turno.paciente?.apellido || 'Sin apellido'}, {turno.paciente?.nombre || 'Sin nombre'}
-                                                    </h4>
-                                                    {isST && (
-                                                        <span className="text-[8px] font-extrabold bg-red-500/20 text-red-400 border border-red-500/30 rounded px-1 leading-none py-0.5 uppercase tracking-wide">
-                                                            ST
-                                                        </span>
-                                                    )}
-                                                </div>
-                                                <p className="text-xs text-muted-foreground mt-0.5 font-medium truncate flex items-center gap-1.5 flex-wrap">
-                                                    <span>{turno.tipo_tratamiento?.nombre || 'Consulta General'}</span>
-                                                    {turno.numero_pieza && (
-                                                        <span className="text-[10px] font-extrabold tracking-wide bg-amber-100/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/60 px-1.5 py-0.5 rounded shrink-0">
-                                                            Pieza {turno.numero_pieza}
-                                                        </span>
-                                                    )}
-                                                </p>
-                                                <div className="flex items-center gap-1.5 mt-1">
-                                                    <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: turno.profesional?.color_agenda }} />
-                                                    <span className="text-[10px] text-muted-foreground">Dr. {turno.profesional?.nombre || 'General'}</span>
-                                                </div>
-                                            </div>
-                                            <div className="shrink-0 scale-95 origin-top-right">
-                                                <StatusBadge status={estado} />
-                                            </div>
+                                        {/* Day number header */}
+                                        <div className="flex justify-between items-center px-0.5">
+                                            <span className={cn(
+                                                "text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center transition-all",
+                                                esHoy ? "bg-primary text-primary-foreground shadow-md scale-105" : isSelected ? "bg-white/20 text-white font-bold" : "text-foreground/90"
+                                            )}>
+                                                {format(dia, 'd')}
+                                            </span>
+                                            {turnosDiaFiltrados.length > 0 && (
+                                                <span className="text-[7.5px] font-extrabold text-muted-foreground/80 px-1 py-0.2 bg-white/5 rounded-full border border-white/5">
+                                                    {turnosDiaFiltrados.length}
+                                                </span>
+                                            )}
                                         </div>
 
-                                        {/* Expansion panel for actions */}
-                                        <AnimatePresence initial={false}>
-                                            {isExpanded && (
-                                                <motion.div
-                                                    initial={{ height: 0, opacity: 0, marginTop: 0 }}
-                                                    animate={{ height: 'auto', opacity: 1, marginTop: 12 }}
-                                                    exit={{ height: 0, opacity: 0, marginTop: 0 }}
-                                                    transition={{ duration: 0.2, ease: 'easeInOut' }}
-                                                    onClick={(e) => e.stopPropagation()} // Stop bubbling up to toggleTurnoExpande
-                                                    className="overflow-hidden border-t border-white/5 pt-3"
-                                                >
-                                                    {/* Numero de Pieza section */}
-                                                    {turno.numero_pieza && (
-                                                        <div className="mb-3 bg-amber-500/10 p-2.5 rounded-lg border border-amber-500/20">
-                                                            <p className="text-[9px] font-bold text-amber-400 mb-1 uppercase tracking-wider">Número de Pieza:</p>
-                                                            <p className="text-xs text-amber-200 font-mono font-bold">Pieza {turno.numero_pieza}</p>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Notas section */}
-                                                    {turno.notas && (
-                                                        <div className="mb-3 bg-black/40 p-2.5 rounded-lg border border-white/5">
-                                                            <p className="text-[9px] font-bold text-slate-400 mb-1 uppercase tracking-wider">Notas:</p>
-                                                            <p className="text-xs text-slate-300 font-mono whitespace-pre-line leading-relaxed">{turno.notas}</p>
-                                                        </div>
-                                                    )}
-
-                                                    {/* State changes row */}
-                                                    <div className="flex flex-wrap gap-1 mb-3">
-                                                        {estado === 'PENDIENTE' && (
-                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2.5 border border-white/10 hover:bg-white/10 text-slate-200"
-                                                                onClick={() => { handleCambiarEstado(turno.id, 'CONFIRMADO'); }}>
-                                                                ✓ Confirmar
-                                                            </GlassButton>
-                                                        )}
-                                                        {estado === 'CONFIRMADO' && (
-                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2.5 border-violet-500/20 bg-violet-500/10 text-violet-400 hover:bg-violet-500/25"
-                                                                onClick={() => { handleCambiarEstado(turno.id, 'EN_SALA'); }}>
-                                                                🔔 En sala
-                                                            </GlassButton>
-                                                        )}
-                                                        {estado === 'EN_SALA' && (
-                                                            <GlassButton size="sm" variant="success" className="h-7 text-[10px] px-2.5"
-                                                                onClick={() => { handleCambiarEstado(turno.id, 'ATENDIDO'); }}>
-                                                                ✓ Atendido
-                                                            </GlassButton>
-                                                        )}
-                                                        {!['ATENDIDO', 'CANCELADO', 'AUSENTE'].includes(estado) && (
-                                                            <GlassButton size="sm" variant="ghost" className="h-7 text-[10px] px-2.5 text-red-400 hover:bg-red-500/10 hover:text-red-300 border-transparent"
-                                                                onClick={() => { handleCambiarEstado(turno.id, 'CANCELADO'); }}>
-                                                                Cancelar
-                                                            </GlassButton>
-                                                        )}
-                                                        {estado === 'ATENDIDO' && (
-                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2.5 border border-white/10 hover:bg-white/10 text-slate-200"
-                                                                onClick={() => { handleCambiarEstado(turno.id, 'PENDIENTE'); }}>
-                                                                Revertir
-                                                            </GlassButton>
-                                                        )}
+                                        {/* Turnos event chips list (Google Calendar style) */}
+                                        <div className="flex-1 flex flex-col gap-0.5 mt-1 overflow-hidden">
+                                            {turnosDiaFiltrados.slice(0, 3).map((t: any) => {
+                                                const tColor = t.tipo_tratamiento?.color || t.profesional?.color_agenda || '#3b82f6'
+                                                const labelText = t.paciente ? `${t.paciente.apellido}` : 'Turno'
+                                                return (
+                                                    <div
+                                                        key={t.id}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation()
+                                                            setSelectedTurnoDetail(t)
+                                                        }}
+                                                        className="text-[8px] font-extrabold leading-none py-0.5 px-1 rounded truncate border flex items-center gap-1 shadow-sm transition-transform active:scale-95"
+                                                        style={{
+                                                            backgroundColor: `${tColor}35`,
+                                                            borderColor: `${tColor}60`,
+                                                            color: '#ffffff'
+                                                        }}
+                                                    >
+                                                        <span className="h-1.5 w-1.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: tColor }} />
+                                                        <span className="truncate">{labelText}</span>
                                                     </div>
-
-                                                    {/* Secondary actions grid */}
-                                                    <div className="grid grid-cols-2 gap-1.5">
-                                                        {!['ATENDIDO', 'CANCELADO', 'AUSENTE'].includes(estado) && (
-                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-amber-500/20 text-amber-400"
-                                                                onClick={() => handleExtend20Minutes(turno.id)}>
-                                                                <Clock className="h-3.5 w-3.5 mr-1 text-amber-400 shrink-0" />
-                                                                +20 Min
-                                                            </GlassButton>
-                                                        )}
-                                                        {turno.paciente?.telefono && (
-                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-emerald-500/20 text-emerald-400"
-                                                                onClick={() => setTurnoADemorar(turno)}>
-                                                                <MessageSquare className="h-3.5 w-3.5 mr-1 text-emerald-400 shrink-0" />
-                                                                Avisar Demora
-                                                            </GlassButton>
-                                                        )}
-                                                        {turno.paciente?.telefono && (
-                                                            <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-sky-500/20 text-sky-400"
-                                                                onClick={async () => {
-                                                                    const res = await enviarRecordatorioManual(turno.id)
-                                                                    if (res?.error) glassAlert.error({ title: 'Error', description: res.error })
-                                                                    else glassAlert.success({ title: 'Recordatorio enviado' })
-                                                                }}>
-                                                                <Bell className="h-3.5 w-3.5 mr-1 text-sky-400 shrink-0" />
-                                                                Recordar
-                                                            </GlassButton>
-                                                        )}
-                                                        <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-emerald-500/20 text-emerald-400"
-                                                            onClick={() => handleImprimirTicket(turno)}>
-                                                            <Printer className="h-3.5 w-3.5 mr-1 text-emerald-400 shrink-0" />
-                                                            Comprobante
-                                                        </GlassButton>
-                                                        <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-blue-500/20 text-blue-400"
-                                                            onClick={() => handleEditTurno(turno)}>
-                                                            <Edit2 className="h-3.5 w-3.5 mr-1 text-blue-400 shrink-0" />
-                                                            Editar
-                                                        </GlassButton>
-                                                        <GlassButton size="sm" variant="glass" className="h-7 text-[10px] px-2 justify-start border border-red-500/20 text-red-400 hover:bg-red-500/10"
-                                                            onClick={() => handleDeleteTurno(turno.id)}>
-                                                            <Trash2 className="h-3.5 w-3.5 mr-1 text-red-400 shrink-0" />
-                                                            Eliminar
-                                                        </GlassButton>
-                                                    </div>
-                                                </motion.div>
+                                                )
+                                            })}
+                                            {turnosDiaFiltrados.length > 3 && (
+                                                <div className="text-[7.5px] text-primary-foreground/90 font-black text-center bg-primary/20 rounded py-0.2 mt-0.5 border border-primary/20">
+                                                    +{turnosDiaFiltrados.length - 3} más
+                                                </div>
                                             )}
-                                        </AnimatePresence>
+                                        </div>
                                     </div>
-                                </motion.div>
-                            )
-                        })}
+                                )
+                            })}
+                        </div>
+                    </div>
+                ) : (
+                    <div className="pb-20 select-none">
+                        <div className="flex flex-col border border-border/30 rounded-2xl bg-card/5 backdrop-blur-xl shadow-glass overflow-hidden">
+                            {/* Scroll container for grid */}
+                            <div className="flex-1 overflow-auto max-h-[620px] scrollbar-hide flex flex-col min-w-0 w-full relative">
+                                {/* Width setter inside scroll container */}
+                                <div 
+                                    className="flex flex-col flex-1 min-w-0 w-full"
+                                    style={
+                                        (vistaActiva === 'semana' || vistaActiva === '15dias')
+                                            ? { width: `${55 + mobileColumns.length * 100}px` }
+                                            : undefined
+                                    }
+                                >
+                                    {/* Header row: sticky to top */}
+                                    <div className="flex sticky top-0 z-30 border-b border-border/30 bg-[#080a16] select-none w-full">
+                                        {/* Time cell spacer: sticky to top and left */}
+                                        <div className="w-[48px] shrink-0 border-r border-border/30 flex items-end justify-center pb-2 text-[9px] font-bold text-muted-foreground uppercase sticky left-0 top-0 bg-[#080a16] z-40">
+                                            Hora
+                                        </div>
+                                        {/* Column headers wrapper */}
+                                        <div className={cn(
+                                            "flex flex-1 divide-x divide-border/30",
+                                            vistaActiva === '3dias' && "grid grid-cols-3 w-full",
+                                            vistaActiva === 'hoy' && filtroProfMobile !== 'todos' && "grid grid-cols-1 w-full",
+                                            vistaActiva === 'hoy' && filtroProfMobile === 'todos' && "grid w-full",
+                                            (vistaActiva === 'semana' || vistaActiva === '15dias') && "flex"
+                                        )}
+                                        style={
+                                            vistaActiva === 'hoy' && filtroProfMobile === 'todos'
+                                                ? { gridTemplateColumns: `repeat(${mobileColumns.length}, minmax(0, 1fr))` }
+                                                : undefined
+                                        }
+                                        >
+                                            {mobileColumns.map((col, idx) => (
+                                                <div 
+                                                    key={idx} 
+                                                    style={
+                                                        (vistaActiva === 'semana' || vistaActiva === '15dias')
+                                                            ? { width: '100px', minWidth: '100px' }
+                                                            : undefined
+                                                    }
+                                                    className={cn(
+                                                        "flex-1 py-2 text-center flex flex-col items-center justify-center transition-colors min-w-0",
+                                                        isSameDay(col.date, new Date()) && "bg-primary/5"
+                                                    )}
+                                                >
+                                                    {col.header}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Grid Body */}
+                                    <div className="flex flex-1 relative w-full h-[1120px]">
+                                        {/* Hours column: sticky to left */}
+                                        <div className="w-[48px] shrink-0 border-r border-border/30 bg-[#080a16] select-none sticky left-0 z-20">
+                                            {HOURS.map((hour) => (
+                                                <div key={hour} className="text-right pr-1.5 text-[9.5px] font-bold text-muted-foreground/80" style={{ height: `${HOUR_HEIGHT}px`, paddingTop: '4px' }}>
+                                                    {`${hour.toString().padStart(2, '0')}:00`}
+                                                </div>
+                                            ))}
+                                        </div>
+
+                                        {/* Columns grid */}
+                                        <div className={cn(
+                                            "flex-1 relative min-h-0 divide-x divide-border/30",
+                                            vistaActiva === '3dias' && "grid grid-cols-3 w-full",
+                                            vistaActiva === 'hoy' && filtroProfMobile !== 'todos' && "grid grid-cols-1 w-full",
+                                            vistaActiva === 'hoy' && filtroProfMobile === 'todos' && "grid w-full",
+                                            (vistaActiva === 'semana' || vistaActiva === '15dias') && "flex"
+                                        )}
+                                        style={
+                                            vistaActiva === 'hoy' && filtroProfMobile === 'todos'
+                                                ? { gridTemplateColumns: `repeat(${mobileColumns.length}, minmax(0, 1fr))` }
+                                                : undefined
+                                        }
+                                        >
+                                            {/* Background hour lines */}
+                                            <div className="absolute inset-0 pointer-events-none select-none">
+                                                {HOURS.map((hour, idx) => (
+                                                    <div 
+                                                        key={hour} 
+                                                        className="absolute left-0 right-0 border-b border-border/10" 
+                                                        style={{ top: `${(idx + 1) * HOUR_HEIGHT}px`, height: '1px' }}
+                                                    />
+                                                ))}
+                                            </div>
+
+                                            {/* Current Time Indicator Line */}
+                                            {mobileColumns.some(col => isSameDay(col.date, new Date())) && (
+                                                <CurrentTimeIndicator HOUR_HEIGHT={HOUR_HEIGHT} />
+                                            )}
+
+                                            {/* Columns content */}
+                                            {mobileColumns.map((col, colIdx) => {
+                                                const isColToday = isSameDay(col.date, new Date())
+                                                const overlapStyles = calculateOverlappingStyle(col.turnos)
+                                                return (
+                                                    <div
+                                                        key={colIdx}
+                                                        style={
+                                                            (vistaActiva === 'semana' || vistaActiva === '15dias')
+                                                                ? { width: '100px', minWidth: '100px' }
+                                                                : undefined
+                                                        }
+                                                        className={cn(
+                                                            "flex-1 relative h-[1120px] transition-colors min-w-0",
+                                                            isColToday && "bg-primary/[0.01]"
+                                                        )}
+                                                        onClick={(e) => handleColumnClick(e, col.date, col.profesionalId)}
+                                                    >
+                                                        {/* Appointments cards */}
+                                                        {col.turnos.map((turno: any) => {
+                                                            const { top, height } = getCardPosition(turno.fecha_inicio, turno.fecha_fin)
+                                                            const cardStyle = overlapStyles[turno.id] || { left: '4px', width: 'calc(100% - 8px)' }
+                                                            return (
+                                                                <TurnoCalendarCard
+                                                                    key={turno.id}
+                                                                    turno={turno}
+                                                                    top={cardStyle.top !== undefined ? cardStyle.top : top}
+                                                                    height={cardStyle.height !== undefined ? cardStyle.height : height}
+                                                                    left={cardStyle.left}
+                                                                    width={cardStyle.width}
+                                                                    colorProf={col.colorProf || turno.profesional?.color_agenda}
+                                                                    onSelect={() => setSelectedTurnoDetail(turno)}
+                                                                    vistaActiva={vistaActiva}
+                                                                />
+                                                            )
+                                                        })}
+                                                    </div>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
 
-            {/* Mobile FAB button */}
-            <div className="fixed bottom-6 right-6 z-40 md:hidden">
-                <GlassButton
-                    onClick={() => {
-                        setTurnoAEditar(null)
-                        setModalProfId(profesionales[0]?.id ?? '')
-                        setModalOpen(true)
-                    }}
-                    variant="default"
-                    className="h-14 w-14 rounded-full flex items-center justify-center shadow-lg p-0 border border-white/10"
-                    title="Nuevo turno"
-                >
-                    <Plus className="h-6 w-6 text-primary-foreground" />
-                </GlassButton>
-            </div>
+            {/* Mobile Floating Action Button (FAB) Google Calendar style */}
+            <motion.button
+                whileHover={{ scale: 1.08 }}
+                whileTap={{ scale: 0.92 }}
+                onClick={() => {
+                    setTurnoAEditar(null)
+                    setModalProfId(profesionales[0]?.id ?? '')
+                    setModalOpen(true)
+                }}
+                className="fixed bottom-6 right-5 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgba(59,130,246,0.5)] flex items-center justify-center border border-white/20 hover:bg-primary/90 transition-all md:hidden"
+                title="Nuevo turno"
+            >
+                <Plus className="h-7 w-7 stroke-[2.5]" />
+            </motion.button>
 
             {/* Modal nuevo turno */}
             <NuevoTurnoModal
@@ -1907,15 +2101,15 @@ function TurnoCalendarCard({
                             </div>
                             
                             {/* Nombre del Paciente */}
-                            <div className="font-bold text-foreground text-xs truncate max-w-[200px] shrink-0">
+                            <div className="font-bold text-foreground text-xs truncate min-w-0 flex-1">
                                 {turno.paciente ? `${turno.paciente.apellido}, ${turno.paciente.nombre}` : '—'}
                             </div>
 
                             {/* Tipo de Tratamiento */}
                             {turno.tipo_tratamiento?.nombre && (
-                                <div className="flex items-center gap-1.5 shrink-0 min-w-0">
+                                <div className="flex items-center gap-1.5 shrink-0 min-w-0 max-w-full">
                                     <div 
-                                        className="text-[11px] font-extrabold tracking-wide px-2 py-0.5 rounded border select-none truncate max-w-[200px] text-[var(--badge-text-light)] dark:text-[var(--badge-text-dark)] border-[var(--badge-border-light)] dark:border-[var(--badge-border-dark)]"
+                                        className="text-[11px] font-extrabold tracking-wide px-2 py-0.5 rounded border select-none truncate text-[var(--badge-text-light)] dark:text-[var(--badge-text-dark)] border-[var(--badge-border-light)] dark:border-[var(--badge-border-dark)] min-w-0"
                                         style={{
                                             backgroundColor: `${badgeColor}20`,
                                             ['--badge-text-light' as any]: badgeColorLight,
@@ -1942,9 +2136,7 @@ function TurnoCalendarCard({
                         </div>
 
                         {/* Status badge */}
-                        <div className="shrink-0 flex items-center scale-75 origin-right">
-                            <StatusBadge status={estado} />
-                        </div>
+                        <StatusBadge status={estado} className="text-[9.5px] px-2 py-0.5 h-auto min-h-0 shrink-0 font-semibold gap-1 whitespace-nowrap" />
                     </div>
                 ) : (
                     <div className="flex items-center justify-between w-full min-w-0 gap-1.5">
@@ -1953,15 +2145,13 @@ function TurnoCalendarCard({
                                 {format(parseISO(turno.fecha_inicio), 'HH:mm')} {turno.paciente?.apellido}, {turno.paciente?.nombre?.charAt(0)}.
                             </span>
                             {turno.numero_pieza && (
-                                        <span className="text-[9px] font-extrabold bg-amber-100/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/60 px-1 rounded leading-none shrink-0" title={`Pieza Dental: ${turno.numero_pieza}`}>
-                                            Pieza {turno.numero_pieza}
-                                        </span>
-                                    )}
+                                <span className="text-[9px] font-extrabold bg-amber-100/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-300 border border-amber-300/80 dark:border-amber-800/60 px-1 rounded leading-none shrink-0" title={`Pieza Dental: ${turno.numero_pieza}`}>
+                                    P.{turno.numero_pieza}
+                                </span>
+                            )}
                             {isST && <span className="text-[8px] bg-red-500/20 text-red-400 font-bold px-0.5 rounded leading-none">ST</span>}
                         </div>
-                        <div className="shrink-0 flex items-center scale-75 origin-right">
-                            <StatusBadge status={estado} />
-                        </div>
+                        <StatusBadge status={estado} className="text-[9px] px-1.5 py-0.5 h-auto min-h-0 shrink-0 font-semibold gap-0.5 whitespace-nowrap" />
                     </div>
                 )
             ) : (
@@ -1976,17 +2166,10 @@ function TurnoCalendarCard({
                                         {format(parseISO(turno.fecha_inicio), 'dd/MM')} - {format(parseISO(turno.fecha_inicio), 'HH:mm')} hs
                                     </span>
                                 </div>
-                                {height < 85 ? (
-                                    <StatusBadge 
-                                        status={estado} 
-                                        className="text-[9px] px-1.5 py-0 h-4.5 min-h-0 shrink-0 border-neutral-200/50 dark:border-neutral-800/50 font-bold gap-0.5" 
-                                        showIcon={false} 
-                                    />
-                                ) : (
-                                    <div className="shrink-0 scale-75 origin-top-right">
-                                        <StatusBadge status={estado} />
-                                    </div>
-                                )}
+                                <StatusBadge 
+                                    status={estado} 
+                                    className="text-[9.5px] px-2 py-0.5 h-auto min-h-0 shrink-0 font-semibold gap-1 whitespace-nowrap" 
+                                />
                             </div>
 
                             {/* Row 2: Patient Name */}
@@ -2042,17 +2225,10 @@ function TurnoCalendarCard({
                                 <span className="text-[10px] font-semibold text-muted-foreground">
                                     {format(parseISO(turno.fecha_inicio), 'HH:mm')} — {format(parseISO(turno.fecha_fin), 'HH:mm')}
                                 </span>
-                                {height < 85 ? (
-                                    <StatusBadge 
-                                        status={estado} 
-                                        className="text-[9px] px-1.5 py-0 h-4.5 min-h-0 shrink-0 border-neutral-200/50 dark:border-neutral-800/50 font-bold gap-0.5" 
-                                        showIcon={false} 
-                                    />
-                                ) : (
-                                    <div className="shrink-0 scale-75 origin-top-right">
-                                        <StatusBadge status={estado} />
-                                    </div>
-                                )}
+                                <StatusBadge 
+                                    status={estado} 
+                                    className="text-[9px] px-1.5 py-0.5 h-auto min-h-0 shrink-0 font-semibold gap-0.5 whitespace-nowrap" 
+                                />
                             </div>
                             <p className={cn(
                                 "font-bold text-foreground truncate leading-tight group-hover:text-primary transition-colors", 
