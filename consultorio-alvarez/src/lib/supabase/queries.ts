@@ -91,13 +91,37 @@ export async function getPacientes() {
     const tenantId = await getTenantId()
     if (!tenantId) return []
 
-    const { data, error } = await supabase
-        .from('pacientes')
-        .select('*, obra_social:obras_sociales(*)')
-        .eq('tenant_id', tenantId)
-        .order('apellido')
-    if (error) { console.error('getPacientes:', error); return [] }
-    return data ?? []
+    let allData: any[] = []
+    let page = 0
+    const pageSize = 1000
+    let hasMore = true
+
+    while (hasMore) {
+        const { data, error } = await supabase
+            .from('pacientes')
+            .select('*, obra_social:obras_sociales(*)')
+            .eq('tenant_id', tenantId)
+            .order('apellido')
+            .range(page * pageSize, (page + 1) * pageSize - 1)
+
+        if (error) {
+            console.error('getPacientes:', error)
+            break
+        }
+
+        if (data && data.length > 0) {
+            allData = allData.concat(data)
+            if (data.length < pageSize) {
+                hasMore = false
+            } else {
+                page++
+            }
+        } else {
+            hasMore = false
+        }
+    }
+
+    return allData
 }
 
 export async function getPacienteById(id: string) {
