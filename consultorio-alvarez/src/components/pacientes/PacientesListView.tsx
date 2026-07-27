@@ -42,27 +42,31 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     const [deleteCandidate, setDeleteCandidate] = useState<{ id: string, nombre: string } | null>(null)
 
     const filteredPacientes = useMemo(() => {
-        const q = activeQuery.trim().toLowerCase()
+        const q = activeQuery.trim()
         if (!q) return pacientes
         
-        const qWithoutDots = q.replace(/\./g, '')
-        
+        const normalizeStr = (str: string) => 
+            str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+
+        const normQuery = normalizeStr(q)
+        const tokens = normQuery.split(/\s+/).filter(Boolean)
+
         return pacientes.filter((p: any) => {
-            const nombre = p.nombre.toLowerCase()
-            const apellido = p.apellido.toLowerCase()
-            const dni = (p.dni ?? '').toLowerCase()
+            const nombre = normalizeStr(p.nombre || '')
+            const apellido = normalizeStr(p.apellido || '')
+            const dni = normalizeStr(p.dni || '')
             const dniWithoutDots = dni.replace(/\./g, '')
-            const nroHistoria = p.nro_historia_clinica.toLowerCase()
+            const nroHistoria = normalizeStr(p.nro_historia_clinica || '')
             const nroHistoriaWithoutDots = nroHistoria.replace(/\./g, '')
             
-            return (
-                nombre.includes(q) ||
-                apellido.includes(q) ||
-                dni.includes(q) ||
-                dniWithoutDots.includes(qWithoutDots) ||
-                nroHistoria.includes(q) ||
-                nroHistoriaWithoutDots.includes(qWithoutDots)
-            )
+            // Texto completo combinando Apellido + Nombre + DNI + HC en múltiples órdenes
+            const fullText = `${apellido} ${nombre} ${apellido}, ${nombre} ${nombre} ${apellido} ${dni} ${dniWithoutDots} ${nroHistoria} ${nroHistoriaWithoutDots}`
+
+            // Verifica que CADA token ingresado por el usuario esté presente en el paciente
+            return tokens.every(token => {
+                const tokenWithoutDots = token.replace(/\./g, '')
+                return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
+            })
         })
     }, [pacientes, activeQuery])
 

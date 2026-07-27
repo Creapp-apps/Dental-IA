@@ -246,20 +246,28 @@ export function NuevoTurnoModal({
         }
     }
 
-    const cleanSearch = pacienteSearch.toLowerCase().replace(/\./g, '')
-    const filteredPacientes = pacienteSearch.length >= 2
+    const filteredPacientes = pacienteSearch.trim().length >= 2
         ? pacientes.filter((p: any) => {
-            const nombre = p.nombre.toLowerCase()
-            const apellido = p.apellido.toLowerCase()
-            const dni = (p.dni ?? '').toLowerCase()
+            const normalizeStr = (str: string) => 
+                str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+
+            const normQuery = normalizeStr(pacienteSearch)
+            const tokens = normQuery.split(/\s+/).filter(Boolean)
+
+            const nombre = normalizeStr(p.nombre || '')
+            const apellido = normalizeStr(p.apellido || '')
+            const dni = normalizeStr(p.dni || '')
             const dniWithoutDots = dni.replace(/\./g, '')
-            return (
-                nombre.includes(pacienteSearch.toLowerCase()) ||
-                apellido.includes(pacienteSearch.toLowerCase()) ||
-                dni.includes(pacienteSearch) ||
-                dniWithoutDots.includes(cleanSearch)
-            )
-        }).slice(0, 6)
+            const nroHistoria = normalizeStr(p.nro_historia_clinica || '')
+            const nroHistoriaWithoutDots = nroHistoria.replace(/\./g, '')
+
+            const fullText = `${apellido} ${nombre} ${apellido}, ${nombre} ${nombre} ${apellido} ${dni} ${dniWithoutDots} ${nroHistoria} ${nroHistoriaWithoutDots}`
+
+            return tokens.every(token => {
+                const tokenWithoutDots = token.replace(/\./g, '')
+                return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
+            })
+        }).slice(0, 8)
         : []
 
     async function handleGuardar() {
