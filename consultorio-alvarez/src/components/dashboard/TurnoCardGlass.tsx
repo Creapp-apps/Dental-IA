@@ -11,6 +11,7 @@ import { glassAlert } from '@/components/ui/glass-alert'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 import { NotificarDemoraModal } from '@/components/agenda/NotificarDemoraModal'
 import { eliminarTurno } from '@/lib/actions/turnos'
+import { cn } from '@/lib/utils'
 import { PRIORIDAD_COLOR, PRIORIDAD_LABEL, type EstadoTurno, type PrioridadTratamiento } from '@/types'
 
 interface TurnoCardGlassProps {
@@ -56,8 +57,11 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
     return (
         <>
             <motion.div
-            className="group flex items-start gap-3 glass rounded-xl p-3.5 shadow-glass hover:shadow-glass-lg transition-shadow cursor-default"
-            style={{ borderLeft: `3px solid ${colorProf}` }}
+            className={cn(
+                "group flex items-start gap-3 glass rounded-xl p-3.5 shadow-glass hover:shadow-glass-lg transition-all cursor-default",
+                estado === 'CONFIRMADO' && "bg-emerald-500/10 dark:bg-emerald-950/35 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.06)]"
+            )}
+            style={{ borderLeft: estado === 'CONFIRMADO' ? '4px solid #10b981' : `3px solid ${colorProf}` }}
             initial={{ opacity: 0, x: -12 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: index * 0.05, duration: 0.3, ease: 'easeOut' }}

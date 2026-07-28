@@ -241,11 +241,17 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                             const status = getStatusTextAndIcon(turno)
                                             const isSending = loadingMap[turno.id]
                                             const isUrgent = turno.estado === 'PENDIENTE' && (dateObj.getTime() - Date.now()) <= 48 * 60 * 60 * 1000
+                                            const isConfirmed = turno.estado === 'CONFIRMADO'
 
                                             return (
                                                 <motion.tr
                                                     key={turno.id}
-                                                    className="hover:bg-muted/10 transition-colors relative"
+                                                    className={cn(
+                                                        "transition-colors relative",
+                                                        isConfirmed 
+                                                            ? "bg-emerald-500/10 dark:bg-emerald-950/35 hover:bg-emerald-500/15 dark:hover:bg-emerald-950/45" 
+                                                            : "hover:bg-muted/10"
+                                                    )}
                                                     initial={{ opacity: 0 }}
                                                     animate={{
                                                         opacity: 1,
@@ -270,7 +276,8 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                     {/* Fecha y Hora */}
                                                     <td className={cn(
                                                         "py-3 px-2 lg:px-4 font-medium text-foreground transition-all",
-                                                        isUrgent && "border-l-[4px] border-l-red-500"
+                                                        isUrgent && "border-l-[4px] border-l-red-500",
+                                                        isConfirmed && !isUrgent && "border-l-[4px] border-l-emerald-500"
                                                     )}>
                                                         <div className="flex items-start gap-2">
                                                             {isUrgent && (
@@ -429,11 +436,17 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                 const status = getStatusTextAndIcon(turno)
                                 const isSending = loadingMap[turno.id]
                                 const isUrgent = turno.estado === 'PENDIENTE' && (dateObj.getTime() - Date.now()) <= 48 * 60 * 60 * 1000
+                                const isConfirmed = turno.estado === 'CONFIRMADO'
 
                                 return (
                                     <motion.div
                                         key={turno.id}
-                                        className="glass rounded-2xl p-4 border border-border/40 space-y-3 transition-shadow"
+                                        className={cn(
+                                            "glass rounded-2xl p-4 border space-y-3 transition-all",
+                                            isConfirmed 
+                                                ? "bg-emerald-500/10 dark:bg-emerald-950/35 border-emerald-500/30 border-l-[4px] border-l-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.06)]" 
+                                                : "border-border/40"
+                                        )}
                                         initial={{ opacity: 0 }}
                                         animate={{
                                             opacity: 1,
