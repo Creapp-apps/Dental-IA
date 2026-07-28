@@ -28,15 +28,13 @@ async function handleSendTodayReminders(request: NextRequest) {
         }
 
         const admin = createAdminClient()
+        // 1. Obtener la fecha de hoy en huso horario de Argentina (America/Argentina/Buenos_Aires)
+        const nowInArgStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
 
-        // Calcular el rango del día de hoy en huso horario de Argentina (America/Argentina/Buenos_Aires)
-        const targetStart = new Date()
-        targetStart.setHours(0, 0, 0, 0)
+        const targetStart = new Date(`${nowInArgStr}T00:00:00.000-03:00`)
+        const targetEnd = new Date(`${nowInArgStr}T23:59:59.999-03:00`)
 
-        const targetEnd = new Date(targetStart)
-        targetEnd.setHours(23, 59, 59, 999)
-
-        console.log(`🔍 Cron Hoy: Buscando turnos pendientes para hoy entre: ${targetStart.toISOString()} y ${targetEnd.toISOString()}`)
+        console.log(`🔍 Cron Hoy: Buscando turnos pendientes para hoy (${nowInArgStr}) entre: ${targetStart.toISOString()} y ${targetEnd.toISOString()}`)
 
         // 1. Buscar turnos de hoy en estado PENDIENTE
         const { data: turnos, error: errTurnos } = await admin
@@ -59,7 +57,7 @@ async function handleSendTodayReminders(request: NextRequest) {
         }
 
         if (!turnos || turnos.length === 0) {
-            return NextResponse.json({ success: true, message: 'No hay turnos pendientes para el día de hoy.' })
+            return NextResponse.json({ success: true, message: `No hay turnos pendientes para hoy (${nowInArgStr}).` })
         }
 
         console.log(`📅 Se encontraron ${turnos.length} turnos pendientes para hoy.`)
@@ -75,19 +73,26 @@ async function handleSendTodayReminders(request: NextRequest) {
                 continue
             }
 
-            // 2. Evitar envíos duplicados de recordatorios del mismo día (dentro de las últimas 12 horas)
-            const doceHorasAtras = new Date()
-            doceHorasAtras.setHours(doceHorasAtras.getHours() - 12)
-
-            const { data: existingRec } = await admin
+            // 2. Evitar envíos duplicados de recordatorios del mismo día:
+            // - Si ya se envió un recordatorio HOY (canal 'WHATSAPP_HOY')
+            // - O si se envió CUALQUIER notificación en las últimas 12 horas para este turno
+            const { data: recs } = await admin
                 .from('recordatorios')
-                .select('id')
+                .select('id, canal, created_at')
                 .eq('turno_id', t.id)
-                .gte('created_at', doceHorasAtras.toISOString())
-                .maybeSingle()
 
-            if (existingRec) {
-                results.push({ turno_id: t.id, status: 'SKIPPED', reason: 'Recordatorio del mismo día ya enviado recientemente' })
+            const yaEnviadoHoy = recs?.some((r: any) => r.canal === 'WHATSAPP_HOY')
+            const enviadoRecientemente = recs?.some((r: any) => {
+                const fechaRec = new Date(r.created_at || r.fecha_envio).getTime()
+                return fechaRec >= Date.now() - 12 * 60 * 60 * 1000
+            })
+
+            if (yaEnviadoHoy || enviadoRecientemente) {
+                results.push({ 
+                    turno_id: t.id, 
+                    status: 'SKIPPED', 
+                    reason: yaEnviadoHoy ? 'Recordatorio HOY ya enviado previamente' : 'Notificación enviada recientemente (<12hs)' 
+                })
                 continue
             }
 
@@ -172,7 +177,7 @@ async function handleSendTodayReminders(request: NextRequest) {
                     await admin.from('recordatorios').insert({
                         tenant_id: t.tenant_id,
                         turno_id: t.id,
-                        canal: 'WHATSAPP',
+                        canal: 'WHATSAPP_HOY',
                         estado_envio: 'FALLIDO',
                         telefono: cleanPhone,
                         mensaje_enviado: `Nombre: ${pct.nombre}, Hora: ${horaStr}, Profesional: ${nombreProf} (Recordatorio HOY)`,
@@ -184,7 +189,7 @@ async function handleSendTodayReminders(request: NextRequest) {
                     await admin.from('recordatorios').insert({
                         tenant_id: t.tenant_id,
                         turno_id: t.id,
-                        canal: 'WHATSAPP',
+                        canal: 'WHATSAPP_HOY',
                         estado_envio: 'ENVIADO',
                         telefono: cleanPhone,
                         mensaje_enviado: `Nombre: ${pct.nombre}, Hora: ${horaStr}, Profesional: ${nombreProf} (Recordatorio HOY)`,
@@ -199,7 +204,7 @@ async function handleSendTodayReminders(request: NextRequest) {
                 await admin.from('recordatorios').insert({
                     tenant_id: t.tenant_id,
                     turno_id: t.id,
-                    canal: 'WHATSAPP',
+                    canal: 'WHATSAPP_HOY',
                     estado_envio: 'FALLIDO',
                     telefono: cleanPhone,
                     error_detalle: err.message || 'Excepción interna'

@@ -662,15 +662,16 @@ export function NuevoTurnoModal({
                             <GlassDatePicker fecha={fecha} onChange={setFecha} />
                         </div>
                         <div className="space-y-1.5">
-                            <Label>Hora *</Label>
-                            {esSobreturno ? (
+                            <Label>Hora * (24hs)</Label>
+                            <div className="relative">
                                 <Input 
                                     type="text" 
-                                    placeholder="HH:MM (ej: 15:52)" 
+                                    inputMode="numeric"
+                                    placeholder="HH:MM (ej: 14:30)" 
                                     value={hora} 
                                     onChange={(e) => {
                                         let val = e.target.value.replace(/[^0-9:]/g, '')
-                                        // Auto-insertar ":" al ingresar 2 dígitos si no está presente
+                                        // Auto-insertar ":" al ingresar 2 dígitos si no está presente y no se está borrando
                                         if (val.length === 2 && !val.includes(':') && !hora.endsWith(':')) {
                                             val = val + ':'
                                         }
@@ -678,14 +679,26 @@ export function NuevoTurnoModal({
                                             setHora(val)
                                         }
                                     }}
+                                    onBlur={() => {
+                                        let val = hora.trim().replace(/[^0-9]/g, '')
+                                        if (val.length === 4) {
+                                            const hh = val.substring(0, 2)
+                                            const mm = val.substring(2, 4)
+                                            if (parseInt(hh) < 24 && parseInt(mm) < 60) {
+                                                setHora(`${hh}:${mm}`)
+                                            }
+                                        } else if (val.length === 3) {
+                                            const hh = `0${val.substring(0, 1)}`
+                                            const mm = val.substring(1, 3)
+                                            if (parseInt(hh) < 24 && parseInt(mm) < 60) {
+                                                setHora(`${hh}:${mm}`)
+                                            }
+                                        }
+                                    }}
+                                    className="pr-8 font-mono text-sm"
                                 />
-                            ) : (
-                                <Input 
-                                    type="time" 
-                                    value={hora} 
-                                    onChange={(e) => setHora(e.target.value)} 
-                                />
-                            )}
+                                <Clock className="absolute right-2.5 top-1/2 -translate-y-1/2 h-4 w-4 opacity-40 pointer-events-none" />
+                            </div>
                         </div>
                     </div>
 

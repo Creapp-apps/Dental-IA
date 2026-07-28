@@ -29,15 +29,20 @@ async function handleSendReminders(request: NextRequest) {
 
         const admin = createAdminClient()
 
-        // Calcular el rango de pasado mañana (48hs antes) en huso horario de Argentina
-        const targetStart = new Date()
-        targetStart.setDate(targetStart.getDate() + 2) // +2 días para 48hs de anticipación
-        targetStart.setHours(0, 0, 0, 0)
+        // 1. Obtener la fecha de pasado mañana (48hs) en huso horario de Argentina (America/Argentina/Buenos_Aires)
+        const nowInArgStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
+        const [year, month, day] = nowInArgStr.split('-').map(Number)
 
-        const targetEnd = new Date(targetStart)
-        targetEnd.setHours(23, 59, 59, 999)
+        const targetDateObj = new Date(Date.UTC(year, month - 1, day + 2))
+        const targetYear = targetDateObj.getUTCFullYear()
+        const targetMonth = String(targetDateObj.getUTCMonth() + 1).padStart(2, '0')
+        const targetDay = String(targetDateObj.getUTCDate()).padStart(2, '0')
+        const targetDateStr = `${targetYear}-${targetMonth}-${targetDay}`
 
-        console.log(`🔍 Buscando turnos para pasado mañana (48hs antes) entre: ${targetStart.toISOString()} y ${targetEnd.toISOString()}`)
+        const targetStart = new Date(`${targetDateStr}T00:00:00.000-03:00`)
+        const targetEnd = new Date(`${targetDateStr}T23:59:59.999-03:00`)
+
+        console.log(`🔍 Cron 48hs: Buscando turnos para pasado mañana (${targetDateStr}) entre: ${targetStart.toISOString()} y ${targetEnd.toISOString()}`)
 
         // 1. Buscar turnos de pasado mañana en estado PENDIENTE
         const { data: turnos, error: errTurnos } = await admin
@@ -60,10 +65,10 @@ async function handleSendReminders(request: NextRequest) {
         }
 
         if (!turnos || turnos.length === 0) {
-            return NextResponse.json({ success: true, message: 'No hay turnos pendientes para pasado mañana (48hs antes).' })
+            return NextResponse.json({ success: true, message: `No hay turnos pendientes para pasado mañana (${targetDateStr}).` })
         }
 
-        console.log(`📅 Se encontraron ${turnos.length} turnos pendientes para pasado mañana (48hs antes).`)
+        console.log(`📅 Se encontraron ${turnos.length} turnos pendientes para pasado mañana (${targetDateStr}).`)
         const results = []
 
         for (const t of turnos) {
@@ -76,15 +81,26 @@ async function handleSendReminders(request: NextRequest) {
                 continue
             }
 
-            // 2. Evitar envíos duplicados comprobando la tabla de recordatorios
-            const { data: existingRec } = await admin
+            // 2. Evitar envíos duplicados:
+            // - Si ya se envió un recordatorio de 48hs (canal 'WHATSAPP_48HS')
+            // - O si se envió CUALQUIER notificación en las últimas 24 horas para este turno
+            const { data: recs } = await admin
                 .from('recordatorios')
-                .select('id')
+                .select('id, canal, created_at')
                 .eq('turno_id', t.id)
-                .maybeSingle()
 
-            if (existingRec) {
-                results.push({ turno_id: t.id, status: 'SKIPPED', reason: 'Recordatorio ya enviado previamente' })
+            const yaEnviado48hs = recs?.some((r: any) => r.canal === 'WHATSAPP_48HS')
+            const enviadoRecientemente = recs?.some((r: any) => {
+                const fechaRec = new Date(r.created_at || r.fecha_envio).getTime()
+                return fechaRec >= Date.now() - 24 * 60 * 60 * 1000
+            })
+
+            if (yaEnviado48hs || enviadoRecientemente) {
+                results.push({ 
+                    turno_id: t.id, 
+                    status: 'SKIPPED', 
+                    reason: yaEnviado48hs ? 'Recordatorio 48hs ya enviado previamente' : 'Notificación enviada recientemente (<24hs)' 
+                })
                 continue
             }
 
@@ -117,7 +133,7 @@ async function handleSendReminders(request: NextRequest) {
 
             const nombreProf = prof ? `${limpiarTituloProfesional(prof.nombre)} ${prof.apellido.trim()}` : 'el especialista'
 
-            console.log(`📤 Enviando recordatorio a ${pct.nombre} (${cleanPhone}) para turno ${t.id}`)
+            console.log(`📤 Enviando recordatorio 48hs a ${pct.nombre} (${cleanPhone}) para turno ${t.id}`)
 
             try {
                 // 5. Llamada a Meta Cloud API con la plantilla recordatorio_turno
@@ -182,7 +198,7 @@ async function handleSendReminders(request: NextRequest) {
                     await admin.from('recordatorios').insert({
                         tenant_id: t.tenant_id,
                         turno_id: t.id,
-                        canal: 'WHATSAPP',
+                        canal: 'WHATSAPP_48HS',
                         estado_envio: 'FALLIDO',
                         telefono: cleanPhone,
                         mensaje_enviado: `Nombre: ${pct.nombre}, Fecha: ${fechaStrFormatted}, Hora: ${horaStr}, Profesional: ${nombreProf}`,
@@ -195,7 +211,7 @@ async function handleSendReminders(request: NextRequest) {
                     await admin.from('recordatorios').insert({
                         tenant_id: t.tenant_id,
                         turno_id: t.id,
-                        canal: 'WHATSAPP',
+                        canal: 'WHATSAPP_48HS',
                         estado_envio: 'ENVIADO',
                         telefono: cleanPhone,
                         mensaje_enviado: `Nombre: ${pct.nombre}, Fecha: ${fechaStrFormatted}, Hora: ${horaStr}, Profesional: ${nombreProf}`,
@@ -205,12 +221,12 @@ async function handleSendReminders(request: NextRequest) {
                     results.push({ turno_id: t.id, status: 'SUCCESS' })
                 }
             } catch (err: any) {
-                console.error(`❌ Excepción al procesar recordatorio de turno ${t.id}:`, err)
+                console.error(`❌ Excepción al procesar recordatorio 48hs de turno ${t.id}:`, err)
                 
                 await admin.from('recordatorios').insert({
                     tenant_id: t.tenant_id,
                     turno_id: t.id,
-                    canal: 'WHATSAPP',
+                    canal: 'WHATSAPP_48HS',
                     estado_envio: 'FALLIDO',
                     telefono: cleanPhone,
                     error_detalle: err.message || 'Excepción interna'
