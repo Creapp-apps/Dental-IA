@@ -107,6 +107,7 @@ export function AgendaView({
     const router = useRouter()
     const searchParams = useSearchParams()
     const urlVista = (searchParams.get('vista') as ViewMode) || 'semana'
+    const urlProf = searchParams.get('profesional') || 'todos'
     
     const [turnos, setTurnos] = useState<any[]>(turnosIniciales || [])
     
@@ -116,6 +117,7 @@ export function AgendaView({
     }, [turnosIniciales])
 
     const [vistaActiva, setVistaActiva] = useState<ViewMode>(urlVista)
+    const [filtroProf, setFiltroProf] = useState<string>(urlProf)
     const [baseDate, setBaseDate] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
     const [diaSeleccionado, setDiaSeleccionado] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
     const [modalOpen, setModalOpen] = useState(false)
@@ -129,9 +131,26 @@ export function AgendaView({
     const [isPending, startTransition] = useTransition()
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [zoom, setZoom] = useState(100) // Zoom percentage: 80, 100, 120, 150, 200
-    const [filtroProfMobile, setFiltroProfMobile] = useState<string>('todos')
     const [turnoExpandeMobile, setTurnoExpandeMobile] = useState<string | null>(null)
     const [dropdownOpen, setDropdownOpen] = useState(false)
+
+    const selectedProfObj = useMemo(() => {
+        if (filtroProf === 'todos') return null
+        return profesionales.find(p => p.id === filtroProf)
+    }, [filtroProf, profesionales])
+
+    const dynamicSubtitle = useMemo(() => {
+        const vistaText = vistaActiva === 'hoy' ? 'Vista diaria'
+            : vistaActiva === '3dias' ? 'Vista de 3 días'
+            : vistaActiva === 'semana' ? 'Vista semanal'
+            : vistaActiva === '15dias' ? 'Vista de 15 días'
+            : 'Vista mensual'
+            
+        if (selectedProfObj) {
+            return `${vistaText} — Agenda individual Dr. ${selectedProfObj.nombre} ${selectedProfObj.apellido || ''}`
+        }
+        return `${vistaText} — Todos los profesionales`
+    }, [vistaActiva, selectedProfObj])
 
     const toggleTurnoExpande = (id: string) => {
         setTurnoExpandeMobile(prev => prev === id ? null : id)
@@ -146,14 +165,17 @@ export function AgendaView({
         }
     }, [fechaInicial])
 
-    // Sync urlVista to vistaActiva if URL parameter changes
+    // Sync urlVista and urlProf if URL parameters change externally
     useEffect(() => {
         if (urlVista && urlVista !== vistaActiva) {
             setVistaActiva(urlVista)
         }
-    }, [urlVista])
+        if (urlProf && urlProf !== filtroProf) {
+            setFiltroProf(urlProf)
+        }
+    }, [urlVista, urlProf])
 
-    // Sync local baseDate and vistaActiva back to the URL parameters
+    // Sync local baseDate, vistaActiva and filtroProf back to the URL parameters
     useEffect(() => {
         const formattedDate = format(baseDate, 'yyyy-MM-dd')
         const currentParams = new URLSearchParams(window.location.search)
@@ -166,10 +188,21 @@ export function AgendaView({
             currentParams.set('vista', vistaActiva)
             changed = true
         }
+        if (filtroProf !== 'todos') {
+            if (currentParams.get('profesional') !== filtroProf) {
+                currentParams.set('profesional', filtroProf)
+                changed = true
+            }
+        } else {
+            if (currentParams.has('profesional')) {
+                currentParams.delete('profesional')
+                changed = true
+            }
+        }
         if (changed) {
             router.replace(`/agenda?${currentParams.toString()}`, { scroll: false })
         }
-    }, [baseDate, vistaActiva, router])
+    }, [baseDate, vistaActiva, filtroProf, router])
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -431,17 +464,24 @@ export function AgendaView({
 
     const columns = useMemo(() => {
         const showProfColumns = vistaActiva === 'hoy'
+        const turnosBase = filtroProf === 'todos' 
+            ? turnos 
+            : turnos.filter((t: any) => t.profesional_id === filtroProf)
         
         if (showProfColumns) {
-            return profesionales.map(prof => {
-                const turnosDiaProf = turnos.filter(
+            const profsToDisplay = filtroProf === 'todos'
+                ? profesionales
+                : profesionales.filter(p => p.id === filtroProf)
+
+            return profsToDisplay.map(prof => {
+                const turnosDiaProf = turnosBase.filter(
                     (t: any) => t.profesional_id === prof.id && isSameDay(parseISO(t.fecha_inicio), diaSeleccionado)
                 )
                 return {
                     header: (
-                        <div className="flex items-center gap-2 justify-center">
-                            <span className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: prof.color_agenda }} />
-                            <span className="text-xs font-semibold text-foreground truncate">Dr. {prof.nombre}</span>
+                        <div className="flex items-center gap-2 justify-center py-0.5">
+                            <span className="h-2.5 w-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: prof.color_agenda }} />
+                            <span className="text-xs font-bold text-foreground truncate">Dr. {prof.nombre} {prof.apellido || ''}</span>
                         </div>
                     ),
                     date: diaSeleccionado,
@@ -452,7 +492,7 @@ export function AgendaView({
             })
         } else {
             return diasVisibles.map(dia => {
-                const turnosDia = turnos.filter(
+                const turnosDia = turnosBase.filter(
                     (t: any) => isSameDay(parseISO(t.fecha_inicio), dia)
                 )
                 const esHoy = isToday(dia)
@@ -471,22 +511,26 @@ export function AgendaView({
                         </div>
                     ),
                     date: dia,
-                    profesionalId: undefined,
-                    colorProf: undefined,
+                    profesionalId: filtroProf !== 'todos' ? filtroProf : undefined,
+                    colorProf: filtroProf !== 'todos' ? profesionales.find(p => p.id === filtroProf)?.color_agenda : undefined,
                     turnos: turnosDia
                 }
             })
         }
-    }, [vistaActiva, profesionales, turnos, diaSeleccionado, diasVisibles])
+    }, [vistaActiva, profesionales, turnos, diaSeleccionado, diasVisibles, filtroProf])
 
     const mobileColumns = useMemo(() => {
+        const turnosBase = filtroProf === 'todos' 
+            ? turnos 
+            : turnos.filter((t: any) => t.profesional_id === filtroProf)
+
         if (vistaActiva === 'hoy') {
-            const profsToShow = filtroProfMobile === 'todos' 
+            const profsToShow = filtroProf === 'todos' 
                 ? profesionales 
-                : profesionales.filter(p => p.id === filtroProfMobile)
+                : profesionales.filter(p => p.id === filtroProf)
 
             return profsToShow.map(prof => {
-                const turnosDiaProf = turnos.filter(
+                const turnosDiaProf = turnosBase.filter(
                     (t: any) => t.profesional_id === prof.id && isSameDay(parseISO(t.fecha_inicio), diaSeleccionado)
                 )
                 return {
@@ -505,12 +549,9 @@ export function AgendaView({
         } else {
             const filteredDays = vistaActiva === '3dias' ? diasVisibles.slice(0, 3) : diasVisibles
             return filteredDays.map(dia => {
-                let turnosDia = turnos.filter(
+                const turnosDia = turnosBase.filter(
                     (t: any) => isSameDay(parseISO(t.fecha_inicio), dia)
                 )
-                if (filtroProfMobile !== 'todos') {
-                    turnosDia = turnosDia.filter((t: any) => t.profesional_id === filtroProfMobile)
-                }
                 const esHoy = isToday(dia)
                 return {
                     header: (
@@ -527,13 +568,13 @@ export function AgendaView({
                         </div>
                     ),
                     date: dia,
-                    profesionalId: undefined,
-                    colorProf: undefined,
+                    profesionalId: filtroProf !== 'todos' ? filtroProf : undefined,
+                    colorProf: filtroProf !== 'todos' ? profesionales.find(p => p.id === filtroProf)?.color_agenda : undefined,
                     turnos: turnosDia
                 }
             })
         }
-    }, [vistaActiva, profesionales, turnos, diaSeleccionado, diasVisibles, filtroProfMobile])
+    }, [vistaActiva, profesionales, turnos, diaSeleccionado, diasVisibles, filtroProf])
 
     const handleDragOver = (e: React.DragEvent<HTMLDivElement>, colIdx: number) => {
         e.preventDefault()
@@ -975,13 +1016,13 @@ export function AgendaView({
 
     const turnosMobileFiltrados = useMemo(() => {
         const turnosDia = turnos.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), diaSeleccionado))
-        if (filtroProfMobile === 'todos') {
+        if (filtroProf === 'todos') {
             return turnosDia.sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime())
         }
         return turnosDia
-            .filter((t: any) => t.profesional_id === filtroProfMobile)
+            .filter((t: any) => t.profesional_id === filtroProf)
             .sort((a, b) => new Date(a.fecha_inicio).getTime() - new Date(b.fecha_inicio).getTime())
-    }, [turnos, diaSeleccionado, filtroProfMobile])
+    }, [turnos, diaSeleccionado, filtroProf])
 
     return (
         <div className="space-y-4 relative">
@@ -1007,6 +1048,12 @@ export function AgendaView({
                     </motion.div>
                 )}
             </AnimatePresence>
+
+            {/* Desktop Header & Subtitle */}
+            <div className="hidden md:flex flex-col text-left mb-1">
+                <h1 className="text-2xl font-bold text-foreground">Agenda</h1>
+                <p className="text-sm text-muted-foreground mt-0.5">{dynamicSubtitle}</p>
+            </div>
 
             {/* View mode selector + navigation */}
             <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="hidden md:flex items-center justify-between flex-wrap gap-3 w-full">
@@ -1079,13 +1126,68 @@ export function AgendaView({
                     </GlassButton>
                     <GlassButton onClick={() => { 
                         setTurnoAEditar(null)
-                        setModalProfId(profesionales[0]?.id ?? '')
+                        setModalProfId(filtroProf !== 'todos' ? filtroProf : (profesionales[0]?.id ?? ''))
                         setModalOpen(true) 
                     }}>
                         <Plus className="h-4 w-4 mr-2" />
                         Nuevo turno
                     </GlassButton>
                 </div>
+            </motion.div>
+
+            {/* Desktop Professional Selector Bar (Pill Tabs) */}
+            <motion.div custom={0.5} variants={sectionVariants} initial="hidden" animate="visible" className="hidden md:flex items-center justify-between gap-3 w-full bg-card/20 backdrop-blur-xl p-2 rounded-2xl border border-border/40 shadow-sm">
+                <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-0.5">
+                    <span className="text-xs font-bold text-muted-foreground pl-1 pr-1 flex items-center gap-1.5 shrink-0 uppercase tracking-wider">
+                        <User className="h-3.5 w-3.5 text-primary" />
+                        Profesional:
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setFiltroProf('todos')}
+                            className={cn(
+                                'px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-200 shrink-0 flex items-center gap-2 border',
+                                filtroProf === 'todos'
+                                    ? 'bg-primary border-primary text-primary-foreground shadow-md'
+                                    : 'glass border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10'
+                            )}
+                        >
+                            👥 Todos los profesionales
+                        </button>
+                        {profesionales.map(prof => {
+                            const isSelected = filtroProf === prof.id
+                            return (
+                                <button
+                                    key={prof.id}
+                                    onClick={() => setFiltroProf(prof.id)}
+                                    className={cn(
+                                        'px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-200 shrink-0 flex items-center gap-2 border',
+                                        isSelected
+                                            ? 'border-transparent text-white shadow-md'
+                                            : 'glass border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10'
+                                    )}
+                                    style={
+                                        isSelected
+                                            ? { backgroundColor: `${prof.color_agenda}45`, borderColor: prof.color_agenda, color: '#ffffff' }
+                                            : undefined
+                                    }
+                                >
+                                    <span className="h-2.5 w-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: prof.color_agenda }} />
+                                    Dr. {prof.nombre} {prof.apellido || ''}
+                                </button>
+                            )
+                        })}
+                    </div>
+                </div>
+                
+                {filtroProf !== 'todos' && selectedProfObj && (
+                    <div className="flex items-center gap-2 pr-1 shrink-0">
+                        <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1.5">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                            Agenda Individual
+                        </span>
+                    </div>
+                )}
             </motion.div>
 
             {/* Selector de día (strip) */}
@@ -1097,7 +1199,8 @@ export function AgendaView({
                     )}
                 >
                     {diasVisibles.map((dia) => {
-                        const turnosDelDia = turnos.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), dia))
+                        const turnosBase = filtroProf === 'todos' ? turnos : turnos.filter((t: any) => t.profesional_id === filtroProf)
+                        const turnosDelDia = turnosBase.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), dia))
                         const totalDia = turnosDelDia.length
                         const pendientesDia = turnosDelDia.filter((t: any) => t.estado === 'PENDIENTE').length
                         const esHoy = isToday(dia)
@@ -1482,10 +1585,10 @@ export function AgendaView({
                     {/* Professional filter pills horizontal bar */}
                     <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5 select-none w-full">
                         <button
-                            onClick={() => setFiltroProfMobile('todos')}
+                            onClick={() => setFiltroProf('todos')}
                             className={cn(
                                 "px-3 py-1 text-[11px] font-bold rounded-full border transition-all duration-200 shrink-0",
-                                filtroProfMobile === 'todos'
+                                filtroProf === 'todos'
                                     ? "bg-primary border-primary text-primary-foreground shadow-sm"
                                     : "glass border-white/10 text-muted-foreground hover:text-foreground"
                             )}
@@ -1495,15 +1598,15 @@ export function AgendaView({
                         {profesionales.map(prof => (
                             <button
                                 key={prof.id}
-                                onClick={() => setFiltroProfMobile(prof.id)}
+                                onClick={() => setFiltroProf(prof.id)}
                                 className={cn(
                                     "px-3 py-1 text-[11px] font-bold rounded-full border transition-all duration-200 shrink-0 flex items-center gap-1.5",
-                                    filtroProfMobile === prof.id
+                                    filtroProf === prof.id
                                         ? "border-transparent text-foreground shadow-sm"
                                         : "glass border-white/10 text-muted-foreground hover:text-foreground"
                                 )}
                                 style={
-                                    filtroProfMobile === prof.id
+                                    filtroProf === prof.id
                                         ? { backgroundColor: `${prof.color_agenda}35`, border: `1px solid ${prof.color_agenda}` }
                                         : undefined
                                 }
@@ -1528,9 +1631,9 @@ export function AgendaView({
                             {/* Day cells (Google Calendar 7-column grid) */}
                             {getMonthGridDays(baseDate).map((dia, idx) => {
                                 const turnosDia = turnos.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), dia))
-                                const turnosDiaFiltrados = filtroProfMobile === 'todos'
+                                const turnosDiaFiltrados = filtroProf === 'todos'
                                     ? turnosDia
-                                    : turnosDia.filter((t: any) => t.profesional_id === filtroProfMobile)
+                                    : turnosDia.filter((t: any) => t.profesional_id === filtroProf)
                                 const isCurrentMonth = dia.getMonth() === baseDate.getMonth()
                                 const esHoy = isToday(dia)
                                 const isSelected = isSameDay(dia, diaSeleccionado)
@@ -1624,12 +1727,12 @@ export function AgendaView({
                                         <div className={cn(
                                             "flex flex-1 divide-x divide-border/30",
                                             vistaActiva === '3dias' && "grid grid-cols-3 w-full",
-                                            vistaActiva === 'hoy' && filtroProfMobile !== 'todos' && "grid grid-cols-1 w-full",
-                                            vistaActiva === 'hoy' && filtroProfMobile === 'todos' && "grid w-full",
+                                            vistaActiva === 'hoy' && filtroProf !== 'todos' && "grid grid-cols-1 w-full",
+                                            vistaActiva === 'hoy' && filtroProf === 'todos' && "grid w-full",
                                             (vistaActiva === 'semana' || vistaActiva === '15dias') && "flex"
                                         )}
                                         style={
-                                            vistaActiva === 'hoy' && filtroProfMobile === 'todos'
+                                            vistaActiva === 'hoy' && filtroProf === 'todos'
                                                 ? { gridTemplateColumns: `repeat(${mobileColumns.length}, minmax(0, 1fr))` }
                                                 : undefined
                                         }
@@ -1668,12 +1771,12 @@ export function AgendaView({
                                         <div className={cn(
                                             "flex-1 relative min-h-0 divide-x divide-border/30",
                                             vistaActiva === '3dias' && "grid grid-cols-3 w-full",
-                                            vistaActiva === 'hoy' && filtroProfMobile !== 'todos' && "grid grid-cols-1 w-full",
-                                            vistaActiva === 'hoy' && filtroProfMobile === 'todos' && "grid w-full",
+                                            vistaActiva === 'hoy' && filtroProf !== 'todos' && "grid grid-cols-1 w-full",
+                                            vistaActiva === 'hoy' && filtroProf === 'todos' && "grid w-full",
                                             (vistaActiva === 'semana' || vistaActiva === '15dias') && "flex"
                                         )}
                                         style={
-                                            vistaActiva === 'hoy' && filtroProfMobile === 'todos'
+                                            vistaActiva === 'hoy' && filtroProf === 'todos'
                                                 ? { gridTemplateColumns: `repeat(${mobileColumns.length}, minmax(0, 1fr))` }
                                                 : undefined
                                         }

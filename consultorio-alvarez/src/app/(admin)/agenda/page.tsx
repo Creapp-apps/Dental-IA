@@ -68,19 +68,13 @@ export default async function AgendaPage({ searchParams }: PageProps) {
     ])
 
     return (
-        <div className="space-y-4">
-            <div className="hidden md:block text-center md:text-left">
-                <h1 className="text-2xl font-bold text-foreground">Agenda</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">{subtitle}</p>
-            </div>
-            <AgendaView
-                profesionales={profesionales}
-                tiposTratamiento={tiposTratamiento}
-                turnosIniciales={turnos}
-                pacientes={pacientes}
-                fechaInicial={format(focusDate, 'yyyy-MM-dd')}
-                landingConfig={landingConfig}
-            />
-        </div>
+        <AgendaView
+            profesionales={profesionales}
+            tiposTratamiento={tiposTratamiento}
+            turnosIniciales={turnos}
+            pacientes={pacientes}
+            fechaInicial={format(focusDate, 'yyyy-MM-dd')}
+            landingConfig={landingConfig}
+        />
     )
 }
