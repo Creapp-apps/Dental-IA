@@ -328,7 +328,9 @@ export async function POST(request: NextRequest) {
                 fecha_inicio: turno?.fecha_inicio
             }, turno?.tenant_id)
         } else {
-            await logDebug('webhook_no_match', {
+            console.log(`[WA WEBHOOK] Mensaje de texto libre o no reconocido de ${from}. Enviando auto-respuesta defensiva...`)
+            await enviarAutoRespuestaMeta(from)
+            await logDebug('webhook_auto_reply_sent', {
                 type,
                 buttonPayload,
                 textBody,
@@ -344,5 +346,43 @@ export async function POST(request: NextRequest) {
             stack: error.stack
         })
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    }
+}
+
+async function enviarAutoRespuestaMeta(toPhone: string) {
+    if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
+        console.warn('⚠️ No se puede enviar auto-respuesta: Variables META_WA faltantes en entorno.')
+        return
+    }
+
+    const autoReplyText = `🤖 *Consultorio Álvarez — Notificación Automática*\n\nTe informamos que esta casilla de WhatsApp es *exclusiva para el envío automático de notificaciones de turnos* y *no cuenta con atención humana ni recepción de mensajes*.\n\n📞 *¿Necesitás comunicarte o consultar algo sobre tu turno?*\n• Por favor comunicate con nuestro equipo al teléfono del consultorio o escribinos a nuestro canal oficial de atención de secretaría.\n\n¡Muchas gracias por tu comprensión!`
+
+    try {
+        const response = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                recipient_type: 'individual',
+                to: toPhone,
+                type: 'text',
+                text: {
+                    preview_url: false,
+                    body: autoReplyText
+                }
+            })
+        })
+
+        const resData = await response.json()
+        if (!response.ok) {
+            console.error('❌ Error al enviar auto-respuesta Meta API:', JSON.stringify(resData, null, 2))
+        } else {
+            console.log(`✅ Auto-respuesta de Meta enviada con éxito a ${toPhone}`)
+        }
+    } catch (err) {
+        console.error('❌ Excepción al enviar auto-respuesta Meta API:', err)
     }
 }

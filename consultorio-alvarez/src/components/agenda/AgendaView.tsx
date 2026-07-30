@@ -9,7 +9,7 @@ import {
     startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell, CalendarDays, ChevronUp, ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -116,6 +116,7 @@ export function AgendaView({
         setTurnos(turnosIniciales || [])
     }, [turnosIniciales])
 
+    // Controlled View & Filter States
     const [vistaActiva, setVistaActiva] = useState<ViewMode>(urlVista)
     const [filtroProf, setFiltroProf] = useState<string>(urlProf)
     const [baseDate, setBaseDate] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
@@ -129,8 +130,10 @@ export function AgendaView({
     const [selectedTurnoDetail, setSelectedTurnoDetail] = useState<any>(null)
     const [draggedOverTime, setDraggedOverTime] = useState<{ time: string; colIndex: number; top: number } | null>(null)
     const [isPending, startTransition] = useTransition()
+
     const [isFullscreen, setIsFullscreen] = useState(false)
     const [zoom, setZoom] = useState(100) // Zoom percentage: 80, 100, 120, 150, 200
+    const [showDayStrip, setShowDayStrip] = useState(true)
     const [turnoExpandeMobile, setTurnoExpandeMobile] = useState<string | null>(null)
     const [dropdownOpen, setDropdownOpen] = useState(false)
 
@@ -156,12 +159,17 @@ export function AgendaView({
         setTurnoExpandeMobile(prev => prev === id ? null : id)
     }
 
-    // Sync fechaInicial prop to local state
+    const activeDateRef = useRef<string>(format(fechaInicial ? parseISO(fechaInicial) : new Date(), 'yyyy-MM-dd'))
+
+    // Sync fechaInicial prop to local state ONLY if it matches the active user selection (prevents race condition regression)
     useEffect(() => {
         if (fechaInicial) {
-            const date = parseISO(fechaInicial)
-            setBaseDate(date)
-            setDiaSeleccionado(date)
+            const formattedProp = format(parseISO(fechaInicial), 'yyyy-MM-dd')
+            if (formattedProp === activeDateRef.current) {
+                const date = parseISO(fechaInicial)
+                setBaseDate(date)
+                setDiaSeleccionado(date)
+            }
         }
     }, [fechaInicial])
 
@@ -175,9 +183,10 @@ export function AgendaView({
         }
     }, [urlVista, urlProf])
 
-    // Sync local baseDate, vistaActiva and filtroProf back to the URL parameters
+    // Sync local baseDate, vistaActiva and filtroProf back to the URL parameters smoothly without server race condition
     useEffect(() => {
         const formattedDate = format(baseDate, 'yyyy-MM-dd')
+        activeDateRef.current = formattedDate
         const currentParams = new URLSearchParams(window.location.search)
         let changed = false
         if (currentParams.get('fecha') !== formattedDate) {
@@ -200,9 +209,9 @@ export function AgendaView({
             }
         }
         if (changed) {
-            router.replace(`/agenda?${currentParams.toString()}`, { scroll: false })
+            window.history.replaceState(null, '', `${window.location.pathname}?${currentParams.toString()}`)
         }
-    }, [baseDate, vistaActiva, filtroProf, router])
+    }, [baseDate, vistaActiva, filtroProf])
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -991,13 +1000,7 @@ export function AgendaView({
                         • Domicilio: ${address}
                     </div>
                     
-                    <div class="divider"></div>
-                    
-                    <div class="footer-msg">
-                        Recuerde que podrá autogestionar su turno<br>
-                        desde nuestra nueva web:<br>
-                        <strong>www.dentalva.ar</strong>!
-                    </div>
+
                     
                     <script>
                         window.onload = function() {
@@ -1025,7 +1028,7 @@ export function AgendaView({
     }, [turnos, diaSeleccionado, filtroProf])
 
     return (
-        <div className="space-y-4 relative">
+        <div className="space-y-2 relative">
             {/* Real-time Mutation Overlay Spinner */}
             <AnimatePresence>
                 {isPending && (
@@ -1050,14 +1053,14 @@ export function AgendaView({
             </AnimatePresence>
 
             {/* Desktop Header & Subtitle */}
-            <div className="hidden md:flex flex-col text-left mb-1">
-                <h1 className="text-2xl font-bold text-foreground">Agenda</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">{dynamicSubtitle}</p>
+            <div className="hidden md:flex flex-col text-left mb-0">
+                <h1 className="text-2xl font-bold text-foreground leading-tight">Agenda</h1>
+                <p className="text-xs text-muted-foreground mt-0.5">{dynamicSubtitle}</p>
             </div>
 
             {/* View mode selector + navigation */}
-            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="hidden md:flex items-center justify-between flex-wrap gap-3 w-full">
-                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2.5 w-full md:w-auto">
+            <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="hidden md:flex items-center justify-between flex-wrap gap-2.5 w-full">
+                <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 w-full md:w-auto">
                     {/* View mode pills */}
                     <div className="flex items-center gap-0.5 glass rounded-xl p-0.5">
                         {VIEW_OPTIONS.map(opt => (
@@ -1065,7 +1068,7 @@ export function AgendaView({
                                 key={opt.key}
                                 onClick={() => setVistaActiva(opt.key)}
                                 className={cn(
-                                    'px-3 py-1.5 text-xs font-medium rounded-lg transition-all duration-200',
+                                    'px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-200',
                                     vistaActiva === opt.key
                                         ? 'bg-primary text-primary-foreground shadow-sm'
                                         : 'text-muted-foreground hover:text-foreground hover:bg-white/10'
@@ -1077,7 +1080,7 @@ export function AgendaView({
                     </div>
 
                     {/* Navigation arrows */}
-                    <div className="flex items-center gap-1.5 ml-0 sm:ml-1.5">
+                    <div className="flex items-center gap-1 ml-0 sm:ml-1">
                         <GlassButton variant="glass" size="icon-sm" onClick={navAnterior}>
                             <ChevronLeft className="h-4 w-4" />
                         </GlassButton>
@@ -1090,14 +1093,14 @@ export function AgendaView({
                     </div>
 
                     {/* Range label */}
-                    <span className="text-sm font-medium text-foreground ml-0 sm:ml-1.5 capitalize text-center">
+                    <span className="text-xs font-semibold text-foreground ml-0 sm:ml-1.5 capitalize text-center">
                         {getRangeLabel()}
                     </span>
                 </div>
 
-                <div className="flex items-center justify-center md:justify-end gap-2 w-full md:w-auto flex-wrap">
+                <div className="flex items-center justify-center md:justify-end gap-1.5 w-full md:w-auto flex-wrap">
                     {usesCustomWidth && (
-                        <div className="flex items-center gap-1 glass-subtle rounded-xl p-0.5 border border-white/5 mr-1">
+                        <div className="flex items-center gap-1 glass-subtle rounded-xl p-0.5 border border-white/5 mr-0.5">
                             <GlassButton
                                 onClick={() => setZoom(prev => Math.max(80, prev - 10))}
                                 variant="ghost"
@@ -1107,7 +1110,7 @@ export function AgendaView({
                             >
                                 <ZoomOut className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
                             </GlassButton>
-                            <span className="text-[11px] font-semibold text-muted-foreground w-12 text-center select-none">
+                            <span className="text-[11px] font-semibold text-muted-foreground w-10 text-center select-none">
                                 {zoom}%
                             </span>
                             <GlassButton
@@ -1121,6 +1124,16 @@ export function AgendaView({
                             </GlassButton>
                         </div>
                     )}
+                    {vistaActiva !== 'mes' && (
+                        <GlassButton
+                            onClick={() => setShowDayStrip(prev => !prev)}
+                            variant="glass"
+                            size="icon"
+                            title={showDayStrip ? "Ocultar resumen de días para ver más agenda" : "Mostrar resumen de días"}
+                        >
+                            {showDayStrip ? <ChevronUp className="h-4 w-4 text-primary" /> : <CalendarDays className="h-4 w-4 text-muted-foreground" />}
+                        </GlassButton>
+                    )}
                     <GlassButton onClick={toggleFullscreen} variant="glass" size="icon" title="Pantalla completa">
                         {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
                     </GlassButton>
@@ -1129,26 +1142,26 @@ export function AgendaView({
                         setModalProfId(filtroProf !== 'todos' ? filtroProf : (profesionales[0]?.id ?? ''))
                         setModalOpen(true) 
                     }}>
-                        <Plus className="h-4 w-4 mr-2" />
+                        <Plus className="h-4 w-4 mr-1.5" />
                         Nuevo turno
                     </GlassButton>
                 </div>
             </motion.div>
 
             {/* Desktop Professional Selector Bar (Pill Tabs) */}
-            <motion.div custom={0.5} variants={sectionVariants} initial="hidden" animate="visible" className="hidden md:flex items-center justify-between gap-3 w-full bg-card/20 backdrop-blur-xl p-2 rounded-2xl border border-border/40 shadow-sm">
+            <motion.div custom={0.5} variants={sectionVariants} initial="hidden" animate="visible" className="hidden md:flex items-center justify-between gap-2.5 w-full bg-card/20 backdrop-blur-xl py-1 px-2.5 rounded-xl border border-border/40 shadow-sm">
                 <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-0.5">
-                    <span className="text-xs font-bold text-muted-foreground pl-1 pr-1 flex items-center gap-1.5 shrink-0 uppercase tracking-wider">
+                    <span className="text-[11px] font-bold text-muted-foreground pl-0.5 pr-0.5 flex items-center gap-1.5 shrink-0 uppercase tracking-wider">
                         <User className="h-3.5 w-3.5 text-primary" />
                         Profesional:
                     </span>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                         <button
                             onClick={() => setFiltroProf('todos')}
                             className={cn(
-                                'px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-200 shrink-0 flex items-center gap-2 border',
+                                'px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-200 shrink-0 flex items-center gap-1.5 border',
                                 filtroProf === 'todos'
-                                    ? 'bg-primary border-primary text-primary-foreground shadow-md'
+                                    ? 'bg-primary border-primary text-primary-foreground shadow-sm'
                                     : 'glass border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10'
                             )}
                         >
@@ -1161,9 +1174,9 @@ export function AgendaView({
                                     key={prof.id}
                                     onClick={() => setFiltroProf(prof.id)}
                                     className={cn(
-                                        'px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all duration-200 shrink-0 flex items-center gap-2 border',
+                                        'px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-200 shrink-0 flex items-center gap-1.5 border',
                                         isSelected
-                                            ? 'border-transparent text-white shadow-md'
+                                            ? 'border-transparent text-white shadow-sm'
                                             : 'glass border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10'
                                     )}
                                     style={
@@ -1172,7 +1185,7 @@ export function AgendaView({
                                             : undefined
                                     }
                                 >
-                                    <span className="h-2.5 w-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: prof.color_agenda }} />
+                                    <span className="h-2 w-2 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: prof.color_agenda }} />
                                     Dr. {prof.nombre} {prof.apellido || ''}
                                 </button>
                             )
@@ -1181,8 +1194,8 @@ export function AgendaView({
                 </div>
                 
                 {filtroProf !== 'todos' && selectedProfObj && (
-                    <div className="flex items-center gap-2 pr-1 shrink-0">
-                        <span className="text-[11px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-xl flex items-center gap-1.5">
+                    <div className="flex items-center gap-2 pr-0.5 shrink-0">
+                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg flex items-center gap-1">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                             Agenda Individual
                         </span>
@@ -1191,10 +1204,10 @@ export function AgendaView({
             </motion.div>
 
             {/* Selector de día (strip) */}
-            {vistaActiva !== 'mes' && (
+            {vistaActiva !== 'mes' && showDayStrip && (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible"
                     className={cn(
-                        'flex gap-2 overflow-x-auto scrollbar-hide pb-2 snap-x snap-mandatory',
+                        'flex gap-1.5 overflow-x-auto scrollbar-hide snap-x snap-mandatory',
                         (vistaActiva === 'semana' || vistaActiva === 'hoy') && 'md:grid md:grid-cols-7 md:overflow-x-visible md:snap-none'
                     )}
                 >
@@ -1222,31 +1235,31 @@ export function AgendaView({
                                     }, 50)
                                 }}
                                 className={cn(
-                                    'relative rounded-xl p-2 md:p-2.5 text-center transition-all cursor-pointer border flex flex-col items-center justify-between',
+                                    'relative rounded-xl py-1 px-2 text-center transition-all cursor-pointer border flex flex-col items-center justify-center gap-0.5 min-h-[44px]',
                                     (vistaActiva === 'semana' || vistaActiva === 'hoy')
                                         ? 'w-14 md:w-auto shrink-0 md:shrink snap-center md:snap-align-none'
                                         : 'min-w-[4.5rem] shrink-0 snap-center',
                                     isSelected
-                                        ? 'bg-primary border-primary text-primary-foreground shadow-glass-lg'
+                                        ? 'bg-primary border-primary text-primary-foreground shadow-sm'
                                         : esHoy
                                             ? 'glass border-primary/50 text-primary font-semibold'
                                             : pendientesDia > 0
-                                                ? 'glass border-amber-500/40 text-muted-foreground hover:text-foreground shadow-[0_0_12px_rgba(245,158,11,0.1)] hover:border-amber-500/60'
+                                                ? 'glass border-amber-500/40 text-muted-foreground hover:text-foreground shadow-[0_0_8px_rgba(245,158,11,0.1)] hover:border-amber-500/60'
                                                 : 'glass-subtle border-transparent hover:border-white/20 text-muted-foreground hover:text-foreground'
                                 )}
-                                whileHover={{ scale: 1.02 }}
-                                whileTap={{ scale: 0.98 }}
+                                whileHover={{ scale: 1.01 }}
+                                whileTap={{ scale: 0.99 }}
                             >
                                 {/* Dot indicator for days with turnos (Desktop) */}
                                 {totalDia > 0 && (
-                                    <span className="hidden md:flex absolute top-1.5 right-1.5 h-2 w-2">
+                                    <span className="hidden md:flex absolute top-1 right-1 h-1.5 w-1.5">
                                         {pendientesDia > 0 ? (
                                             <>
                                                 <span className={cn(
                                                     'absolute inline-flex h-full w-full rounded-full opacity-75 animate-ping bg-amber-400'
                                                 )} />
                                                 <span className={cn(
-                                                    'relative inline-flex rounded-full h-2 w-2',
+                                                    'relative inline-flex rounded-full h-1.5 w-1.5',
                                                     isSelected ? 'bg-amber-300' : 'bg-amber-500'
                                                 )} />
                                             </>
@@ -1257,57 +1270,60 @@ export function AgendaView({
                                                     isSelected ? 'bg-white/60' : 'bg-emerald-400'
                                                 )} />
                                                 <span className={cn(
-                                                    'relative inline-flex rounded-full h-2 w-2',
+                                                    'relative inline-flex rounded-full h-1.5 w-1.5',
                                                     isSelected ? 'bg-white' : 'bg-emerald-500'
                                                 )} />
                                             </>
                                         )}
                                     </span>
                                 )}
-                                <p className={cn("text-[9px] md:text-xs uppercase tracking-wide", isSelected ? "opacity-90" : "opacity-70")}>
-                                    {format(dia, 'EEE', { locale: es })}
-                                </p>
-                                <p className="text-lg md:text-xl font-bold leading-tight my-0.5">{format(dia, 'd')}</p>
-                                {totalDia > 0 && (
-                                    <>
-                                        {/* Desktop verbose count badges */}
-                                        <div className="hidden md:flex flex-col gap-1 items-center w-full">
-                                            <p className={cn(
-                                                "text-[10px] font-semibold rounded-full px-1.5 py-0.5 mx-auto w-fit",
-                                                isSelected
-                                                    ? 'bg-white/20 text-white'
-                                                    : 'bg-primary/10 text-primary'
-                                            )}>
-                                                {totalDia} turno{totalDia > 1 ? 's' : ''}
-                                            </p>
-                                            {pendientesDia > 0 && (
-                                                <span className={cn(
-                                                    "text-[9px] font-extrabold rounded-md px-1 py-0.5 w-fit text-center animate-pulse",
-                                                    isSelected
-                                                        ? 'bg-amber-400 text-black shadow-[0_0_8px_rgba(245,158,11,0.4)]'
-                                                        : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
-                                                )}>
-                                                    {pendientesDia} sin conf.
-                                                </span>
-                                            )}
-                                        </div>
+                                
+                                <div className="flex items-center gap-1 justify-center">
+                                    <span className={cn("text-[10px] uppercase tracking-wide font-semibold", isSelected ? "opacity-90" : "opacity-70")}>
+                                        {format(dia, 'EEE', { locale: es })}
+                                    </span>
+                                    <span className="text-sm font-extrabold leading-none">{format(dia, 'd')}</span>
+                                </div>
 
-                                        {/* Mobile compact dot bar */}
-                                        <div className="flex md:hidden items-center justify-center gap-1 mt-1">
-                                            {totalDia > pendientesDia && (
-                                                <span className={cn(
-                                                    "h-1.5 w-1.5 rounded-full",
-                                                    isSelected ? "bg-white" : "bg-emerald-500"
-                                                )} />
-                                            )}
-                                            {pendientesDia > 0 && (
-                                                <span className={cn(
-                                                    "h-1.5 w-1.5 rounded-full animate-pulse",
-                                                    isSelected ? "bg-amber-300" : "bg-amber-500"
-                                                )} />
-                                            )}
-                                        </div>
-                                    </>
+                                {totalDia > 0 && (
+                                    <div className="hidden md:flex items-center gap-1 justify-center">
+                                        <span className={cn(
+                                            "text-[9px] font-bold rounded-full px-1.5 py-0.2 leading-tight",
+                                            isSelected
+                                                ? 'bg-white/20 text-white'
+                                                : 'bg-primary/10 text-primary'
+                                        )}>
+                                            {totalDia} {totalDia === 1 ? 'turno' : 'turnos'}
+                                        </span>
+                                        {pendientesDia > 0 && (
+                                            <span className={cn(
+                                                "text-[9px] font-extrabold rounded px-1 py-0.2 leading-tight animate-pulse",
+                                                isSelected
+                                                    ? 'bg-amber-400 text-black'
+                                                    : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                                            )}>
+                                                {pendientesDia} sin conf.
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Mobile compact dot bar */}
+                                {totalDia > 0 && (
+                                    <div className="flex md:hidden items-center justify-center gap-1">
+                                        {totalDia > pendientesDia && (
+                                            <span className={cn(
+                                                "h-1.5 w-1.5 rounded-full",
+                                                isSelected ? "bg-white" : "bg-emerald-500"
+                                            )} />
+                                        )}
+                                        {pendientesDia > 0 && (
+                                            <span className={cn(
+                                                "h-1.5 w-1.5 rounded-full animate-pulse",
+                                                isSelected ? "bg-amber-300" : "bg-amber-500"
+                                            )} />
+                                        )}
+                                    </div>
                                 )}
                             </motion.button>
                         )
