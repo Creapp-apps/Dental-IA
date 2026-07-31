@@ -355,7 +355,14 @@ async function enviarAutoRespuestaMeta(toPhone: string) {
         return
     }
 
-    const autoReplyText = `🤖 *Consultorio Álvarez — Notificación Automática*\n\nTe informamos que esta casilla de WhatsApp es *exclusiva para el envío automático de notificaciones de turnos* y *no cuenta con atención humana ni recepción de mensajes*.\n\n📞 *¿Necesitás comunicarte o consultar algo sobre tu turno?*\n• Por favor comunicate con nuestro equipo al teléfono del consultorio o escribinos a nuestro canal oficial de atención de secretaría.\n\n¡Muchas gracias por tu comprensión!`
+    const autoReplyText = `🤖*Consultorio Alvarez - Clinica Odontologica*
+⚠️Te informamos que este numero es exclusiva para el envío automático de *notificaciones de turnos*.⚠️
+
+🗓️En caso de requerir alguna información especifica o personalizada, podes comunicarte con Administración a través del siguiente numero de Whatsapp:
+
+📲 11-6103-9248
+
+Muchas Gracias!❤️🦷`
 
     try {
         const response = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
