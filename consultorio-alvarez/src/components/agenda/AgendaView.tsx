@@ -111,9 +111,22 @@ export function AgendaView({
     
     const [turnos, setTurnos] = useState<any[]>(turnosIniciales || [])
     
-    // Synchronize prop updates to local state
+    // Synchronize prop updates to local state without discarding locally created/realtime turnos
     useEffect(() => {
-        setTurnos(turnosIniciales || [])
+        setTurnos(prev => {
+            const map = new Map<string, any>()
+            // First load turnosIniciales from server
+            for (const t of (turnosIniciales || [])) {
+                if (t?.id) map.set(t.id, t)
+            }
+            // Preserve local state turnos that might not be in turnosIniciales yet
+            for (const t of prev) {
+                if (t?.id && !map.has(t.id)) {
+                    map.set(t.id, t)
+                }
+            }
+            return Array.from(map.values())
+        })
     }, [turnosIniciales])
 
     // Controlled View & Filter States
@@ -183,7 +196,7 @@ export function AgendaView({
         }
     }, [urlVista, urlProf])
 
-    // Sync local baseDate, vistaActiva and filtroProf back to the URL parameters smoothly without server race condition
+    // Sync local baseDate, vistaActiva and filtroProf back to the URL parameters and Next.js router
     useEffect(() => {
         const formattedDate = format(baseDate, 'yyyy-MM-dd')
         activeDateRef.current = formattedDate
@@ -209,9 +222,11 @@ export function AgendaView({
             }
         }
         if (changed) {
-            window.history.replaceState(null, '', `${window.location.pathname}?${currentParams.toString()}`)
+            const newUrl = `${window.location.pathname}?${currentParams.toString()}`
+            window.history.replaceState(null, '', newUrl)
+            router.replace(newUrl, { scroll: false })
         }
-    }, [baseDate, vistaActiva, filtroProf])
+    }, [baseDate, vistaActiva, filtroProf, router])
 
     useEffect(() => {
         const handleFullscreenChange = () => {
@@ -1922,7 +1937,22 @@ export function AgendaView({
                     if (isEdit) {
                         setTurnos(prev => prev.map(t => t.id === turnoRaw.id ? turnoCompleto : t))
                     } else {
-                        setTurnos(prev => [...prev, turnoCompleto])
+                        setTurnos(prev => {
+                            if (prev.some(t => t.id === turnoRaw.id)) {
+                                return prev.map(t => t.id === turnoRaw.id ? turnoCompleto : t)
+                            }
+                            return [...prev, turnoCompleto]
+                        })
+
+                        if (turnoRaw.fecha_inicio) {
+                            const fechaTurno = parseISO(turnoRaw.fecha_inicio)
+                            setBaseDate(fechaTurno)
+                            setDiaSeleccionado(fechaTurno)
+                        }
+
+                        if (filtroProf !== 'todos' && turnoRaw.profesional_id && filtroProf !== turnoRaw.profesional_id) {
+                            setFiltroProf('todos')
+                        }
                     }
                 }}
             />
