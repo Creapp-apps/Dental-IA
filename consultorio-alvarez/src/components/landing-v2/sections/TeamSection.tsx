@@ -3,12 +3,11 @@
 import { useRef, useEffect } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { PROFESSIONALS } from '@/lib/landing-constants'
 import type { LandingConfig } from '@/lib/types/landing'
 
 gsap.registerPlugin(ScrollTrigger)
 
-export function TeamSection({ config, professionals = [] }: { config?: Pick<LandingConfig, 'equipo_titulo' | 'equipo_subtitulo'>, professionals?: any[] }) {
+export function TeamSection({ config, professionals = [] }: { config?: Pick<LandingConfig, 'equipo_titulo' | 'equipo_subtitulo' | 'color_primary'>, professionals?: any[] }) {
     const sectionRef = useRef<HTMLDivElement>(null)
     const cardsRef = useRef<HTMLDivElement>(null)
     const titleRef = useRef<HTMLDivElement>(null)
@@ -17,45 +16,46 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
         if (!sectionRef.current || !cardsRef.current || !titleRef.current) return
 
         const ctx = gsap.context(() => {
-            // Title parallax
             gsap.fromTo(
                 titleRef.current,
-                { opacity: 0, y: 100 },
+                { opacity: 0, y: 40 },
                 {
                     opacity: 1,
                     y: 0,
+                    duration: 0.8,
+                    ease: 'power2.out',
                     scrollTrigger: {
                         trigger: sectionRef.current,
                         start: 'top 80%',
-                        end: 'top 30%',
-                        scrub: 1,
+                        toggleActions: 'play none none none',
                     },
                 }
             )
 
-            // Cards heavy parallax
             const cards = cardsRef.current!.querySelectorAll('.team-card')
-            cards.forEach((card, i) => {
-                gsap.fromTo(
-                    card,
-                    { opacity: 0, y: 150 + i * 30, scale: 0.92 },
-                    {
-                        opacity: 1,
-                        y: 0,
-                        scale: 1,
-                        scrollTrigger: {
-                            trigger: sectionRef.current,
-                            start: `top ${70 - i * 10}%`,
-                            end: `top ${20 - i * 5}%`,
-                            scrub: 1.5,
-                        },
-                    }
-                )
-            })
+            gsap.fromTo(
+                cards,
+                { opacity: 0, y: 50, scale: 0.95 },
+                {
+                    opacity: 1,
+                    y: 0,
+                    scale: 1,
+                    duration: 0.8,
+                    stagger: 0.15,
+                    ease: 'power3.out',
+                    scrollTrigger: {
+                        trigger: cardsRef.current,
+                        start: 'top 80%',
+                        toggleActions: 'play none none none',
+                    },
+                }
+            )
         }, sectionRef)
 
         return () => ctx.revert()
     }, [])
+
+    const primaryColor = config?.color_primary ?? '#0d9488'
 
     return (
         <section
@@ -67,7 +67,7 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                 <div ref={titleRef} className="mb-16 text-center" style={{ opacity: 0 }}>
                     <span
                         className="text-xs font-semibold tracking-[0.25em] uppercase mb-3 block"
-                        style={{ color: config?.equipo_titulo ? 'var(--landing-primary, #0d9488)' : '#0d9488' }}
+                        style={{ color: primaryColor }}
                     >
                         {config?.equipo_titulo ?? 'Nuestro equipo'}
                     </span>
@@ -75,7 +75,7 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                         Profesionales de
                         <span className="text-gradient-landing"> confianza</span>
                     </h2>
-                    <p className="mt-4 text-white/80 font-medium max-w-lg mx-auto text-base">
+                    <p className="mt-4 text-slate-300 font-medium max-w-lg mx-auto text-base">
                         {config?.equipo_subtitulo || 'Un equipo multidisciplinario con más de 15 años de experiencia.'}
                     </p>
                 </div>
@@ -86,11 +86,11 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                         return (
                             <div
                                 key={prof.id}
-                                className="team-card glass w-full md:w-[calc(33.333%-1rem)] max-w-sm rounded-3xl p-8 text-center hover:bg-white/10 transition-all duration-500"
+                                className="team-card bg-white/10 backdrop-blur-xl border border-white/15 w-full md:w-[calc(33.333%-1rem)] max-w-sm rounded-3xl p-8 text-center shadow-2xl hover:bg-white/15 hover:-translate-y-1 transition-all duration-300"
                             >
                                 <div
-                                    className="mx-auto mb-5 h-20 w-20 relative overflow-hidden rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg"
-                                    style={{ backgroundColor: prof.color_agenda || 'var(--landing-primary, #0d9488)' }}
+                                    className="mx-auto mb-5 h-20 w-20 relative overflow-hidden rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg ring-4 ring-white/20"
+                                    style={{ backgroundColor: prof.color_agenda || primaryColor }}
                                 >
                                     {prof.avatar_url ? (
                                         <img src={prof.avatar_url} alt={`Dr. ${prof.nombre}`} className="w-full h-full object-cover" />
@@ -98,28 +98,28 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                                         initials
                                     )}
                                 </div>
-                                <h3 className="text-lg font-bold text-white drop-shadow-sm">
+                                <h3 className="text-xl font-extrabold text-white tracking-tight mb-2">
                                     Dr/a. {prof.nombre} {prof.apellido}
                                 </h3>
-                                <div className="mt-2.5">
+                                <div className="mt-3">
                                     <span
-                                        className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-semibold tracking-wide border backdrop-blur-sm"
+                                        className="inline-flex items-center justify-center px-4 py-1.5 rounded-full text-xs font-bold tracking-wide border shadow-xs"
                                         style={{ 
-                                            backgroundColor: 'var(--landing-primary, #0d9488)1a', 
-                                            borderColor: 'var(--landing-primary, #0d9488)33',
-                                            color: '#ffffff' 
+                                            backgroundColor: `${primaryColor}25`, 
+                                            borderColor: `${primaryColor}40`,
+                                            color: '#5eead4' 
                                         }}
                                     >
                                         {prof.especialidad || 'Odontología General'}
                                     </span>
                                 </div>
                                 {prof.matricula && (
-                                    <p className="text-xs text-white/60 mt-3 font-medium tracking-wide drop-shadow-sm">{prof.matricula}</p>
+                                    <p className="text-xs text-slate-400 mt-4 font-semibold tracking-wider uppercase">{prof.matricula}</p>
                                 )}
                             </div>
                         )
                     }) : (
-                        <p className="text-white/50 w-full col-span-full text-center py-10">Agregue profesionales desde el panel administrativo.</p>
+                        <p className="text-slate-400 w-full col-span-full text-center py-10">Agregue profesionales desde el panel administrativo.</p>
                     )}
                 </div>
             </div>

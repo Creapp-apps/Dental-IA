@@ -74,42 +74,59 @@ export async function crearPaciente(formData: {
         }
     }
 
-    const nextHC = formData.nro_historia_clinica?.trim() || await getNextNroHistoriaClinica(tenantId, supabase)
+    let attempts = 0
+    let lastError: any = null
 
-    const { data, error } = await supabase
-        .from('pacientes')
-        .insert({
-            tenant_id: tenantId,
-            nro_historia_clinica: nextHC,
-            nombre: formData.nombre,
-            apellido: formData.apellido,
-            foto_url: formData.foto_url || null,
-            dni: formData.dni || null,
-            cuit: formData.cuit || null,
-            fecha_nacimiento: formData.fecha_nacimiento || null,
-            genero: formData.genero || null,
-            telefono: formData.telefono || null,
-            email: formData.email || null,
-            direccion: formData.direccion || null,
-            ciudad: formData.ciudad || null,
-            obra_social_id: finalObraSocialId,
-            plan_obra_social: formData.plan_obra_social || null,
-            n_afiliado: formData.n_afiliado || null,
-            alergias: formData.alergias || null,
-            medicacion_actual: formData.medicacion_actual || null,
-            antecedentes: formData.antecedentes || null,
-            notas_internas: formData.notas_internas || null,
-            registro_completo: formData.registro_completo !== undefined ? formData.registro_completo : true,
-        })
-        .select()
-        .single()
+    while (attempts < 3) {
+        const nextHC = (attempts === 0 && formData.nro_historia_clinica?.trim())
+            ? formData.nro_historia_clinica.trim()
+            : await getNextNroHistoriaClinica(tenantId, supabase)
 
-    if (error) return { error: error.message }
+        const { data, error } = await supabase
+            .from('pacientes')
+            .insert({
+                tenant_id: tenantId,
+                nro_historia_clinica: nextHC,
+                nombre: formData.nombre,
+                apellido: formData.apellido,
+                foto_url: formData.foto_url || null,
+                dni: formData.dni || null,
+                cuit: formData.cuit || null,
+                fecha_nacimiento: formData.fecha_nacimiento || null,
+                genero: formData.genero || null,
+                telefono: formData.telefono || null,
+                email: formData.email || null,
+                direccion: formData.direccion || null,
+                ciudad: formData.ciudad || null,
+                obra_social_id: finalObraSocialId,
+                plan_obra_social: formData.plan_obra_social || null,
+                n_afiliado: formData.n_afiliado || null,
+                alergias: formData.alergias || null,
+                medicacion_actual: formData.medicacion_actual || null,
+                antecedentes: formData.antecedentes || null,
+                notas_internas: formData.notas_internas || null,
+                registro_completo: formData.registro_completo !== undefined ? formData.registro_completo : true,
+            })
+            .select()
+            .single()
 
-    after(() => {
-        revalidatePath('/pacientes')
-    })
-    return { data }
+        if (!error) {
+            after(() => {
+                revalidatePath('/pacientes')
+            })
+            return { data }
+        }
+
+        if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('pacientes_tenant_id_nro_historia_clinica_key')) {
+            lastError = error
+            attempts++
+            continue
+        } else {
+            return { error: error.message }
+        }
+    }
+
+    return { error: lastError?.message || 'Error al generar un número de historia clínica único.' }
 }
 
 export async function actualizarPaciente(id: string, formData: {
@@ -252,27 +269,50 @@ export async function getOdontogramaPaciente(pacienteId: string) {
 }
 
 export async function getNextNroHistoriaClinica(tenantId: string, supabase: any): Promise<string> {
-    const { data, error } = await supabase
+    const { data } = await supabase
         .from('pacientes')
         .select('nro_historia_clinica')
         .eq('tenant_id', tenantId)
-
-    if (error || !data || data.length === 0) {
-        return '1000'
-    }
+        .limit(5000)
 
     let maxNum = 0
-    for (const p of data) {
-        if (!p.nro_historia_clinica) continue
-        const clean = p.nro_historia_clinica.replace(/\D/g, '')
-        if (clean) {
-            const num = parseInt(clean, 10)
-            if (!isNaN(num) && num > maxNum) {
-                maxNum = num
+    if (data && data.length > 0) {
+        for (const p of data) {
+            if (!p.nro_historia_clinica) continue
+            const clean = p.nro_historia_clinica.replace(/\D/g, '')
+            if (clean) {
+                const num = parseInt(clean, 10)
+                if (!isNaN(num) && num > maxNum) {
+                    maxNum = num
+                }
             }
         }
     }
 
-    const nextNum = maxNum + 1
-    return nextNum.toString().padStart(4, '0')
+    if (maxNum === 0) {
+        maxNum = 999 // so initial candidate is '1000'
+    }
+
+    let nextNum = maxNum + 1
+    let candidate = nextNum.toString().padStart(4, '0')
+
+    // Verification loop: check if candidate already exists in database
+    let attempts = 0
+    while (attempts < 100) {
+        const { data: existing } = await supabase
+            .from('pacientes')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('nro_historia_clinica', candidate)
+            .maybeSingle()
+
+        if (!existing) {
+            return candidate
+        }
+        nextNum++
+        candidate = nextNum.toString().padStart(4, '0')
+        attempts++
+    }
+
+    return candidate
 }

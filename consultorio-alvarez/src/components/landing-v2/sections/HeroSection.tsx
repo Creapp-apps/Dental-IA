@@ -10,17 +10,17 @@ import { motion, AnimatePresence } from 'framer-motion'
 
 const SLIDES = [
     {
-        image: '/landing_slide1.png',
+        image: '/consultorio/slide_1.webp',
         title: 'Instalaciones Premium',
         description: 'Tecnología de última generación y máximo confort en Olivos.'
     },
     {
-        image: '/landing_slide2.png',
+        image: '/consultorio/slide_2.webp',
         title: 'Ortodoncia Invisible',
         description: 'Alineadores estéticos y cómodos diseñados a tu medida.'
     },
     {
-        image: '/landing_slide3.png',
+        image: '/consultorio/slide_3.webp',
         title: 'Estética Dental',
         description: 'Diseño de sonrisa y blanqueamiento con resultados naturales.'
     }

@@ -26,27 +26,27 @@ const TOOLTIP_DATA: Record<string, ServiceTooltipData> = {
     'estética dental': {
         title: 'Estética Dental Premium',
         expandedDescription: 'Tratamientos personalizados de diseño de sonrisa. Combinamos carillas ultrafinas de porcelana inyectada, blanqueamiento láser y coronas de zirconio de alta traslúcida para lograr una armonía natural y duradera.',
-        images: ['/estetica_1.jpeg', '/estetica_2.jpeg']
+        images: ['/servicios/estetica_dental.webp']
     },
     'odontología digital': {
         title: 'Odontología Digital 3D',
         expandedDescription: 'Escaneo intraoral de alta precisión que reemplaza las pastas de impresión tradicionales. Diseñamos restauraciones mediante tecnología CAD/CAM y simulamos tu sonrisa antes de comenzar.',
-        images: ['/landing_slide1.png', '/landing_slide2.png']
+        images: ['/servicios/odontologia_digital.webp']
     },
     'implantologia': {
         title: 'Implantes Guiados por Computadora',
         expandedDescription: 'Colocación precisa de implantes de titanio utilizando guías quirúrgicas impresas en 3D. Minimiza el tiempo de cirugía, el dolor postoperatorio y acelera el proceso de oseointegración.',
-        images: ['/landing_slide2.png', '/landing_slide3.png']
+        images: ['/servicios/implantologia_guiada.webp']
     },
     'endodoncia mecanizada': {
         title: 'Endodoncia Rotatoria Automatizada',
         expandedDescription: 'Tratamiento de conducto eficiente y confortable en una sola sesión. Utilizamos motores inteligentes y localizadores de ápice digitales para asegurar la desinfección total de la pieza.',
-        images: ['/landing_slide3.png', '/landing_slide1.png']
+        images: ['/servicios/endodoncia_mecanizada.webp']
     },
     'turnos puntuales': {
         title: 'Agenda de Turnos Optimizada',
         expandedDescription: 'Sistema inteligente de reservas que calcula el tiempo real necesario para cada procedimiento. Sin sobreturnos, garantizando puntualidad y una experiencia de espera relajada y exclusiva.',
-        images: ['/landing_slide1.png', '/landing_slide3.png']
+        images: ['/servicios/turnos_puntuales.webp']
     }
 };
 
@@ -64,6 +64,7 @@ function CardTooltip({ tooltip }: { tooltip: ServiceTooltipData }) {
     const [index, setIndex] = useState(0)
 
     useEffect(() => {
+        if (tooltip.images.length <= 1) return
         const timer = setInterval(() => {
             setIndex((prev) => (prev + 1) % tooltip.images.length)
         }, 4000)
