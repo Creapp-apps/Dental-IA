@@ -5,6 +5,7 @@ import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
 import { ArrowLeft, Phone, Mail, MapPin, CreditCard, AlertCircle, Stethoscope, Edit2 } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
+import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
 import { FichaPacienteTabs } from '@/components/pacientes/FichaPacienteTabs'
 
 const GENERO_LABEL: Record<string, string> = { M: 'Masculino', F: 'Femenino', X: 'No binario' }
@@ -81,12 +82,7 @@ export default async function FichaPacientePage({
                     </div>
                 </div>
 
-                <Link href={`/pacientes/${p.id}/editar`}>
-                    <GlassButton size="sm" variant="glass" className="h-9 border-primary/20 hover:border-primary/50 text-primary">
-                        <Edit2 className="h-4 w-4 mr-1.5" />
-                        Editar Paciente
-                    </GlassButton>
-                </Link>
+                <EditarPacienteBtn pacienteId={p.id} label="Editar Paciente" size="sm" />
             </div>
 
             {/* Registro Incompleto Alert */}
@@ -101,11 +97,7 @@ export default async function FichaPacientePage({
                             </p>
                         </div>
                     </div>
-                    <Link href={`/pacientes/${p.id}/editar`} className="inline-flex shrink-0">
-                        <GlassButton size="sm" className="bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25">
-                            Completar información
-                        </GlassButton>
-                    </Link>
+                    <EditarPacienteBtn pacienteId={p.id} label="Completar información" size="sm" className="bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25 shrink-0" />
                 </div>
             )}
 
@@ -159,12 +151,7 @@ export default async function FichaPacientePage({
                         </div>
 
                         <div className="mt-4 pt-3 border-t border-border">
-                            <Link href={`/pacientes/${p.id}/editar`} className="block w-full">
-                                <GlassButton className="w-full text-xs font-semibold justify-center h-8" variant="glass">
-                                    <Edit2 className="h-3.5 w-3.5 mr-1.5" />
-                                    Editar Información
-                                </GlassButton>
-                            </Link>
+                            <EditarPacienteBtn pacienteId={p.id} label="Editar Información" className="w-full text-xs justify-center h-8" />
                         </div>
                     </div>
 

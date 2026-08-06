@@ -162,6 +162,13 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
         setScannedImageError(false)
     }
 
+    const initialObraSocialNombre = paciente ? (
+        paciente.obra_social?.nombre ||
+        obrasSociales?.find((os: any) => os.id === paciente.obra_social_id)?.nombre ||
+        (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(paciente.obra_social_id || '') ? paciente.obra_social_id : '') ||
+        ''
+    ) : ''
+
     const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormData>({
         resolver: zodResolver(schema),
         defaultValues: paciente ? {
@@ -177,7 +184,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             email: paciente.email || '',
             direccion: paciente.direccion || '',
             ciudad: paciente.ciudad || '',
-            obra_social_id: paciente.obra_social?.nombre || paciente.obra_social_id || '',
+            obra_social_id: initialObraSocialNombre,
             plan_obra_social: paciente.plan_obra_social || '',
             n_afiliado: paciente.n_afiliado || '',
             motivo_consulta: paciente.motivo_consulta || '',

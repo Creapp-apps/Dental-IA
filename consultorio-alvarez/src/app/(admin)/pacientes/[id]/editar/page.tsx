@@ -14,7 +14,7 @@ export default async function EditarPacientePage({
     const supabase = await createClient()
 
     const [pacienteRes, obrasSociales] = await Promise.all([
-        supabase.from('pacientes').select('*').eq('id', id).single(),
+        supabase.from('pacientes').select('*, obra_social:obras_sociales(*)').eq('id', id).single(),
         getObrasSociales()
     ])
 

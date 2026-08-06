@@ -40,6 +40,9 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     const [isNavigating, startNavigation] = useTransition()
     const [isDeleting, startDeleting] = useTransition()
     const [deleteCandidate, setDeleteCandidate] = useState<{ id: string, nombre: string } | null>(null)
+    const [navigatingId, setNavigatingId] = useState<string | null>(null)
+    const [editingId, setEditingId] = useState<string | null>(null)
+    const [isCreatingNew, setIsCreatingNew] = useState(false)
 
     const filteredPacientes = useMemo(() => {
         const q = activeQuery.trim()
@@ -105,6 +108,25 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
         window.history.replaceState(null, '', url)
     }
 
+    function handleNuevoPaciente() {
+        if (isCreatingNew || navigatingId || editingId) return
+        setIsCreatingNew(true)
+        startNavigation(() => {
+            router.push('/pacientes/nuevo')
+        })
+    }
+
+    function handleCardClick(e: React.MouseEvent, id: string) {
+        if (editingId || navigatingId || isCreatingNew) {
+            e.preventDefault()
+            return
+        }
+        setNavigatingId(id)
+        startNavigation(() => {
+            router.push(`/pacientes/${id}`)
+        })
+    }
+
     async function handleEliminar(e: React.MouseEvent, id: string, nombre: string) {
         e.preventDefault()
         e.stopPropagation()
@@ -127,6 +149,8 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     function handleEditar(e: React.MouseEvent, id: string) {
         e.preventDefault()
         e.stopPropagation()
+        if (editingId || navigatingId || isCreatingNew) return
+        setEditingId(id)
         startNavigation(() => {
             router.push(`/pacientes/${id}/editar`)
         })
@@ -142,20 +166,14 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                         {filteredPacientes.length} paciente{filteredPacientes.length !== 1 ? 's' : ''} {activeQuery ? 'encontrados' : 'registrados'}
                     </p>
                 </div>
-                <button
-                    type="button"
-                    onTouchStart={(e) => {
-                        e.preventDefault()
-                        router.push('/pacientes/nuevo')
-                    }}
-                    onClick={() => {
-                        router.push('/pacientes/nuevo')
-                    }}
-                    className="w-full sm:w-auto shrink-0 inline-flex items-center justify-center gap-2 rounded-xl text-sm font-semibold h-10 px-5 bg-primary text-primary-foreground cursor-pointer select-none active:opacity-90 transition-none [touch-action:manipulation]"
+                <GlassButton
+                    onClick={handleNuevoPaciente}
+                    loading={isCreatingNew}
+                    className="w-full sm:w-auto shrink-0 font-semibold"
                 >
-                    <Plus className="h-4 w-4 mr-2" />
+                    {!isCreatingNew && <Plus className="h-4 w-4 mr-1.5" />}
                     Nuevo paciente
-                </button>
+                </GlassButton>
             </div>
 
             {/* Search */}
@@ -211,6 +229,10 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="grid gap-2">
                     {filteredPacientes.map((p: any, i: number) => {
                         const iniciales = `${p.nombre.charAt(0)}${p.apellido.charAt(0)}`
+                        const isNavigatingCard = navigatingId === p.id
+                        const isEditingThis = editingId === p.id
+                        const isRowBusy = isNavigatingCard || isEditingThis
+
                         return (
                             <motion.div
                                 key={p.id}
@@ -218,22 +240,46 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: i * 0.02, duration: 0.2 }}
                             >
-                                <Link
-                                    href={`/pacientes/${p.id}`}
-                                    className="flex items-center gap-4 glass rounded-xl px-4 py-3.5 shadow-glass hover:shadow-glass-lg transition-all group"
+                                <div
+                                    onClick={(e) => handleCardClick(e, p.id)}
+                                    className={cn(
+                                        "flex items-center gap-4 glass rounded-xl px-4 py-3.5 shadow-glass transition-all duration-200 group relative overflow-hidden cursor-pointer select-none",
+                                        "hover:shadow-glass-lg hover:-translate-y-0.5 hover:border-primary/40 active:scale-[0.985] active:bg-primary/5",
+                                        isNavigatingCard && "border-primary/60 bg-primary/10 shadow-primary/10 ring-2 ring-primary/30 animate-pulse",
+                                        isEditingThis && "border-amber-500/60 bg-amber-500/10 shadow-amber-500/10 ring-2 ring-amber-500/30 animate-pulse"
+                                    )}
                                 >
                                     {/* Avatar */}
-                                    <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0 group-hover:bg-primary/20 transition-colors">
-                                        <span className="text-sm font-bold text-primary">{iniciales}</span>
+                                    <div className={cn(
+                                        "h-10 w-10 rounded-full flex items-center justify-center shrink-0 transition-colors",
+                                        isRowBusy ? "bg-primary/20 ring-2 ring-primary/40" : "bg-primary/10 group-hover:bg-primary/20"
+                                    )}>
+                                        {isRowBusy ? (
+                                            <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                                        ) : (
+                                            <span className="text-sm font-bold text-primary">{iniciales}</span>
+                                        )}
                                     </div>
 
                                     {/* Info */}
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 flex-wrap">
                                             <p className="text-sm font-semibold text-foreground truncate">
                                                 {p.apellido}, {p.nombre}
                                             </p>
-                                            {p.registro_completo === false && (
+                                            {isNavigatingCard && (
+                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold animate-pulse shrink-0 border border-primary/30">
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                    Abriendo...
+                                                </span>
+                                            )}
+                                            {isEditingThis && (
+                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[11px] font-semibold animate-pulse shrink-0 border border-amber-500/30">
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                    Abriendo edición...
+                                                </span>
+                                            )}
+                                            {p.registro_completo === false && !isRowBusy && (
                                                 <span className="inline-flex items-center rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400 border border-red-500/30 animate-pulse shrink-0">
                                                     ⚠️ Incompleto
                                                 </span>
@@ -267,23 +313,34 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                                     )}
 
                                     {/* Acciones */}
-                                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                                    <div className="flex items-center gap-1 opacity-90 sm:opacity-70 group-hover:opacity-100 transition-opacity ml-2">
                                         <button
+                                            type="button"
+                                            disabled={isRowBusy}
                                             onClick={(e) => handleEditar(e, p.id)}
-                                            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-muted-foreground hover:text-foreground"
-                                            title="Editar"
+                                            className={cn(
+                                                "p-2.5 rounded-xl transition-all text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 active:scale-90 cursor-pointer",
+                                                isEditingThis && "bg-primary/20 text-primary scale-105"
+                                            )}
+                                            title="Editar paciente"
                                         >
-                                            <Pencil className="h-4 w-4" />
+                                            {isEditingThis ? (
+                                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                            ) : (
+                                                <Pencil className="h-4 w-4" />
+                                            )}
                                         </button>
                                         <button
+                                            type="button"
+                                            disabled={isRowBusy}
                                             onClick={(e) => handleEliminar(e, p.id, `${p.nombre} ${p.apellido}`)}
-                                            className="p-2 hover:bg-destructive/10 rounded-lg transition-colors text-muted-foreground hover:text-destructive"
-                                            title="Eliminar"
+                                            className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/15 active:scale-90 cursor-pointer"
+                                            title="Eliminar paciente"
                                         >
                                             <Trash className="h-4 w-4" />
                                         </button>
                                     </div>
-                                </Link>
+                                </div>
                             </motion.div>
                         )
                     })}
