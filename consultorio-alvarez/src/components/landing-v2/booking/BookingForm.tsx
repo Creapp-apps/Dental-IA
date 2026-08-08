@@ -325,8 +325,8 @@ function StepProfessional({
                                     className="h-10 w-10 relative overflow-hidden rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0 shadow-sm"
                                     style={{ backgroundColor: (p as any).color || '#0d9488' }}
                                 >
-                                    {(p as any).avatar_url ? (
-                                        <img src={(p as any).avatar_url} alt={`Dr/a. ${p.nombre}`} className="w-full h-full object-cover" />
+                                    {((p as any).avatar_url || (p as any).foto_url) ? (
+                                        <img src={(p as any).avatar_url || (p as any).foto_url} alt={`Dr/a. ${p.nombre}`} className="w-full h-full object-cover" />
                                     ) : (
                                         initials
                                     )}

@@ -78,6 +78,7 @@ export async function crearProfesional(data: {
                 email: data.email,
                 color_agenda: data.color_agenda || '#2563eb',
                 foto_url: data.avatar_url || null,
+                avatar_url: data.avatar_url || null,
                 activo: true
             })
             .select('id')
@@ -123,7 +124,7 @@ export async function actualizarProfesional(id: string, data: Record<string, any
     const clean = Object.fromEntries(Object.entries(data).map(([k, v]) => [k, v === '' ? null : v]))
     if (clean.avatar_url !== undefined) {
         clean.foto_url = clean.avatar_url;
-        delete clean.avatar_url;
+        clean.avatar_url = clean.avatar_url;
     }
     
     // 1. Actualizar tabla de profesionales

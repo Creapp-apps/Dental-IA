@@ -92,8 +92,8 @@ export function TeamSection({ config, professionals = [] }: { config?: Pick<Land
                                     className="mx-auto mb-5 h-20 w-20 relative overflow-hidden rounded-full flex items-center justify-center text-2xl font-bold text-white shadow-lg ring-4 ring-white/20"
                                     style={{ backgroundColor: prof.color_agenda || primaryColor }}
                                 >
-                                    {prof.avatar_url ? (
-                                        <img src={prof.avatar_url} alt={`Dr. ${prof.nombre}`} className="w-full h-full object-cover" />
+                                    {(prof.avatar_url || (prof as any).foto_url) ? (
+                                        <img src={prof.avatar_url || (prof as any).foto_url} alt={`Dr. ${prof.nombre}`} className="w-full h-full object-cover" />
                                     ) : (
                                         initials
                                     )}

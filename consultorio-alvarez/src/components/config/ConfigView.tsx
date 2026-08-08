@@ -303,9 +303,9 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
             email: p.email || '',
             password: '',
             color_agenda: p.color_agenda || '#2563eb',
-            avatar_url: p.avatar_url || ''
+            avatar_url: p.avatar_url || p.foto_url || ''
         })
-        setAvatarPreview(p.avatar_url || null)
+        setAvatarPreview(p.avatar_url || p.foto_url || null)
         setEditingId(p.id)
         setShowForm(true)
     }
@@ -458,8 +458,8 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                     <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-3 glass-subtle rounded-xl group transition-colors hover:bg-muted/30">
                         <div className="flex items-center gap-3 flex-1 min-w-0">
                             <div className={cn("h-10 w-10 relative overflow-hidden rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0 transition-opacity", !p.activo && "opacity-50")} style={{ backgroundColor: p.color_agenda }}>
-                                {p.avatar_url ? (
-                                    <img src={p.avatar_url} alt={p.nombre} className="h-full w-full object-cover" />
+                                {(p.avatar_url || p.foto_url) ? (
+                                    <img src={(p.avatar_url || p.foto_url)!} alt={p.nombre} className="h-full w-full object-cover" />
                                 ) : (
                                     <>{p.nombre.charAt(0)}{p.apellido.charAt(0)}</>
                                 )}

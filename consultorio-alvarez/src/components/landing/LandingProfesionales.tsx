@@ -11,10 +11,11 @@ interface Props {
 }
 
 function Initials({ prof, color }: { prof: any; color: string }) {
-    if (prof.avatar_url) {
+    const img = prof.avatar_url || prof.foto_url
+    if (img) {
         return (
             <div className="h-24 w-24 rounded-2xl relative overflow-hidden flex items-center justify-center shadow-lg mx-auto mb-5">
-                <img src={prof.avatar_url} alt={prof.nombre} className="h-full w-full object-cover" />
+                <img src={img} alt={prof.nombre} className="h-full w-full object-cover" />
             </div>
         )
     }
@@ -61,8 +62,8 @@ export function LandingProfesionales({ profesionales, colorPrimario }: Props) {
                                         zIndex: profesionales.length - i,
                                     }}
                                 >
-                                    {p.avatar_url ? (
-                                        <img src={p.avatar_url} alt={p.nombre} className="h-full w-full object-cover" />
+                                    {(p.avatar_url || p.foto_url) ? (
+                                        <img src={(p.avatar_url || p.foto_url)!} alt={p.nombre} className="h-full w-full object-cover" />
                                     ) : (
                                         <>{p.nombre[0]}{p.apellido[0]}</>
                                     )}
