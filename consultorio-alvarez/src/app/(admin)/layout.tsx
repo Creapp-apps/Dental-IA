@@ -5,7 +5,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { AdminBackground } from '@/components/ui/admin-background'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
 import { NotificationProvider } from '@/components/providers/NotificationProvider'
-import { getCurrentUsuario } from '@/lib/supabase/queries'
+import { getCurrentUsuario, getTodayOperationalSummary } from '@/lib/supabase/queries'
 import { getBillingConfig } from '@/lib/actions/billing'
 import { BillingGuard } from '@/components/providers/BillingGuard'
 
@@ -22,7 +22,12 @@ export default async function AdminLayout({
         redirect('/login')
     }
 
-    const usuario = await getCurrentUsuario()
+    const [usuario, todaySummary, config] = await Promise.all([
+        getCurrentUsuario(),
+        getTodayOperationalSummary(),
+        getLandingConfigAdmin()
+    ])
+
     if (!usuario) {
         redirect(`/api/auth/logout?redirectTo=/login`)
     }
@@ -62,8 +67,6 @@ export default async function AdminLayout({
         showSidebarAlert = diffDays <= 7 && !hasActivePayment
     }
 
-    const config = await getLandingConfigAdmin()
-
     // En Tailwind v4 inyectamos una etiqueta <style> global para asegurar que los componentes
     // renderizados a través de Portals (como los Modales, Selects y Toasts) también hereden
     // el color primario de la marca y no queden con el azul por defecto en el <body>.
@@ -88,6 +91,7 @@ export default async function AdminLayout({
                             themeColor={primaryStr} 
                             logoConfig={config?.logo_config} 
                             showBillingAlert={showSidebarAlert}
+                            todaySummary={todaySummary}
                         />
                         <main className="flex-1 overflow-y-auto">
                             <div className="min-h-full p-4 sm:p-6 lg:p-8 overflow-x-hidden">

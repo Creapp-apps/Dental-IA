@@ -370,3 +370,40 @@
 .animate-red-banner-pulse {
   animation: red-banner-pulse 1.8s infinite ease-in-out;
 }
+
+/* Card Pulse Animations for Turnos sin confirmar y cancelados */
+@keyframes card-pulse-amber {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.3), 0 2px 8px -2px rgba(245, 158, 11, 0.15);
+  }
+  50% {
+    transform: scale(1.018);
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.6), 0 8px 24px -4px rgba(245, 158, 11, 0.45);
+  }
+}
+
+@keyframes card-pulse-red {
+  0%, 100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35), 0 2px 8px -2px rgba(239, 68, 68, 0.2);
+  }
+  50% {
+    transform: scale(1.022);
+    box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.7), 0 8px 26px -4px rgba(239, 68, 68, 0.55);
+  }
+}
+
+.animate-card-pulse-amber {
+  animation: card-pulse-amber 2.2s infinite ease-in-out !important;
+  transform-origin: center center;
+  will-change: transform, box-shadow;
+  z-index: 10;
+}
+
+.animate-card-pulse-red {
+  animation: card-pulse-red 2s infinite ease-in-out !important;
+  transform-origin: center center;
+  will-change: transform, box-shadow;
+  z-index: 10;
+}

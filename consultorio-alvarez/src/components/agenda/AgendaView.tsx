@@ -65,12 +65,16 @@ function getCardPosition(fechaInicioStr: string, fechaFinStr: string) {
     const end = parseISO(fechaFinStr)
     
     const startHour = start.getHours() + start.getMinutes() / 60
-    const endHour = end.getHours() + end.getMinutes() / 60
-    
     const agendaStartHour = 8
     
     const top = Math.max(0, (startHour - agendaStartHour) * HOUR_HEIGHT)
-    const height = Math.max(30, (endHour - startHour) * HOUR_HEIGHT)
+    
+    const diffMs = Math.max(0, end.getTime() - start.getTime())
+    const diffMinutes = diffMs / (1000 * 60)
+    
+    const exactHeight = (diffMinutes / 60) * HOUR_HEIGHT
+    // Restamos 2px para dejar un canal de separación limpio de 2px entre turnos consecutivos
+    const height = Math.max(16, exactHeight - 2)
     
     return { top, height }
 }
@@ -2074,13 +2078,13 @@ function calculateOverlappingStyle(turnos: any[]) {
             const colIndex = eventCols[t.id]
             const widthVal = 100 / totalCols
             const leftVal = colIndex * widthVal
-            const isST = t.es_sobreturno === true
+            const pos = getCardPosition(t.fecha_inicio, t.fecha_fin)
 
             styles[t.id] = {
                 width: `calc(${widthVal}% - 4px)`,
                 left: `calc(${leftVal}% + 2px)`,
-                top: isST ? getCardPosition(t.fecha_inicio, t.fecha_fin).top : (hasOverlap ? minTop : undefined),
-                height: isST ? getCardPosition(t.fecha_inicio, t.fecha_fin).height : (hasOverlap ? unifiedHeight : undefined),
+                top: pos.top,
+                height: pos.height,
             }
         }
     }
@@ -2183,6 +2187,43 @@ interface TurnoCalendarCardProps {
     vistaActiva?: ViewMode
 }
 
+function AgendaStatusIndicator({ status }: { status: EstadoTurno }) {
+    if (status === 'CONFIRMADO') {
+        return (
+            <span 
+                className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-emerald-500/25 text-emerald-900 dark:text-emerald-200 text-[10px] font-extrabold shrink-0 border border-emerald-500/40 shadow-xs" 
+                title="Estado: Confirmado"
+            >
+                ✓
+            </span>
+        )
+    }
+    if (status === 'CANCELADO') {
+        return (
+            <span 
+                className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-red-500/30 text-red-900 dark:text-red-200 text-[10px] font-extrabold shrink-0 border border-red-500/50 shadow-xs" 
+                title="Estado: Cancelado por paciente"
+            >
+                ✕
+            </span>
+        )
+    }
+    if (status === 'PENDIENTE') {
+        return (
+            <span 
+                className="inline-flex items-center justify-center h-4 w-4 rounded-full bg-amber-500/25 text-amber-900 dark:text-amber-200 text-[9px] font-extrabold shrink-0 border border-amber-500/50 shadow-xs" 
+                title="Estado: Sin confirmar"
+            >
+                <span className="relative flex h-2 w-2 items-center justify-center">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-500 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-600 dark:bg-amber-400" />
+                </span>
+            </span>
+        )
+    }
+    return null
+}
+
 function TurnoCalendarCard({
     turno,
     top,
@@ -2216,6 +2257,9 @@ function TurnoCalendarCard({
     const bgColor = isST ? 'rgba(239, 68, 68, 0.32)' : `${badgeColor}45`
     const borderOutlineColor = isST ? 'rgba(239, 68, 68, 0.75)' : `${borderLeftColor}75`
 
+    const isPendingStatus = estado === 'PENDIENTE'
+    const isCancelled = estado === 'CANCELADO'
+
     return (
         <motion.div
             draggable
@@ -2223,7 +2267,8 @@ function TurnoCalendarCard({
             onDragEnd={onDragEnd}
             onClick={handleClick}
             className={cn(
-                "absolute rounded-lg shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-md transition-all select-none group",
+                "absolute rounded-lg shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-xl hover:z-50 transition-all select-none group will-change-transform transform-gpu flex flex-col justify-center",
+                height < 32 ? "px-1.5 py-0" : height < 50 ? "px-1.5 py-0.5" : "p-1.5",
                 isST ? "animate-pulse-subtle" : ""
             )}
             style={{
@@ -2235,12 +2280,38 @@ function TurnoCalendarCard({
                 borderTop: `1.5px solid ${borderOutlineColor}`,
                 borderRight: `1.5px solid ${borderOutlineColor}`,
                 borderBottom: `1.5px solid ${borderOutlineColor}`,
-                backgroundColor: bgColor,
-                boxShadow: `0 4px 14px 0 ${borderLeftColor}25`
+                backgroundColor: isCancelled ? 'rgba(239, 68, 68, 0.28)' : bgColor,
+                zIndex: isCancelled ? 25 : isPendingStatus ? 20 : 10,
             }}
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            initial={{ opacity: 1, scale: 1 }}
+            animate={
+                isCancelled
+                    ? {
+                          scale: [1, 1.02, 1],
+                          opacity: 1,
+                          boxShadow: [
+                              `0 0 4px rgba(239, 68, 68, 0.3)`,
+                              `0 0 16px rgba(239, 68, 68, 0.6)`,
+                              `0 0 4px rgba(239, 68, 68, 0.3)`
+                          ]
+                      }
+                    : isPendingStatus
+                    ? {
+                          scale: [1, 1.018, 1],
+                          opacity: 1,
+                          boxShadow: [
+                              `0 0 4px rgba(245, 158, 11, 0.3)`,
+                              `0 0 14px rgba(245, 158, 11, 0.55)`,
+                              `0 0 4px rgba(245, 158, 11, 0.3)`
+                          ]
+                      }
+                    : { opacity: 1, scale: 1 }
+            }
+            transition={
+                (isCancelled || isPendingStatus)
+                    ? { duration: 2.2, repeat: Infinity, ease: 'easeInOut' }
+                    : { type: 'spring', stiffness: 300, damping: 25 }
+            }
         >
             {height < 65 ? (
                 vistaActiva === 'hoy' ? (
@@ -2293,8 +2364,8 @@ function TurnoCalendarCard({
                             )}
                         </div>
 
-                        {/* Status badge */}
-                        <StatusBadge status={estado} className="text-[9.5px] px-2 py-0.5 h-auto min-h-0 shrink-0 font-semibold gap-1 whitespace-nowrap" />
+                        {/* Minimalist Status Indicator */}
+                        <AgendaStatusIndicator status={estado} />
                     </div>
                 ) : (
                     <div className="flex items-center justify-between w-full min-w-0 gap-1.5">
@@ -2310,7 +2381,7 @@ function TurnoCalendarCard({
                             )}
                             {isST && <span className="text-[8px] bg-red-500/30 text-red-300 font-extrabold px-0.5 rounded leading-none border border-red-500/50">ST</span>}
                         </div>
-                        <StatusBadge status={estado} className="text-[9px] px-1.5 py-0.5 h-auto min-h-0 shrink-0 font-semibold gap-0.5 whitespace-nowrap" />
+                        <AgendaStatusIndicator status={estado} />
                     </div>
                 )
             ) : (
@@ -2326,10 +2397,7 @@ function TurnoCalendarCard({
                                         {format(parseISO(turno.fecha_inicio), 'dd/MM')} - {format(parseISO(turno.fecha_inicio), 'HH:mm')} hs
                                     </span>
                                 </div>
-                                <StatusBadge 
-                                    status={estado} 
-                                    className="text-[9.5px] px-2 py-0.5 h-auto min-h-0 shrink-0 font-semibold gap-1 whitespace-nowrap" 
-                                />
+                                <AgendaStatusIndicator status={estado} />
                             </div>
 
                             {/* Row 2: Patient Name */}
@@ -2389,10 +2457,7 @@ function TurnoCalendarCard({
                                         {format(parseISO(turno.fecha_inicio), 'HH:mm')} — {format(parseISO(turno.fecha_fin), 'HH:mm')}
                                     </span>
                                 </div>
-                                <StatusBadge 
-                                    status={estado} 
-                                    className="text-[9px] px-1.5 py-0.5 h-auto min-h-0 shrink-0 font-semibold gap-0.5 whitespace-nowrap" 
-                                />
+                                <AgendaStatusIndicator status={estado} />
                             </div>
                             <p className={cn(
                                 "font-extrabold text-foreground truncate leading-tight group-hover:text-primary transition-colors", 

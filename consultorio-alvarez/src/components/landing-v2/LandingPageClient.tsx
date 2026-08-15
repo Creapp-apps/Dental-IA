@@ -6,6 +6,7 @@ import Lenis from 'lenis'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { HeroSection } from '@/components/landing-v2/sections/HeroSection'
+import { AboutUsSection } from '@/components/landing-v2/sections/AboutUsSection'
 import { ServicesSection } from '@/components/landing-v2/sections/ServicesSection'
 import { TeamSection } from '@/components/landing-v2/sections/TeamSection'
 import { ObrasSocialesSection } from '@/components/landing-v2/sections/ObrasSocialesSection'
@@ -94,6 +95,7 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
             <MeshGradient scrollProgress={scrollProgress} />
             <main className="relative z-10">
                 <HeroSection onBookingClick={scrollToBooking} config={config} />
+                <AboutUsSection onBookingClick={scrollToBooking} colorPrimary={config.color_primary} />
                 <ServicesSection config={config} />
                 <TeamSection config={config} professionals={professionals} />
                 {obrasSociales && obrasSociales.length > 0 && (

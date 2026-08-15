@@ -256,10 +256,10 @@ export async function getTurnosSinConfirmar() {
             paciente:pacientes(id, nombre, apellido, telefono),
             profesional:profesionales(id, nombre, apellido, color_agenda),
             tipo_tratamiento:tipos_tratamiento(id, nombre, duracion_minutos, prioridad, color),
-            recordatorios(id, created_at, estado_envio)
+            recordatorios(id, created_at, estado_envio, error_detalle, mensaje_enviado)
         `)
         .eq('tenant_id', tenantId)
-        .in('estado', ['PENDIENTE', 'CONFIRMADO'])
+        .in('estado', ['PENDIENTE', 'CONFIRMADO', 'CANCELADO'])
         .gte('fecha_inicio', hoy.toISOString())
         .order('fecha_inicio', { ascending: true })
 
@@ -269,3 +269,54 @@ export async function getTurnosSinConfirmar() {
     }
     return data ?? []
 }
+
+export async function getTodayOperationalSummary() {
+    const supabase = getAdmin()
+    const tenantId = await getTenantId()
+    if (!tenantId) return { turnosHoy: 0, turnosConfirmados: 0, turnosPendientes: 0, proximoTurno: null }
+
+    const now = new Date()
+    const diaStr = now.toISOString().split('T')[0]
+
+    const { data: turnos, error } = await supabase
+        .from('turnos')
+        .select(`
+            id,
+            fecha_inicio,
+            estado,
+            paciente:pacientes(nombre, apellido)
+        `)
+        .eq('tenant_id', tenantId)
+        .gte('fecha_inicio', `${diaStr}T00:00:00`)
+        .lt('fecha_inicio', `${diaStr}T23:59:59`)
+        .order('fecha_inicio', { ascending: true })
+
+    if (error || !turnos) {
+        return { turnosHoy: 0, turnosConfirmados: 0, turnosPendientes: 0, proximoTurno: null }
+    }
+
+    const turnosHoy = turnos.length
+    const turnosConfirmados = turnos.filter(t => ['CONFIRMADO', 'EN_SALA', 'ATENDIDO'].includes(t.estado)).length
+    const turnosPendientes = turnos.filter(t => t.estado === 'PENDIENTE').length
+
+    const nowIso = now.toISOString()
+    const proximo = turnos.find(t => t.fecha_inicio >= nowIso && !['CANCELADO', 'ATENDIDO'].includes(t.estado))
+        || turnos.find(t => !['CANCELADO', 'ATENDIDO'].includes(t.estado))
+
+    let proximoTurno = null
+    if (proximo) {
+        const fecha = new Date(proximo.fecha_inicio)
+        const hora = `${String(fecha.getHours()).padStart(2, '0')}:${String(fecha.getMinutes()).padStart(2, '0')}`
+        const pac = proximo.paciente as any
+        const pacienteNombre = pac ? `${pac.nombre || ''} ${pac.apellido || ''}`.trim() : 'Paciente'
+        proximoTurno = { hora, pacienteNombre }
+    }
+
+    return {
+        turnosHoy,
+        turnosConfirmados,
+        turnosPendientes,
+        proximoTurno
+    }
+}
+

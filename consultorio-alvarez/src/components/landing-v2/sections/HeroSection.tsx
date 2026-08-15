@@ -11,18 +11,27 @@ import { motion, AnimatePresence } from 'framer-motion'
 const SLIDES = [
     {
         image: '/consultorio/slide_1.webp',
-        title: 'Instalaciones Premium',
-        description: 'Tecnología de última generación y máximo confort en Olivos.'
+        title: 'Odontologia Digitalizada',
+        description: 'Escaneos para diagnosticos de la cavidad oral.',
+        tag: 'Tecnología de última generación'
     },
     {
         image: '/consultorio/slide_2.webp',
-        title: 'Ortodoncia Invisible',
-        description: 'Alineadores estéticos y cómodos diseñados a tu medida.'
+        title: 'Implantología',
+        description: 'Rehabilitación bucal integral con implantes de última tecnología, prótesis fijas y soluciones avanzadas a tu medida.',
+        tag: 'Rehabilitación Oral'
     },
     {
         image: '/consultorio/slide_3.webp',
         title: 'Estética Dental',
-        description: 'Diseño de sonrisa y blanqueamiento con resultados naturales.'
+        description: 'Diseño de sonrisa y blanqueamiento con resultados naturales.',
+        tag: 'Resultados Naturales'
+    },
+    {
+        image: '/landing_slide4.png',
+        title: 'Placas digitalizadas',
+        description: 'Diagnóstico por imágenes e impresión de placas dentales digitales a medida.',
+        tag: 'Diagnóstico Digital'
     }
 ]
 
@@ -137,6 +146,9 @@ export function HeroSection({ onBookingClick, config }: Props) {
                                 <img
                                     src={slide.image}
                                     alt={slide.title}
+                                    style={{
+                                        objectPosition: (slide as any).objectPosition || 'center 45%'
+                                    }}
                                     className={`w-full h-full object-cover transition-transform duration-[8000ms] ease-out ${
                                         currentSlide === idx ? 'scale-105' : 'scale-100'
                                     }`}
@@ -164,10 +176,10 @@ export function HeroSection({ onBookingClick, config }: Props) {
                         {/* Highlight Category Tag */}
                         <div className="mb-1.5 flex items-center gap-2 overflow-hidden h-6">
                             <span 
-                                className="text-[10px] sm:text-xs font-black uppercase tracking-widest"
+                                className="text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300"
                                 style={{ color: config?.color_primary ?? '#0d9488' }}
                             >
-                                Tecnología de última generación
+                                {SLIDES[currentSlide].tag || 'Tecnología de última generación'}
                             </span>
                         </div>
 

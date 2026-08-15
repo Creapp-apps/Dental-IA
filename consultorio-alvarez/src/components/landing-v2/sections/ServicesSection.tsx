@@ -25,7 +25,7 @@ interface ServiceTooltipData {
 const TOOLTIP_DATA: Record<string, ServiceTooltipData> = {
     'estética dental': {
         title: 'Estética Dental Premium',
-        expandedDescription: 'Tratamientos personalizados de diseño de sonrisa. Combinamos carillas ultrafinas de porcelana inyectada, blanqueamiento láser y coronas de zirconio de alta traslúcida para lograr una armonía natural y duradera.',
+        expandedDescription: 'Tratamientos personalizados de diseño de sonrisa. Combinamos carillas ultrafinas de porcelana inyectada, blanqueamiento y coronas de zirconio de alta traslúcida para lograr una armonía natural y duradera.',
         images: ['/servicios/estetica_dental.webp']
     },
     'odontología digital': {

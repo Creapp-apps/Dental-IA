@@ -58,13 +58,40 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
         <>
             <motion.div
             className={cn(
-                "group flex items-start gap-3 glass rounded-xl p-3.5 shadow-glass hover:shadow-glass-lg transition-all cursor-default",
+                "group flex items-start gap-3 glass rounded-xl p-3.5 shadow-glass hover:shadow-glass-lg transition-all cursor-default relative overflow-hidden will-change-transform transform-gpu",
+                estado === 'CANCELADO' && "bg-red-500/15 dark:bg-red-950/40 border-red-500/40 border-l-[5px] border-l-red-600 shadow-[0_0_20px_rgba(239,68,68,0.25)]",
                 estado === 'CONFIRMADO' && "bg-emerald-500/10 dark:bg-emerald-950/35 border-emerald-500/30 shadow-[0_0_15px_rgba(16,185,129,0.06)]"
             )}
-            style={{ borderLeft: estado === 'CONFIRMADO' ? '4px solid #10b981' : `3px solid ${colorProf}` }}
-            initial={{ opacity: 0, x: -12 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: index * 0.05, duration: 0.3, ease: 'easeOut' }}
+            style={{ borderLeft: estado === 'CANCELADO' ? '5px solid #dc2626' : estado === 'CONFIRMADO' ? '4px solid #10b981' : `3px solid ${colorProf}` }}
+            initial={{ opacity: 1, scale: 1, x: 0 }}
+            animate={
+                estado === 'CANCELADO'
+                    ? {
+                          scale: [1, 1.02, 1],
+                          opacity: 1,
+                          boxShadow: [
+                              "0 0 4px rgba(239, 68, 68, 0.2)",
+                              "0 0 22px rgba(239, 68, 68, 0.55)",
+                              "0 0 4px rgba(239, 68, 68, 0.2)"
+                          ]
+                      }
+                    : estado === 'PENDIENTE'
+                    ? {
+                          scale: [1, 1.015, 1],
+                          opacity: 1,
+                          boxShadow: [
+                              "0 0 4px rgba(245, 158, 11, 0.2)",
+                              "0 0 18px rgba(245, 158, 11, 0.5)",
+                              "0 0 4px rgba(245, 158, 11, 0.2)"
+                          ]
+                      }
+                    : { opacity: 1, x: 0, scale: 1 }
+            }
+            transition={
+                (estado === 'CANCELADO' || estado === 'PENDIENTE')
+                    ? { duration: 2.2, repeat: Infinity, ease: 'easeInOut' }
+                    : { delay: index * 0.05, duration: 0.3, ease: 'easeOut' }
+            }
         >
             {/* Hora */}
             <div className="shrink-0 text-center min-w-[48px]">
