@@ -1,11 +1,11 @@
 'use client'
 
-import { useRef, useEffect, useState } from 'react'
+import { useRef, useEffect, useState, useId } from 'react'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { SERVICES } from '@/lib/landing-constants'
 import type { LandingConfig } from '@/lib/types/landing'
-import { Shield, Clock, Star, Heart, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Shield, Clock, Star, Heart, ChevronLeft, ChevronRight, X, Info, Sparkles } from 'lucide-react'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -60,7 +60,19 @@ const getTooltipData = (title: string): ServiceTooltipData | null => {
     return null;
 };
 
-function CardTooltip({ tooltip }: { tooltip: ServiceTooltipData }) {
+function CardTooltip({ 
+    tooltip, 
+    isOpen, 
+    onClose,
+    onBookingClick,
+    colorPrimary = '#0d9488'
+}: { 
+    tooltip: ServiceTooltipData; 
+    isOpen: boolean; 
+    onClose: () => void;
+    onBookingClick?: () => void;
+    colorPrimary?: string;
+}) {
     const [index, setIndex] = useState(0)
 
     useEffect(() => {
@@ -82,7 +94,29 @@ function CardTooltip({ tooltip }: { tooltip: ServiceTooltipData }) {
     }
 
     return (
-        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-[280px] sm:w-[340px] md:w-[380px] bg-white/95 border border-white/80 rounded-3xl p-4 shadow-2xl backdrop-blur-md z-50 transition-all duration-300 opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto scale-95 group-hover:scale-100 origin-bottom flex flex-col gap-3">
+        <div 
+            onClick={(e) => e.stopPropagation()}
+            className={`hidden sm:flex absolute bottom-full left-1/2 -translate-x-1/2 mb-4 w-[300px] sm:w-[340px] md:w-[380px] bg-white/95 border border-white/80 rounded-3xl p-4 shadow-2xl backdrop-blur-md z-50 transition-all duration-300 origin-bottom flex-col gap-3 ${
+                isOpen 
+                    ? 'opacity-100 pointer-events-auto scale-100' 
+                    : 'opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto scale-95 group-hover:scale-100'
+            }`}
+        >
+            {/* Close button (always visible when pinned open or hovered) */}
+            <button
+                onClick={(e) => {
+                    e.stopPropagation()
+                    onClose()
+                }}
+                className={`absolute top-3 right-3 h-7 w-7 rounded-full bg-slate-900/60 hover:bg-slate-900/80 text-white flex items-center justify-center transition-all z-20 backdrop-blur-sm shadow-md cursor-pointer ${
+                    isOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                }`}
+                title="Cerrar detalle"
+                aria-label="Cerrar detalle"
+            >
+                <X className="h-3.5 w-3.5" />
+            </button>
+
             {/* Carousel */}
             <div className="relative h-40 w-full overflow-hidden rounded-2xl bg-slate-100 group/carousel">
                 <img 
@@ -126,9 +160,22 @@ function CardTooltip({ tooltip }: { tooltip: ServiceTooltipData }) {
             </div>
 
             {/* Content */}
-            <div className="text-left">
+            <div className="text-left pr-4">
                 <h4 className="text-sm font-bold text-slate-900 mb-1">{tooltip.title}</h4>
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">{tooltip.expandedDescription}</p>
+                <p className="text-xs text-slate-600 font-medium leading-relaxed mb-3">{tooltip.expandedDescription}</p>
+                {onBookingClick && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation()
+                            onClose()
+                            onBookingClick()
+                        }}
+                        className="w-full py-2 px-3 rounded-xl text-white font-semibold text-xs shadow-sm hover:shadow-md transition-all active:scale-[0.98] text-center block cursor-pointer"
+                        style={{ backgroundColor: colorPrimary }}
+                    >
+                        Agendar este tratamiento
+                    </button>
+                )}
             </div>
             
             {/* Small triangle arrow at the bottom */}
@@ -137,10 +184,40 @@ function CardTooltip({ tooltip }: { tooltip: ServiceTooltipData }) {
     )
 }
 
-export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'servicios' | 'servicios_titulo' | 'servicios_subtitulo' | 'color_primary' | 'color_accent'> }) {
+interface ServicesSectionProps {
+    config?: Pick<LandingConfig, 'servicios' | 'servicios_titulo' | 'servicios_subtitulo' | 'color_primary' | 'color_accent'>;
+    onBookingClick?: () => void;
+}
+
+export function ServicesSection({ config, onBookingClick }: ServicesSectionProps) {
     const sectionRef = useRef<HTMLDivElement>(null)
     const cardsRef = useRef<HTMLDivElement>(null)
     const titleRef = useRef<HTMLHeadingElement>(null)
+    
+    // State to manage pinned/active tooltip on iPad/mobile/tap
+    const [activeTooltipKey, setActiveTooltipKey] = useState<string | null>(null)
+    const [mobileImgIndex, setMobileImgIndex] = useState<number>(0)
+
+    // Handle click outside or Escape key to close active tooltips
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setActiveTooltipKey(null)
+            }
+        }
+        const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+            if (cardsRef.current && !cardsRef.current.contains(e.target as Node)) {
+                setActiveTooltipKey(null)
+            }
+        }
+
+        window.addEventListener('keydown', handleKeyDown)
+        document.addEventListener('pointerdown', handleClickOutside)
+        return () => {
+            window.removeEventListener('keydown', handleKeyDown)
+            document.removeEventListener('pointerdown', handleClickOutside)
+        }
+    }, [])
 
     useEffect(() => {
         if (!sectionRef.current || !cardsRef.current || !titleRef.current) return
@@ -153,7 +230,7 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                 // Title reveal (no scrub, fluid entry)
                 gsap.fromTo(
                     titleRef.current,
-                    { opacity: 0, y: 50 },
+                    { opacity: 0, y: 40 },
                     {
                         opacity: 1,
                         y: 0,
@@ -167,27 +244,25 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                     }
                 )
 
-                // Cards stagger (no scrub, fluid entry)
+                // Cards stagger (perfect vertical entry, strictly aligned grid)
                 const cards = cardsRef.current!.querySelectorAll('.service-card')
                 gsap.fromTo(
                     cards,
                     {
                         opacity: 0,
-                        y: 60,
-                        x: (i) => (i % 2 === 0 ? -30 : 30),
-                        scale: 0.95,
+                        y: 40,
+                        scale: 0.98,
                     },
                     {
                         opacity: 1,
                         y: 0,
-                        x: 0,
                         scale: 1,
-                        duration: 0.8,
-                        stagger: 0.15,
-                        ease: 'power3.out',
+                        duration: 0.7,
+                        stagger: 0.1,
+                        ease: 'power2.out',
                         scrollTrigger: {
                             trigger: cardsRef.current,
-                            start: 'top 75%',
+                            start: 'top 80%',
                             toggleActions: 'play none none none',
                         },
                     }
@@ -195,7 +270,7 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
             })
 
             mm.add("(max-width: 767px)", () => {
-                // Mobile: No pinning, fluid scroll-triggered entrance (no scrub)
+                // Mobile: fluid vertical entrance (no horizontal offset)
                 gsap.fromTo(
                     titleRef.current,
                     { opacity: 0, y: 30 },
@@ -214,13 +289,13 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                 const cards = cardsRef.current!.querySelectorAll('.service-card')
                 gsap.fromTo(
                     cards,
-                    { opacity: 0, y: 40, scale: 0.95 },
+                    { opacity: 0, y: 30, scale: 0.98 },
                     {
                         opacity: 1,
                         y: 0,
                         scale: 1,
                         duration: 0.5,
-                        stagger: 0.1,
+                        stagger: 0.08,
                         ease: 'power2.out',
                         scrollTrigger: {
                             trigger: cardsRef.current,
@@ -233,6 +308,13 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
 
         return () => ctx.revert() // Only kills triggers scoped to this component
     }, [])
+
+    const toggleCard = (key: string) => {
+        setMobileImgIndex(0)
+        setActiveTooltipKey((prev) => (prev === key ? null : key))
+    }
+
+    const activeTooltipData = activeTooltipKey ? getTooltipData(activeTooltipKey) : null
 
     return (
         <section
@@ -261,8 +343,15 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                     {config?.servicios ? (
                         config.servicios.map((service, idx) => {
                             const tooltipData = getTooltipData(service.titulo);
+                            const isPinned = activeTooltipKey === service.titulo;
                             return (
-                                <div key={idx} className="service-card relative glass-light rounded-3xl p-7 hover:bg-white/95 hover:shadow-xl hover:shadow-slate-200/40 transition-premium group cursor-default">
+                                <div 
+                                    key={idx} 
+                                    onClick={() => tooltipData && toggleCard(service.titulo)}
+                                    className={`service-card relative glass-light rounded-3xl p-7 hover:bg-white/95 hover:shadow-xl hover:shadow-slate-200/40 transition-premium group cursor-pointer select-none active:scale-[0.99] ${
+                                        isPinned ? 'ring-2 ring-teal-500/50 bg-white/95 shadow-xl' : ''
+                                    }`}
+                                >
                                     <div className="flex items-start gap-4">
                                         <div
                                             className="h-12 w-12 rounded-2xl flex items-center justify-center shrink-0 transition-all duration-300"
@@ -274,19 +363,42 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                                             {ICON_MAP[service.icono] ?? <Star className="h-5 w-5" />}
                                         </div>
                                         <div className="flex-1 text-left">
-                                            <h3 className="text-lg font-bold text-slate-800 mb-1">{service.titulo}</h3>
+                                            <div className="flex items-start justify-between gap-3 mb-1">
+                                                <h3 className="text-lg font-bold text-slate-800 leading-snug">{service.titulo}</h3>
+                                                {tooltipData && (
+                                                    <span className="inline-flex sm:hidden shrink-0 items-center gap-1 text-[11px] font-semibold text-teal-700 bg-teal-50/90 px-2.5 py-0.5 rounded-full border border-teal-100/80 mt-0.5">
+                                                        <Info className="h-3 w-3 shrink-0" />
+                                                        <span className="whitespace-nowrap">Ver más</span>
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p className="text-sm text-slate-600 font-medium leading-relaxed">{service.descripcion}</p>
                                         </div>
                                     </div>
-                                    {tooltipData && <CardTooltip tooltip={tooltipData} />}
+                                    {tooltipData && (
+                                        <CardTooltip 
+                                            tooltip={tooltipData} 
+                                            isOpen={isPinned}
+                                            onClose={() => setActiveTooltipKey(null)}
+                                            onBookingClick={onBookingClick}
+                                            colorPrimary={config?.color_primary}
+                                        />
+                                    )}
                                 </div>
                             );
                         })
                     ) : (
                         SERVICES.map((service) => {
                             const tooltipData = getTooltipData(service.title);
+                            const isPinned = activeTooltipKey === service.title;
                             return (
-                                <div key={service.id} className="service-card relative glass-light rounded-3xl p-7 hover:bg-white/95 hover:shadow-xl hover:shadow-slate-200/40 transition-premium group cursor-default">
+                                <div 
+                                    key={service.id} 
+                                    onClick={() => tooltipData && toggleCard(service.title)}
+                                    className={`service-card relative glass-light rounded-3xl p-7 hover:bg-white/95 hover:shadow-xl hover:shadow-slate-200/40 transition-premium group cursor-pointer select-none active:scale-[0.99] ${
+                                        isPinned ? 'ring-2 ring-teal-500/50 bg-white/95 shadow-xl' : ''
+                                    }`}
+                                >
                                     <div className="flex items-start gap-4">
                                         <div 
                                             className="h-12 w-12 rounded-2xl flex items-center justify-center text-xl shrink-0 group-hover:bg-teal-500/20 transition-colors duration-300"
@@ -298,7 +410,15 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                                             {service.icon}
                                         </div>
                                         <div className="flex-1 text-left">
-                                            <h3 className="text-lg font-bold text-slate-800 mb-1">{service.title}</h3>
+                                            <div className="flex items-start justify-between gap-3 mb-1">
+                                                <h3 className="text-lg font-bold text-slate-800 leading-snug">{service.title}</h3>
+                                                {tooltipData && (
+                                                    <span className="inline-flex sm:hidden shrink-0 items-center gap-1 text-[11px] font-semibold text-teal-700 bg-teal-50/90 px-2.5 py-0.5 rounded-full border border-teal-100/80 mt-0.5">
+                                                        <Info className="h-3 w-3 shrink-0" />
+                                                        <span className="whitespace-nowrap">Ver más</span>
+                                                    </span>
+                                                )}
+                                            </div>
                                             <p 
                                                 className="text-xs font-semibold mb-3"
                                                 style={{ color: config?.color_primary ?? '#0d9488' }}
@@ -308,13 +428,130 @@ export function ServicesSection({ config }: { config?: Pick<LandingConfig, 'serv
                                             <p className="text-sm text-slate-600 font-medium leading-relaxed">{service.description}</p>
                                         </div>
                                     </div>
-                                    {tooltipData && <CardTooltip tooltip={tooltipData} />}
+                                    {tooltipData && (
+                                        <CardTooltip 
+                                            tooltip={tooltipData} 
+                                            isOpen={isPinned}
+                                            onClose={() => setActiveTooltipKey(null)}
+                                            onBookingClick={onBookingClick}
+                                            colorPrimary={config?.color_primary}
+                                        />
+                                    )}
                                 </div>
                             );
                         })
                     )}
                 </div>
             </div>
+
+            {/* Mobile Bottom Sheet Modal (< 640px) */}
+            {activeTooltipData && (
+                <div 
+                    className="fixed inset-0 z-[100] flex items-end sm:hidden bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={() => setActiveTooltipKey(null)}
+                >
+                    <div 
+                        className="w-full bg-white rounded-t-[2.5rem] p-6 shadow-2xl border-t border-white/60 flex flex-col gap-4 animate-in slide-in-from-bottom duration-300 max-h-[88vh] overflow-y-auto"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        {/* Drag Handle */}
+                        <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-1 shrink-0" />
+                        
+                        {/* Header with category badge & close */}
+                        <div className="flex items-center justify-between">
+                            <span className="inline-flex items-center gap-1 text-xs font-bold tracking-wider uppercase px-3 py-1 rounded-full bg-teal-50 text-teal-700 border border-teal-100">
+                                <Sparkles className="h-3 w-3" />
+                                Detalle del Tratamiento
+                            </span>
+                            <button 
+                                onClick={() => setActiveTooltipKey(null)}
+                                className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
+                                aria-label="Cerrar"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {/* Image Showcase */}
+                        <div className="relative h-48 w-full overflow-hidden rounded-2xl bg-slate-100 shadow-inner">
+                            <img 
+                                src={activeTooltipData.images[mobileImgIndex]} 
+                                alt={activeTooltipData.title}
+                                className="h-full w-full object-cover"
+                            />
+                            {activeTooltipData.images.length > 1 && (
+                                <>
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setMobileImgIndex((prev) => (prev - 1 + activeTooltipData.images.length) % activeTooltipData.images.length);
+                                        }}
+                                        className="absolute left-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/50 text-white flex items-center justify-center cursor-pointer"
+                                    >
+                                        <ChevronLeft className="h-4 w-4" />
+                                    </button>
+                                    <button 
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setMobileImgIndex((prev) => (prev + 1) % activeTooltipData.images.length);
+                                        }}
+                                        className="absolute right-2 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full bg-black/50 text-white flex items-center justify-center cursor-pointer"
+                                    >
+                                        <ChevronRight className="h-4 w-4" />
+                                    </button>
+
+                                    {/* Dots */}
+                                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1 z-10">
+                                        {activeTooltipData.images.map((_, i) => (
+                                            <button
+                                                key={i}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setMobileImgIndex(i);
+                                                }}
+                                                className={`h-1.5 rounded-full transition-all ${
+                                                    mobileImgIndex === i ? 'w-3.5 bg-white' : 'w-1.5 bg-white/50'
+                                                }`}
+                                            />
+                                        ))}
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        {/* Text description */}
+                        <div>
+                            <h3 className="text-lg font-bold text-slate-900 mb-2">{activeTooltipData.title}</h3>
+                            <p className="text-sm text-slate-600 font-medium leading-relaxed">{activeTooltipData.expandedDescription}</p>
+                        </div>
+
+                        {/* Action CTA */}
+                        <div className="pt-2 pb-1 flex flex-col gap-2">
+                            <button
+                                onClick={() => {
+                                    setActiveTooltipKey(null)
+                                    if (onBookingClick) {
+                                        onBookingClick()
+                                    } else {
+                                        document.getElementById('reservar')?.scrollIntoView({ behavior: 'smooth' })
+                                    }
+                                }}
+                                className="w-full py-3.5 px-4 rounded-2xl text-white font-semibold text-sm shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/30 transition-all active:scale-[0.98] text-center block cursor-pointer"
+                                style={{ backgroundColor: config?.color_primary ?? '#0d9488' }}
+                            >
+                                Agendar turno para este tratamiento
+                            </button>
+                            <button
+                                onClick={() => setActiveTooltipKey(null)}
+                                className="w-full py-2 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors text-center cursor-pointer"
+                            >
+                                Cerrar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </section>
     )
 }
+

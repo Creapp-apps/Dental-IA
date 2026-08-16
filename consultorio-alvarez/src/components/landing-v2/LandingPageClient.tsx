@@ -42,6 +42,7 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
     const [scrollProgress, setScrollProgress] = useState(0)
     const mainRef = useRef<HTMLDivElement>(null)
     const bgRef = useRef<HTMLDivElement>(null)
+    const lenisRef = useRef<Lenis | null>(null)
 
     useEffect(() => {
         const lenis = new Lenis({
@@ -49,6 +50,7 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
             easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
             smoothWheel: true,
         })
+        lenisRef.current = lenis
 
         lenis.on('scroll', ScrollTrigger.update)
         gsap.ticker.add((time) => { lenis.raf(time * 1000) })
@@ -65,6 +67,7 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
 
         return () => {
             lenis.destroy()
+            lenisRef.current = null
             st.kill()
             gsap.ticker.remove(() => { })
         }
@@ -77,7 +80,13 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
     }, [scrollProgress])
 
     const scrollToBooking = () => {
-        document.getElementById('reservar')?.scrollIntoView({ behavior: 'smooth' })
+        const target = document.getElementById('reservar')
+        if (target) {
+            if (lenisRef.current) {
+                lenisRef.current.scrollTo(target, { duration: 1.5 })
+            }
+            target.scrollIntoView({ behavior: 'smooth' })
+        }
     }
 
     return (
@@ -96,7 +105,7 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
             <main className="relative z-10">
                 <HeroSection onBookingClick={scrollToBooking} config={config} />
                 <AboutUsSection onBookingClick={scrollToBooking} colorPrimary={config.color_primary} />
-                <ServicesSection config={config} />
+                <ServicesSection onBookingClick={scrollToBooking} config={config} />
                 <TeamSection config={config} professionals={professionals} />
                 {obrasSociales && obrasSociales.length > 0 && (
                     <ObrasSocialesSection config={config} obrasSociales={obrasSociales} />
