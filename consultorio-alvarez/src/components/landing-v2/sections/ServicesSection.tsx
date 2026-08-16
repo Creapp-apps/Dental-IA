@@ -1,6 +1,7 @@
 'use client'
 
-import { useRef, useEffect, useState, useId } from 'react'
+import { useRef, useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { SERVICES } from '@/lib/landing-constants'
@@ -197,25 +198,31 @@ export function ServicesSection({ config, onBookingClick }: ServicesSectionProps
     // State to manage pinned/active tooltip on iPad/mobile/tap
     const [activeTooltipKey, setActiveTooltipKey] = useState<string | null>(null)
     const [mobileImgIndex, setMobileImgIndex] = useState<number>(0)
+    const [mounted, setMounted] = useState<boolean>(false)
 
-    // Handle click outside or Escape key to close active tooltips
+    useEffect(() => {
+        setMounted(true)
+    }, [])
+
+    // Handle Escape key or Desktop click-outside
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 setActiveTooltipKey(null)
             }
         }
-        const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-            if (cardsRef.current && !cardsRef.current.contains(e.target as Node)) {
+        const handleClickOutside = (e: MouseEvent) => {
+            // Only close floating tooltips on desktop when clicking outside
+            if (window.innerWidth >= 640 && cardsRef.current && !cardsRef.current.contains(e.target as Node)) {
                 setActiveTooltipKey(null)
             }
         }
 
         window.addEventListener('keydown', handleKeyDown)
-        document.addEventListener('pointerdown', handleClickOutside)
+        document.addEventListener('click', handleClickOutside)
         return () => {
             window.removeEventListener('keydown', handleKeyDown)
-            document.removeEventListener('pointerdown', handleClickOutside)
+            document.removeEventListener('click', handleClickOutside)
         }
     }, [])
 
@@ -445,14 +452,22 @@ export function ServicesSection({ config, onBookingClick }: ServicesSectionProps
             </div>
 
             {/* Mobile Bottom Sheet Modal (< 640px) */}
-            {activeTooltipData && (
+            {mounted && activeTooltipData && createPortal(
                 <div 
-                    className="fixed inset-0 z-[100] flex items-end sm:hidden bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200"
-                    onClick={() => setActiveTooltipKey(null)}
+                    className="fixed inset-0 z-[9999] flex items-end sm:hidden bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200"
+                    onClick={(e) => {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        setActiveTooltipKey(null)
+                    }}
+                    onTouchStart={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
                 >
                     <div 
                         className="w-full bg-white rounded-t-[2.5rem] p-6 shadow-2xl border-t border-white/60 flex flex-col gap-4 animate-in slide-in-from-bottom duration-300 max-h-[88vh] overflow-y-auto"
                         onClick={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
                     >
                         {/* Drag Handle */}
                         <div className="w-12 h-1.5 bg-slate-300 rounded-full mx-auto mb-1 shrink-0" />
@@ -464,7 +479,11 @@ export function ServicesSection({ config, onBookingClick }: ServicesSectionProps
                                 Detalle del Tratamiento
                             </span>
                             <button 
-                                onClick={() => setActiveTooltipKey(null)}
+                                onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    setActiveTooltipKey(null)
+                                }}
                                 className="h-8 w-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center transition-colors cursor-pointer"
                                 aria-label="Cerrar"
                             >
@@ -528,7 +547,9 @@ export function ServicesSection({ config, onBookingClick }: ServicesSectionProps
                         {/* Action CTA */}
                         <div className="pt-2 pb-1 flex flex-col gap-2">
                             <button
-                                onClick={() => {
+                                onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
                                     setActiveTooltipKey(null)
                                     if (onBookingClick) {
                                         onBookingClick()
@@ -536,20 +557,25 @@ export function ServicesSection({ config, onBookingClick }: ServicesSectionProps
                                         document.getElementById('reservar')?.scrollIntoView({ behavior: 'smooth' })
                                     }
                                 }}
-                                className="w-full py-3.5 px-4 rounded-2xl text-white font-semibold text-sm shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/30 transition-all active:scale-[0.98] text-center block cursor-pointer"
+                                className="w-full py-3.5 px-4 rounded-2xl text-white font-semibold text-sm shadow-lg shadow-teal-500/20 hover:shadow-xl hover:shadow-teal-500/30 transition-all active:scale-[0.98] text-center block cursor-pointer select-none"
                                 style={{ backgroundColor: config?.color_primary ?? '#0d9488' }}
                             >
                                 Agendar turno para este tratamiento
                             </button>
                             <button
-                                onClick={() => setActiveTooltipKey(null)}
+                                onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    setActiveTooltipKey(null)
+                                }}
                                 className="w-full py-2 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors text-center cursor-pointer"
                             >
                                 Cerrar
                             </button>
                         </div>
                     </div>
-                </div>
+                </div>,
+                document.body
             )}
         </section>
     )
