@@ -5,6 +5,7 @@ import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario
 import { DashboardKPI } from '@/components/dashboard/DashboardKPI'
 import { TurnoCardGlass } from '@/components/dashboard/TurnoCardGlass'
 import { TurnosSinConfirmarSection } from '@/components/dashboard/TurnosSinConfirmarSection'
+import { DashboardLiveAlerts } from '@/components/dashboard/DashboardLiveAlerts'
 import { getBillingConfig } from '@/lib/actions/billing'
 
 export default async function DashboardPage() {
@@ -94,6 +95,8 @@ export default async function DashboardPage() {
             {/* Banner de Cobro */}
             {alertBanner}
 
+            {/* Centro de Alertas y Novedades en Tiempo Real */}
+            <DashboardLiveAlerts />
 
             {/* KPIs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

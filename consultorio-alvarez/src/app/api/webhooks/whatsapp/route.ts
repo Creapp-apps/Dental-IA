@@ -281,6 +281,47 @@ export async function POST(request: NextRequest) {
                 }
             }
 
+            // --- Insertar Notificación Realtime en la base de datos para Dashboard y Toasts ---
+            if (turno?.tenant_id) {
+                try {
+                    const pct = turno?.paciente as any
+                    const trat = (turno as any)?.tipo_treatment?.nombre || 'Consulta'
+                    const fechaObj = new Date(turno?.fecha_inicio || '')
+                    const horaStr = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })
+                    const fechaStr = fechaObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Argentina/Buenos_Aires' })
+
+                    let notifTitulo = ''
+                    let notifMensaje = ''
+                    let notifTipo: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' = 'turno_confirmado'
+
+                    if (respuestaPaciente === 'CONFIRMAR') {
+                        notifTitulo = '✅ Turno Confirmado por WhatsApp'
+                        notifMensaje = `${pct?.nombre || 'Paciente'} confirmó su turno de ${trat} para el ${fechaStr} a las ${horaStr} hs.`
+                        notifTipo = 'turno_confirmado'
+                    } else if (respuestaPaciente === 'CANCELAR') {
+                        notifTitulo = '❌ Turno Cancelado por Paciente'
+                        notifMensaje = `${pct?.nombre || 'Paciente'} canceló su turno de ${trat} del ${fechaStr} a las ${horaStr} hs.`
+                        notifTipo = 'turno_cancelado'
+                    } else {
+                        notifTitulo = '🔄 Solicitud de Reprogramación'
+                        notifMensaje = `${pct?.nombre || 'Paciente'} solicita reprogramar su turno de ${trat} (${fechaStr} ${horaStr} hs).`
+                        notifTipo = 'turno_reprogramado'
+                    }
+
+                    await admin.from('notificaciones').insert({
+                        tenant_id: turno.tenant_id,
+                        titulo: notifTitulo,
+                        mensaje: notifMensaje,
+                        tipo: notifTipo,
+                        referencia_id: turnoIdToUpdate,
+                        leida: false
+                    })
+                    console.log(`🔔 Notificación realtime registrada: "${notifTitulo}"`)
+                } catch (notifErr) {
+                    console.error('❌ Error insertando registro en tabla notificaciones:', notifErr)
+                }
+            }
+
             // --- Enviar Push Notification al profesional asignado ---
             try {
                 const { data: usuarioProf } = await admin

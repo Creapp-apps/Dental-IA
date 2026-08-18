@@ -22,9 +22,13 @@ const NotificationContext = createContext<NotificationContextProps>({
     markAllAsRead: async () => { },
 })
 
+interface LiveToast extends Notificacion {
+    toastId: string
+}
+
 export function NotificationProvider({ children }: { children: ReactNode }) {
     const [notifications, setNotifications] = useState<Notificacion[]>([])
-    const [activeAlert, setActiveAlert] = useState<Notificacion | null>(null)
+    const [toasts, setToasts] = useState<LiveToast[]>([])
     const [mounted, setMounted] = useState(false)
     const supabase = createClient()
     const router = useRouter()
@@ -47,8 +51,6 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                     let sub = await registration.pushManager.getSubscription()
                     const publicKeyB64 = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
 
-                    // Si no hay una suscripción activa pero el permiso está concedido,
-                    // renovamos silenciosamente la suscripción sin molestar al usuario
                     if (!sub && publicKeyB64) {
                         console.log('[PUSH SYNC] Permiso concedido pero sin suscripción activa. Renovando token en segundo plano...')
                         const applicationServerKey = urlB64ToUint8Array(publicKeyB64)
@@ -98,9 +100,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                     const newNotif = payload.new as Notificacion
                     setNotifications(prev => [newNotif, ...prev])
                     
-                    if (newNotif.tipo === 'turno_nuevo') {
-                        setActiveAlert(newNotif)
+                    // Disparar Toast flotante en tiempo real
+                    const toastItem: LiveToast = {
+                        ...newNotif,
+                        toastId: `${newNotif.id}-${Date.now()}`
                     }
+                    setToasts(prev => [toastItem, ...prev.slice(0, 3)]) // Máximo 4 toasts a la vez
+
+                    // Auto-cerrar el toast después de 8 segundos
+                    setTimeout(() => {
+                        setToasts(prev => prev.filter(t => t.toastId !== toastItem.toastId))
+                    }, 8000)
 
                     // Reproducir sonido personalizado según configuración de timbre/volumen
                     try {
@@ -108,10 +118,13 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                         const settings = saved ? JSON.parse(saved) : null
                         const defaultSounds: Record<string, { sound: string; volume: number }> = {
                             turno_nuevo: { sound: 'bell.ogg', volume: 0.5 },
+                            turno_reprogramado: { sound: 'chime.mp3', volume: 0.6 },
+                            turno_cancelado: { sound: 'beep.mp3', volume: 0.6 },
+                            turno_confirmado: { sound: 'ding.mp3', volume: 0.5 },
                             alerta: { sound: 'chime.mp3', volume: 0.5 },
                             sistema: { sound: 'beep.mp3', volume: 0.5 },
                         }
-                        const config = settings?.[newNotif.tipo] ?? defaultSounds[newNotif.tipo] ?? { sound: '', volume: 0.5 }
+                        const config = settings?.[newNotif.tipo] ?? defaultSounds[newNotif.tipo] ?? { sound: 'bell.ogg', volume: 0.5 }
 
                         if (config.sound) {
                             const audio = new Audio(`/sounds/${config.sound}`)
@@ -141,6 +154,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     const markAsRead = async (id: string) => {
         // Optimistic update
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n))
+        setToasts(prev => prev.filter(t => t.id !== id))
         await supabase.from('notificaciones').update({ leida: true }).eq('id', id)
     }
 
@@ -150,77 +164,144 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
         // Optimistic update
         setNotifications(prev => prev.map(n => ({ ...n, leida: true })))
+        setToasts([])
         await supabase.from('notificaciones').update({ leida: true }).in('id', unreadIds)
     }
 
+    const dismissToast = (toastId: string) => {
+        setToasts(prev => prev.filter(t => t.toastId !== toastId))
+    }
+
     const unreadCount = notifications.filter(n => !n.leida).length
+
+    const getToastVisuals = (tipo: Notificacion['tipo']) => {
+        switch (tipo) {
+            case 'turno_reprogramado':
+                return {
+                    border: 'border-amber-500/50 bg-slate-900/95 shadow-amber-500/10',
+                    badge: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
+                    dot: 'bg-amber-500',
+                    label: 'Reprogramar Turno',
+                    icon: '🔄'
+                }
+            case 'turno_cancelado':
+                return {
+                    border: 'border-rose-500/50 bg-slate-900/95 shadow-rose-500/10',
+                    badge: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
+                    dot: 'bg-rose-500',
+                    label: 'Cancelación',
+                    icon: '❌'
+                }
+            case 'turno_confirmado':
+                return {
+                    border: 'border-emerald-500/50 bg-slate-900/95 shadow-emerald-500/10',
+                    badge: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+                    dot: 'bg-emerald-500',
+                    label: 'Confirmado',
+                    icon: '✅'
+                }
+            case 'turno_nuevo':
+                return {
+                    border: 'border-indigo-500/50 bg-slate-900/95 shadow-indigo-500/10',
+                    badge: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+                    dot: 'bg-indigo-500',
+                    label: 'Nueva Reserva Web',
+                    icon: '🌟'
+                }
+            default:
+                return {
+                    border: 'border-primary/50 bg-slate-900/95 shadow-primary/10',
+                    badge: 'bg-primary/20 text-primary-300 border-primary/30',
+                    dot: 'bg-primary',
+                    label: 'Aviso de Sistema',
+                    icon: '🔔'
+                }
+        }
+    }
 
     return (
         <NotificationContext.Provider value={{ notifications, unreadCount, markAsRead, markAllAsRead }}>
             {children}
 
-            {/* Modal central de Nuevo Turno */}
+            {/* Stack de Toasts Flotantes en Tiempo Real (Top-Right) */}
             {mounted && createPortal(
-                <AnimatePresence>
-                    {activeAlert && (
-                        <motion.div
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            exit={{ opacity: 0 }}
-                            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-                            onClick={() => setActiveAlert(null)}
-                        >
-                            <motion.div
-                                initial={{ scale: 0.9, opacity: 0, y: 20 }}
-                                animate={{ scale: 1, opacity: 1, y: 0 }}
-                                exit={{ scale: 0.9, opacity: 0, y: 20 }}
-                                transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                                className="relative w-full max-w-sm bg-card text-card-foreground rounded-2xl shadow-2xl border border-primary/20 overflow-hidden flex flex-col"
-                                onClick={(e) => e.stopPropagation()}
-                            >
-                                {/* Pulso animado de fondo */}
-                                <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary to-transparent animate-pulse" />
-                                
-                                <div className="p-6 text-center flex flex-col items-center">
-                                    <div className="relative mb-4">
-                                        <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping" />
-                                        <div className="relative h-16 w-16 bg-primary/10 rounded-full flex items-center justify-center border border-primary/30">
-                                            <BellRing className="h-8 w-8 text-primary animate-bounce" />
-                                        </div>
-                                    </div>
-                                    
-                                    <h3 className="text-xl font-bold text-foreground mb-2">
-                                        ¡Nuevo Turno Recibido!
-                                    </h3>
-                                    <p className="text-sm text-muted-foreground mb-6">
-                                        {activeAlert.mensaje}
-                                    </p>
-
-                                    <button
-                                        onClick={() => {
-                                            setActiveAlert(null)
-                                            markAsRead(activeAlert.id)
-                                            if (activeAlert.referencia_id) {
-                                                router.push(`/agenda?turno=${activeAlert.referencia_id}`)
-                                            }
-                                        }}
-                                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 h-11 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all"
-                                    >
-                                        <CalendarClock className="h-4 w-4" />
-                                        Ver Turno
-                                    </button>
-                                </div>
-                                
-                                <button
-                                    onClick={() => setActiveAlert(null)}
-                                    className="absolute top-3 right-3 h-8 w-8 rounded-full bg-foreground/5 flex items-center justify-center text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
+                <div className="fixed top-5 right-5 z-[99999] flex flex-col gap-3 max-w-sm w-[calc(100vw-2.5rem)] pointer-events-none">
+                    <AnimatePresence>
+                        {toasts.map((toast) => {
+                            const visual = getToastVisuals(toast.tipo)
+                            return (
+                                <motion.div
+                                    key={toast.toastId}
+                                    initial={{ opacity: 0, x: 50, scale: 0.9 }}
+                                    animate={{ opacity: 1, x: 0, scale: 1 }}
+                                    exit={{ opacity: 0, scale: 0.85, x: 30 }}
+                                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                                    className={`pointer-events-auto w-full rounded-2xl border p-4 shadow-2xl backdrop-blur-xl text-white overflow-hidden relative ${visual.border}`}
                                 >
-                                    <X className="h-4 w-4" />
-                                </button>
-                            </motion.div>
-                        </motion.div>
-                    )}
-                </AnimatePresence>,
+                                    {/* Indicador de pulso superior */}
+                                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-pulse" />
+
+                                    <div className="flex items-start gap-3">
+                                        <div className="text-xl shrink-0 mt-0.5">{visual.icon}</div>
+                                        <div className="flex-1 min-w-0 space-y-1">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${visual.badge}`}>
+                                                    {visual.label}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 font-medium">
+                                                    Ahora
+                                                </span>
+                                            </div>
+                                            <h4 className="text-sm font-bold text-white leading-tight">
+                                                {toast.titulo}
+                                            </h4>
+                                            <p className="text-xs text-slate-300 leading-snug line-clamp-3">
+                                                {toast.mensaje}
+                                            </p>
+
+                                            {/* Acciones */}
+                                            <div className="pt-2 flex items-center gap-2">
+                                                <button
+                                                    onClick={() => {
+                                                        markAsRead(toast.id)
+                                                        dismissToast(toast.toastId)
+                                                        if (toast.referencia_id) {
+                                                            router.push(`/agenda?turno=${toast.referencia_id}`)
+                                                        } else {
+                                                            router.push('/agenda')
+                                                        }
+                                                    }}
+                                                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/30 transition-all flex items-center gap-1.5"
+                                                >
+                                                    <CalendarClock className="h-3.5 w-3.5" />
+                                                    <span>Ver Turno</span>
+                                                </button>
+                                                <button
+                                                    onClick={() => {
+                                                        markAsRead(toast.id)
+                                                        dismissToast(toast.toastId)
+                                                    }}
+                                                    className="px-2.5 py-1.5 rounded-lg text-xs font-semibold bg-white/10 hover:bg-white/20 text-slate-200 transition-colors"
+                                                >
+                                                    Marcar Leída
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Botón Cerrar */}
+                                        <button
+                                            onClick={() => dismissToast(toast.toastId)}
+                                            className="h-6 w-6 rounded-full bg-white/5 hover:bg-white/15 flex items-center justify-center text-slate-400 hover:text-white transition-colors shrink-0"
+                                            title="Cerrar notificación"
+                                        >
+                                            <X className="h-3.5 w-3.5" />
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            )
+                        })}
+                    </AnimatePresence>
+                </div>,
                 document.body
             )}
         </NotificationContext.Provider>

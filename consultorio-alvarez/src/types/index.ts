@@ -210,7 +210,13 @@ export const ESTADO_TURNO_COLOR: Record<EstadoTurno, string> = {
   AUSENTE: 'bg-gray-100 text-gray-800 border-gray-200',
 }
 
-export type TipoNotificacion = 'turno_nuevo' | 'alerta' | 'sistema'
+export type TipoNotificacion =
+  | 'turno_nuevo'
+  | 'turno_reprogramado'
+  | 'turno_cancelado'
+  | 'turno_confirmado'
+  | 'alerta'
+  | 'sistema'
 
 export interface Notificacion {
   id: string
