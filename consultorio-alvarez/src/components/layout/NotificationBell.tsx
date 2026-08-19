@@ -87,7 +87,23 @@ export function NotificationBell({ themeColor }: { themeColor?: string }) {
                                             </span>
                                         </div>
                                         <p className="text-xs text-muted-foreground leading-snug line-clamp-2">
-                                            {n.mensaje}
+                                            {(() => {
+                                                const parts = n.mensaje.split(/(\*\*.*?\*\*)/g)
+                                                return (
+                                                    <span>
+                                                        {parts.map((part, i) => {
+                                                            if (part.startsWith('**') && part.endsWith('**')) {
+                                                                return (
+                                                                    <strong key={i} className="font-black text-foreground mr-1 uppercase">
+                                                                        {part.slice(2, -2)}
+                                                                    </strong>
+                                                                )
+                                                            }
+                                                            return part
+                                                        })}
+                                                    </span>
+                                                )
+                                            })()}
                                         </p>
                                     </div>
                                     {isUnread && (

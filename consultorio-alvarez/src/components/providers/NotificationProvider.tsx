@@ -256,7 +256,23 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
                                                 {toast.titulo}
                                             </h4>
                                             <p className="text-xs text-slate-300 leading-snug line-clamp-3">
-                                                {toast.mensaje}
+                                                {(() => {
+                                                    const parts = toast.mensaje.split(/(\*\*.*?\*\*)/g)
+                                                    return (
+                                                        <span>
+                                                            {parts.map((part, i) => {
+                                                                if (part.startsWith('**') && part.endsWith('**')) {
+                                                                    return (
+                                                                        <strong key={i} className="font-black text-white px-1 py-0.2 rounded bg-white/20 mr-1 inline-block uppercase">
+                                                                            {part.slice(2, -2)}
+                                                                        </strong>
+                                                                    )
+                                                                }
+                                                                return part
+                                                            })}
+                                                        </span>
+                                                    )
+                                                })()}
                                             </p>
 
                                             {/* Acciones */}

@@ -21,6 +21,29 @@ import { Notificacion } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 
+function formatNotificationMessage(text: string) {
+    if (!text) return null
+    const parts = text.split(/(\*\*.*?\*\*)/g)
+    return (
+        <span>
+            {parts.map((part, index) => {
+                if (part.startsWith('**') && part.endsWith('**')) {
+                    const content = part.slice(2, -2)
+                    return (
+                        <span
+                            key={index}
+                            className="font-black text-foreground mr-1.5 px-1.5 py-0.5 rounded-md bg-foreground/10 border border-foreground/15 shadow-sm inline-block tracking-wider uppercase"
+                        >
+                            {content}
+                        </span>
+                    )
+                }
+                return part
+            })}
+        </span>
+    )
+}
+
 export function DashboardLiveAlerts() {
     const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
     const [isExpanded, setIsExpanded] = useState(true)
@@ -170,7 +193,7 @@ export function DashboardLiveAlerts() {
                                                 </span>
                                             </div>
                                             <p className="text-xs text-foreground/90 font-medium leading-relaxed">
-                                                {notif.mensaje}
+                                                {formatNotificationMessage(notif.mensaje)}
                                             </p>
                                         </div>
                                     </div>

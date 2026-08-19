@@ -285,6 +285,12 @@ export async function POST(request: NextRequest) {
             if (turno?.tenant_id) {
                 try {
                     const pct = turno?.paciente as any
+                    const apellido = pct?.apellido ? pct.apellido.trim() : ''
+                    const nombre = pct?.nombre ? pct.nombre.trim() : ''
+                    const pacienteDisplay = apellido
+                        ? `**${apellido.toUpperCase()}** ${nombre}`.trim()
+                        : `**${nombre || 'Paciente'}**`
+
                     const trat = (turno as any)?.tipo_treatment?.nombre || 'Consulta'
                     const fechaObj = new Date(turno?.fecha_inicio || '')
                     const horaStr = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })
@@ -296,15 +302,15 @@ export async function POST(request: NextRequest) {
 
                     if (respuestaPaciente === 'CONFIRMAR') {
                         notifTitulo = '✅ Turno Confirmado por WhatsApp'
-                        notifMensaje = `${pct?.nombre || 'Paciente'} confirmó su turno de ${trat} para el ${fechaStr} a las ${horaStr} hs.`
+                        notifMensaje = `${pacienteDisplay} confirmó su turno de ${trat} para el ${fechaStr} a las ${horaStr} hs.`
                         notifTipo = 'turno_confirmado'
                     } else if (respuestaPaciente === 'CANCELAR') {
                         notifTitulo = '❌ Turno Cancelado por Paciente'
-                        notifMensaje = `${pct?.nombre || 'Paciente'} canceló su turno de ${trat} del ${fechaStr} a las ${horaStr} hs.`
+                        notifMensaje = `${pacienteDisplay} canceló su turno de ${trat} del ${fechaStr} a las ${horaStr} hs.`
                         notifTipo = 'turno_cancelado'
                     } else {
                         notifTitulo = '🔄 Solicitud de Reprogramación'
-                        notifMensaje = `${pct?.nombre || 'Paciente'} solicita reprogramar su turno de ${trat} (${fechaStr} ${horaStr} hs).`
+                        notifMensaje = `${pacienteDisplay} solicita reprogramar su turno de ${trat} (${fechaStr} ${horaStr} hs).`
                         notifTipo = 'turno_reprogramado'
                     }
 

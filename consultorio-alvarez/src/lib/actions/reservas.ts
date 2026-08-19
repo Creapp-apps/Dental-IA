@@ -398,10 +398,14 @@ export async function crearReservaPublica(data: {
     const diaSemana = diasSemana[localDate.getDay()]
     const fechaFormateada = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`
 
+    const nombrePacienteReserva = data.apellido 
+        ? `**${data.apellido.toUpperCase()}** ${data.nombre}`.trim() 
+        : `**${data.nombre}**`
+
     await supabase.from('notificaciones').insert({
         tenant_id: tenant.id,
         titulo: '🌟 Nuevo Turno Web',
-        mensaje: `${data.nombre} ${data.apellido} reservó un turno desde la página pública el día ${diaSemana} ${fechaFormateada} a las ${data.hora}.`,
+        mensaje: `${nombrePacienteReserva} reservó un turno desde la página pública el día ${diaSemana} ${fechaFormateada} a las ${data.hora}.`,
         tipo: 'turno_nuevo',
         referencia_id: turnoData?.id,
     })
@@ -598,11 +602,15 @@ export async function notificarDemoraTurno(turnoId: string, demora: number, mens
         return { success: false, error: 'Paciente no encontrado para este turno' }
     }
 
+    const nombrePacienteDemora = paciente.apellido 
+        ? `**${paciente.apellido.toUpperCase()}** ${paciente.nombre}`.trim() 
+        : `**${paciente.nombre}**`
+
     // Insertar log de notificación en la DB
     await supabase.from('notificaciones').insert({
         tenant_id: turno.tenant_id,
         titulo: '⚠️ Notificación de Demora',
-        mensaje: `Se notificó a ${paciente.nombre} ${paciente.apellido} de una demora de ${demora} min (${metodo}).`,
+        mensaje: `Se notificó a ${nombrePacienteDemora} de una demora de ${demora} min (${metodo}).`,
         tipo: 'recordatorio',
         referencia_id: turno.id,
     })

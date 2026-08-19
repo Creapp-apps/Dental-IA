@@ -323,7 +323,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 {/* Paciente */}
                                                 <div className="pr-2">
                                                     <p className="font-bold text-foreground text-sm">
-                                                        {turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}` : '—'}
+                                                        {turno.paciente ? `${turno.paciente.apellido || ''} ${turno.paciente.nombre || ''}`.trim() : '—'}
                                                     </p>
                                                     {turno.paciente?.telefono && (
                                                         <p className="text-xs text-muted-foreground mt-0.5 whitespace-nowrap font-mono">
@@ -579,7 +579,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 <div className="space-y-1">
                                                     <p className="text-muted-foreground font-semibold uppercase tracking-wider text-[9px]">Paciente</p>
                                                     <p className="font-bold text-foreground">
-                                                        {turno.paciente ? `${turno.paciente.nombre} ${turno.paciente.apellido}` : '—'}
+                                                        {turno.paciente ? `${turno.paciente.apellido || ''} ${turno.paciente.nombre || ''}`.trim() : '—'}
                                                     </p>
                                                     {turno.paciente?.telefono && (
                                                         <p className="text-muted-foreground text-[11px] font-mono">{turno.paciente.telefono}</p>

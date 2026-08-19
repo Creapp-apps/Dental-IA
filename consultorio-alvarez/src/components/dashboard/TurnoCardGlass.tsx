@@ -107,7 +107,7 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
             <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold text-foreground truncate">
-                        {turno.paciente?.nombre} {turno.paciente?.apellido}
+                        {turno.paciente ? `${turno.paciente.apellido || ''} ${turno.paciente.nombre || ''}`.trim() : '—'}
                     </p>
                     {prioridad === 'URGENTE' && (
                         <span
