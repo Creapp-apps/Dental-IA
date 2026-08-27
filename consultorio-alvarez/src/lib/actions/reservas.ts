@@ -27,10 +27,29 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
         .eq('activo', true)
         .order('nombre')
 
-    if (!allProfs) return []
+    if (!allProfs || allProfs.length === 0) return []
 
-    // If no date/time provided, return all active professionals
-    if (!fecha || !hora) return allProfs
+    const allSchedules = (tenant.horarios || []) as Array<{
+        dia: number;
+        profesional_id?: string | null;
+        activo: boolean;
+    }>
+
+    // Check which professionals have at least one active day configured
+    const profsWithConfig = new Set(allSchedules.filter(h => !!h.profesional_id).map(h => h.profesional_id!))
+    const profsWithActiveDays = new Set(allSchedules.filter(h => !!h.profesional_id && h.activo).map(h => h.profesional_id!))
+    const clinicHasActiveGeneral = allSchedules.some(h => !h.profesional_id && h.activo)
+
+    // Filter out professionals who have custom schedules where ALL days are deactivated
+    const availableProfs = allProfs.filter(p => {
+        if (profsWithConfig.has(p.id)) {
+            return profsWithActiveDays.has(p.id)
+        }
+        return clinicHasActiveGeneral
+    })
+
+    // If no date/time provided, return active professionals with working hours
+    if (!fecha || !hora) return availableProfs
 
     // Build the UTC timestamp for the selected slot (Argentina = UTC-3)
     const localDateTime = new Date(`${fecha}T${hora}:00-03:00`)
@@ -47,7 +66,7 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
     const ocupadosIds = new Set((ocupados ?? []).map(t => t.profesional_id))
 
     // Filter out busy professionals
-    return allProfs.filter(p => !ocupadosIds.has(p.id))
+    return availableProfs.filter(p => !ocupadosIds.has(p.id))
 }
 
 export async function getObrasSocialesPublicas(tenantSlug: string) {
@@ -71,13 +90,13 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
     if (!tenant) return []
 
     // Get count of active professionals
-    const { count: profCount } = await supabase
+    const { data: activeProfs } = await supabase
         .from('profesionales')
-        .select('id', { count: 'exact', head: true })
+        .select('id')
         .eq('tenant_id', tenant.id)
         .eq('activo', true)
 
-    const totalProfs = profCount ?? 1
+    const totalProfs = activeProfs?.length ?? 1
 
     // Get current local date and time in Argentina to do filtering
     const localNow = new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
@@ -102,13 +121,10 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
     // DB stores UTC — Argentina is UTC-3
     const slotBookedProfs = new Map<string, Set<string>>()
     for (const t of turnosOcupados ?? []) {
-        // Parse the UTC timestamp and convert to local Argentina time string
         const utcDate = new Date(t.fecha_inicio)
-        // Format as YYYY-MM-DD|HH:MM in Argentina timezone (UTC-3)
         const localStr = utcDate.toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
-        // sv-SE gives "YYYY-MM-DD HH:MM:SS" format
         const [datePart, timePart] = localStr.split(' ')
-        const slotKey = `${datePart}|${timePart.slice(0, 5)}` // "2026-04-04|10:00"
+        const slotKey = `${datePart}|${timePart.slice(0, 5)}`
         
         if (!slotBookedProfs.has(slotKey)) {
             slotBookedProfs.set(slotKey, new Set())
@@ -174,9 +190,10 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
     if (profesionalId && profesionalId !== 'sin-preferencia') {
         const profSchedules = allSchedules.filter(h => h.profesional_id === profesionalId)
         if (profSchedules.length > 0) {
+            // Use specific professional schedule (if all are activo: false, schedules has no active days -> 0 slots)
             schedules = profSchedules
         } else {
-            // Fallback: general clinic schedules (without profesional_id)
+            // Fallback: general clinic schedules only if professional has no custom configuration
             schedules = allSchedules.filter(h => !h.profesional_id)
         }
     } else {
@@ -265,42 +282,92 @@ export async function crearReservaPublica(data: {
     const fechaFin = new Date(fechaInicio)
     fechaFin.setMinutes(fechaFin.getMinutes() + 20) // 20 min default
 
+    // Determine day of week
+    const [year, month, day] = data.fecha.split('-').map(Number)
+    const localDate = new Date(year, month - 1, day)
+    const dow = localDate.getDay()
+
+    const allSchedules = (tenant.horarios || []) as Array<{
+        dia: number;
+        profesional_id?: string | null;
+        activo: boolean;
+        apertura_manana?: string;
+        cierre_manana?: string;
+        apertura_tarde?: string;
+        cierre_tarde?: string;
+        apertura?: string;
+        cierre?: string;
+    }>
+
     // Determine profesional
     let profesionalId = data.profesionalId
     if (!profesionalId || profesionalId === 'sin-preferencia') {
-        // Assign first available profesional
+        // Fetch all active professionals
         const { data: profs } = await supabase
             .from('profesionales')
             .select('id')
             .eq('tenant_id', tenant.id)
             .eq('activo', true)
-            .limit(1)
-        profesionalId = profs?.[0]?.id ?? null
+
+        if (!profs || profs.length === 0) return { error: 'No hay profesionales disponibles' }
+
+        // Find existing bookings at this exact datetime
+        const { data: ocupados } = await supabase
+            .from('turnos')
+            .select('profesional_id')
+            .eq('tenant_id', tenant.id)
+            .eq('fecha_inicio', fechaInicio.toISOString())
+            .in('estado', ['CONFIRMADO', 'PENDIENTE', 'EN_SALA'])
+
+        const ocupadosSet = new Set((ocupados ?? []).map(o => o.profesional_id))
+
+        // Check which professional actually works on this day/hour and is not busy
+        const candidateProf = profs.find(p => {
+            if (ocupadosSet.has(p.id)) return false
+
+            const customSchedules = allSchedules.filter(h => h.profesional_id === p.id)
+            if (customSchedules.length > 0) {
+                const daySchedule = customSchedules.find(h => h.dia === dow)
+                return !!daySchedule?.activo
+            }
+
+            // Fallback general schedule
+            const genSchedule = allSchedules.find(h => !h.profesional_id && h.dia === dow)
+            return !!genSchedule?.activo
+        })
+
+        profesionalId = candidateProf?.id || profs[0].id
     }
 
     if (!profesionalId) return { error: 'No hay profesionales disponibles' }
 
-    // Get default treatment type (Revisión de Rutina for online bookings)
-    let { data: defaultTratamiento } = await supabase
+    // Get default treatment type (prioritizing consultation/checkup/routine keywords)
+    const { data: todosTratamientos } = await supabase
         .from('tipos_tratamiento')
-        .select('id')
+        .select('id, nombre, activo')
         .eq('tenant_id', tenant.id)
-        .ilike('nombre', '%revis%')
-        .limit(1)
-        .maybeSingle()
 
-    let tipoTratamientoId = defaultTratamiento?.id
+    let tipoTratamientoId: string | null = null
+
+    if (todosTratamientos && todosTratamientos.length > 0) {
+        // 1. Try to find active consultation / revision / control / routine / checkup treatment
+        const matchTrat = todosTratamientos.find(t =>
+            t.activo && /revis|consult|control|chequeo|rutina|general|evalua/i.test(t.nombre)
+        ) || todosTratamientos.find(t =>
+            /revis|consult|control|chequeo|rutina|general|evalua/i.test(t.nombre)
+        )
+
+        if (matchTrat) {
+            tipoTratamientoId = matchTrat.id
+        } else {
+            // 2. Fallback to first active treatment
+            const firstActive = todosTratamientos.find(t => t.activo)
+            tipoTratamientoId = firstActive ? firstActive.id : todosTratamientos[0].id
+        }
+    }
 
     if (!tipoTratamientoId) {
-        // Fallback: get any treatment type for this tenant
-        const { data: anyTratamiento } = await supabase
-            .from('tipos_tratamiento')
-            .select('id')
-            .eq('tenant_id', tenant.id)
-            .limit(1)
-            .maybeSingle()
-        if (!anyTratamiento) return { error: 'No hay tipos de tratamiento configurados' }
-        tipoTratamientoId = anyTratamiento.id
+        return { error: 'No hay tipos de tratamiento configurados' }
     }
 
     // Try to find existing patient by ID or DNI (with or without dots)
@@ -393,9 +460,7 @@ export async function crearReservaPublica(data: {
 
     // --- DISPARAR NOTIFICACION REALTIME ---
     const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
-    const [year, month, day] = data.fecha.split('-').map(Number)
-    const localDate = new Date(year, month - 1, day)
-    const diaSemana = diasSemana[localDate.getDay()]
+    const diaSemana = diasSemana[dow]
     const fechaFormateada = `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}/${year}`
 
     const nombrePacienteReserva = data.apellido 

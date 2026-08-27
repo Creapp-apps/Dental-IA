@@ -833,7 +833,7 @@ export function AgendaView({
         const esST = t.es_sobreturno === true;
 
         // Parse contact details from landingConfig
-        const address = landingConfig?.footer_address || 'Avenida Maipu 2481, Piso 1 dpto "B", Olivos';
+        const address = landingConfig?.footer_address || 'Avenida Maipu 2841, Piso 1 dpto "B", Olivos';
         
         let telefonoFijo = '4794-9367';
         let whatsappSecretaria = '11 6103-9248';
