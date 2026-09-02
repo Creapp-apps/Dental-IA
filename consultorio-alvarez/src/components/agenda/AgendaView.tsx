@@ -98,6 +98,7 @@ interface AgendaViewProps {
     pacientes?: any[]
     fechaInicial?: string
     landingConfig?: any
+    horarios?: any[]
 }
 
 export function AgendaView({
@@ -107,6 +108,7 @@ export function AgendaView({
     pacientes = [],
     fechaInicial,
     landingConfig,
+    horarios = [],
 }: AgendaViewProps) {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -1926,6 +1928,7 @@ export function AgendaView({
                 profesionales={profesionales}
                 tiposTratamiento={tiposTratamiento}
                 pacientes={pacientes}
+                horarios={horarios}
                 defaultProfesionalId={modalProfId}
                 defaultFecha={format(diaSeleccionado, 'yyyy-MM-dd')}
                 defaultHora={modalHora}

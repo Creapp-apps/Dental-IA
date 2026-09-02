@@ -12,6 +12,7 @@ import { TeamSection } from '@/components/landing-v2/sections/TeamSection'
 import { ObrasSocialesSection } from '@/components/landing-v2/sections/ObrasSocialesSection'
 import { BookingSection } from '@/components/landing-v2/sections/BookingSection'
 import { FooterSection } from '@/components/landing-v2/sections/FooterSection'
+import { FloatingChatbot } from '@/components/landing-v2/ui/FloatingChatbot'
 import type { LandingConfig } from '@/lib/types/landing'
 
 gsap.registerPlugin(ScrollTrigger)
@@ -112,6 +113,12 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
                 )}
                 <BookingSection config={config} />
                 <FooterSection config={config} />
+                <FloatingChatbot
+                    slug={slug}
+                    colorPrimary={config.color_primary}
+                    professionals={professionals}
+                    obrasSociales={obrasSociales}
+                />
             </main>
         </div>
     )

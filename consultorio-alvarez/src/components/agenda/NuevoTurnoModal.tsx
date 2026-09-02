@@ -57,7 +57,7 @@ function GlassSelect({
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: -5, scale: 0.98 }}
                             transition={{ duration: 0.15, ease: 'easeOut' }}
-                            className="absolute top-full left-0 w-full mt-1.5 z-[99999] bg-background/95 supports-[backdrop-filter]:bg-background/95 backdrop-blur-3xl shadow-glass-xl rounded-xl p-1.5 overflow-y-auto max-h-[250px] border border-border custom-scrollbar"
+                            className="absolute top-full left-0 w-full mt-1.5 z-[99999] bg-slate-900 dark:bg-[#0f172a] shadow-[0_15px_35px_rgba(0,0,0,0.85)] rounded-xl p-1.5 overflow-y-auto max-h-[250px] border border-slate-700/90 custom-scrollbar"
                         >
                             {options.map(o => (
                                 <button
@@ -66,7 +66,7 @@ function GlassSelect({
                                     onClick={() => { onChange(o.value); setOpen(false) }}
                                     className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors flex items-start gap-2 ${value === o.value
                                         ? 'bg-primary text-primary-foreground font-medium'
-                                        : 'hover:bg-accent hover:text-accent-foreground text-foreground'
+                                        : 'hover:bg-slate-800 hover:text-white text-slate-200'
                                         }`}
                                 >
                                     <span className="flex-1 leading-snug">{o.label}</span>
@@ -89,6 +89,7 @@ interface NuevoTurnoModalProps {
     profesionales: any[]
     tiposTratamiento: any[]
     pacientes?: any[]
+    horarios?: any[]
     defaultProfesionalId?: string
     defaultFecha?: string
     defaultHora?: string
@@ -102,6 +103,7 @@ export function NuevoTurnoModal({
     profesionales,
     tiposTratamiento,
     pacientes = [],
+    horarios = [],
     defaultProfesionalId = '',
     defaultFecha,
     defaultHora = '09:00',
@@ -262,19 +264,77 @@ export function NuevoTurnoModal({
     }, [open, profId, fecha])
 
     const slots = useMemo(() => {
+        if (!fecha || !profId) {
+            const arr = []
+            for (let h = 8; h <= 20; h++) {
+                for (let m = 0; m < 60; m += 20) {
+                    if (h === 20 && m > 0) continue
+                    arr.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`)
+                }
+            }
+            return arr
+        }
+
+        // Parse day of week from selected fecha (0 = Sunday, 1 = Monday, ..., 6 = Saturday)
+        const [year, month, day] = fecha.split('-').map(Number)
+        const dateObj = new Date(year, month - 1, day)
+        const dow = dateObj.getDay()
+
+        // Find schedule for this professional on this day
+        const profSchedule = (horarios || []).find((h: any) => h.profesional_id === profId && h.dia === dow)
+
+        // Helper to generate exact 20-min slots between start (e.g. "08:30") and end (e.g. "11:00")
+        const generateShiftSlots = (startStr?: string, endStr?: string) => {
+            if (!startStr || !endStr) return []
+            const [sH, sM] = startStr.split(':').map(Number)
+            const [eH, eM] = endStr.split(':').map(Number)
+            const startMinutes = sH * 60 + sM
+            const endMinutes = eH * 60 + eM
+            const shiftArr: string[] = []
+
+            for (let min = startMinutes; min < endMinutes; min += 20) {
+                const h = Math.floor(min / 60)
+                const m = min % 60
+                shiftArr.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`)
+            }
+            return shiftArr
+        }
+
+        if (profSchedule && profSchedule.activo) {
+            const morningSlots = generateShiftSlots(profSchedule.apertura_manana, profSchedule.cierre_manana)
+            const afternoonSlots = generateShiftSlots(profSchedule.apertura_tarde, profSchedule.cierre_tarde)
+            const combined = [...morningSlots, ...afternoonSlots]
+            if (combined.length > 0) {
+                return combined
+            }
+        }
+
+        // Fallback if no active schedule configured for this day
         const arr = []
-        for (let h = 9; h <= 18; h++) {
+        for (let h = 8; h <= 20; h++) {
             for (let m = 0; m < 60; m += 20) {
-                if (h === 18 && m > 0) continue // Solo hasta 18:00
+                if (h === 20 && m > 0) continue
                 arr.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`)
             }
         }
         return arr
-    }, [])
+    }, [fecha, profId, horarios])
+
+    // Sincronizar automáticamente la hora con el primer horario del turno si el actual no coincide
+    useEffect(() => {
+        if (open && !turnoAEditar && slots.length > 0) {
+            if (!slots.includes(hora)) {
+                setHora(slots[0])
+            }
+        }
+    }, [open, turnoAEditar, slots, hora])
 
     function isSlotOccupied(slotHora: string) {
         const slotDate = new Date(`${fecha}T${slotHora}:00`)
-        const slotEnd = new Date(slotDate.getTime() + 20 * 60000)
+        const trat = tiposTratamiento.find((t: any) => String(t.id) === String(tratId))
+        const duracionMinutos = esSobreturno ? 15 : ((trat?.duracion_minutos || 20) + extraMinutes)
+        const slotEnd = new Date(slotDate.getTime() + duracionMinutos * 60000)
+        
         return ocupacion.some((t: any) => {
             if (turnoAEditar && t.id === turnoAEditar.id) return false // No checkear contra si mismo
             const tStart = new Date(t.fecha_inicio)

@@ -53,7 +53,7 @@ function GlassSelect({
                             animate={{ opacity: 1, y: 0, scale: 1 }}
                             exit={{ opacity: 0, y: -5, scale: 0.98 }}
                             transition={{ duration: 0.15, ease: 'easeOut' }}
-                            className="absolute top-full left-0 w-full mt-1.5 z-[99999] bg-background/95 supports-[backdrop-filter]:bg-background/95 backdrop-blur-3xl shadow-glass-xl rounded-xl p-1.5 overflow-y-auto max-h-[250px] border border-border custom-scrollbar"
+                            className="absolute top-full left-0 w-full mt-1.5 z-[99999] bg-slate-900 dark:bg-[#0f172a] shadow-[0_15px_35px_rgba(0,0,0,0.85)] rounded-xl p-1.5 overflow-y-auto max-h-[250px] border border-slate-700/90 custom-scrollbar"
                         >
                             {options.map(o => (
                                 <button
@@ -62,7 +62,7 @@ function GlassSelect({
                                     onClick={() => { onChange(o.value); setOpen(false) }}
                                     className={`w-full text-left px-3 py-2 text-sm rounded-lg transition-colors flex items-start gap-2 ${value === o.value
                                         ? 'bg-primary text-primary-foreground font-medium'
-                                        : 'hover:bg-accent hover:text-accent-foreground text-foreground'
+                                        : 'hover:bg-slate-800 hover:text-white text-slate-200'
                                         }`}
                                 >
                                     <span className="flex-1 leading-snug">{o.label}</span>

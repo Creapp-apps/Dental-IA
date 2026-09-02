@@ -678,9 +678,9 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
 
 /* ──────────── Helper Component: TimeSelect ──────────── */
 function TimeSelect({ value, onChange, disabled }: { value: string; onChange: (v: string) => void; disabled?: boolean }) {
-    const options = Array.from({ length: 96 }, (_, i) => {
-        const h = Math.floor(i / 4).toString().padStart(2, '0')
-        const m = ((i % 4) * 15).toString().padStart(2, '0')
+    const options = Array.from({ length: 144 }, (_, i) => {
+        const h = Math.floor(i / 6).toString().padStart(2, '0')
+        const m = ((i % 6) * 10).toString().padStart(2, '0')
         return `${h}:${m}`
     })
     
@@ -694,10 +694,10 @@ function TimeSelect({ value, onChange, disabled }: { value: string; onChange: (v
             value={value}
             onChange={e => onChange(e.target.value)}
             disabled={disabled}
-            className="bg-transparent text-foreground rounded-lg px-1.5 py-1 text-xs h-8 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 w-[5rem] sm:w-24 font-mono cursor-pointer border border-border/50 hover:bg-background/20 transition-colors"
+            className="bg-slate-900 dark:bg-[#0f172a] text-slate-100 rounded-lg px-2 py-1 text-xs h-8 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 w-[5.5rem] sm:w-24 font-mono cursor-pointer border border-slate-700/80 hover:bg-slate-800 transition-colors shadow-sm"
         >
             {options.map(opt => (
-                <option key={opt} value={opt} className="bg-background text-foreground">
+                <option key={opt} value={opt} className="bg-slate-900 text-slate-100 py-1">
                     {opt} hs
                 </option>
             ))}
@@ -708,32 +708,32 @@ function TimeSelect({ value, onChange, disabled }: { value: string; onChange: (v
 /* ──────────── Tab: Horarios ──────────── */
 function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: any[]; profesionales: any[] }) {
     const [isPending, startTransition] = useTransition()
-    const [selectedProfId, setSelectedProfId] = useState<string | null>(null)
+    const activeProfs = profesionales.filter(p => p.activo)
+    const [selectedProfId, setSelectedProfId] = useState<string>(() => {
+        return activeProfs[0]?.id || profesionales[0]?.id || ''
+    })
     const ordered = [1, 2, 3, 4, 5, 6, 0]
 
-    const targetOptions = [
-        { id: 'general', label: 'General (Consultorio)' },
-        ...profesionales.filter(p => p.activo).map(p => ({
-            id: p.id,
-            label: `Dr/a. ${p.nombre} ${p.apellido}`
-        }))
-    ]
+    const targetOptions = activeProfs.map(p => ({
+        id: p.id,
+        label: `Dr/a. ${p.nombre} ${p.apellido}`
+    }))
 
-    const getHorariosFor = (profId: string | null) => {
-        const filtered = initialHorarios ? initialHorarios.filter((x: any) => profId ? x.profesional_id === profId : !x.profesional_id) : []
+    const getHorariosFor = (profId: string) => {
+        const filtered = initialHorarios ? initialHorarios.filter((x: any) => x.profesional_id === profId) : []
         
         return ordered.map(d => {
             let h = filtered.find((x: any) => x.dia === d)
             
-            // If professional schedule doesn't exist yet, fallback to general clinic schedule as a template
-            if (!h && profId) {
+            // If professional schedule doesn't exist yet, fallback to a sensible template
+            if (!h) {
                 const generalH = initialHorarios ? initialHorarios.find((x: any) => !x.profesional_id && x.dia === d) : null
                 if (generalH) {
                     h = { ...generalH, profesional_id: profId }
                 }
             }
 
-            const base = h ?? { dia: d, apertura_manana: '09:00', cierre_manana: '13:00', apertura_tarde: '15:00', cierre_tarde: '18:00', activo: false }
+            const base = h ?? { dia: d, apertura_manana: '09:00', cierre_manana: '13:00', apertura_tarde: '14:00', cierre_tarde: '18:00', activo: false }
             
             if (!base.apertura_manana && base.apertura) {
                 return {
@@ -742,7 +742,7 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
                     cierre_manana: '13:00',
                     apertura_tarde: '14:00',
                     cierre_tarde: base.cierre,
-                    profesional_id: profId || undefined
+                    profesional_id: profId
                 }
             }
             
@@ -752,15 +752,17 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
                 cierre_manana: base.cierre_manana || '13:00',
                 apertura_tarde: base.apertura_tarde || '14:00',
                 cierre_tarde: base.cierre_tarde || '18:00',
-                profesional_id: profId || undefined
+                profesional_id: profId
             }
         })
     }
 
-    const [horarios, setHorarios] = useState<any[]>(() => getHorariosFor(null))
+    const [horarios, setHorarios] = useState<any[]>(() => getHorariosFor(selectedProfId))
 
     useEffect(() => {
-        setHorarios(getHorariosFor(selectedProfId))
+        if (selectedProfId) {
+            setHorarios(getHorariosFor(selectedProfId))
+        }
     }, [selectedProfId, initialHorarios])
 
     function update(dia: number, field: string, value: any) {
@@ -768,6 +770,11 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
     }
 
     function guardar() {
+        if (!selectedProfId) {
+            glassAlert.error({ title: 'Error', description: 'Seleccioná un profesional para guardar sus horarios.' })
+            return
+        }
+
         for (const h of horarios) {
             if (!h.activo) continue;
             
@@ -809,10 +816,10 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
         }
 
         startTransition(async () => {
-            const otherHorarios = initialHorarios ? initialHorarios.filter((x: any) => selectedProfId ? x.profesional_id !== selectedProfId : !!x.profesional_id) : []
+            const otherHorarios = initialHorarios ? initialHorarios.filter((x: any) => x.profesional_id !== selectedProfId) : []
             const updatedHorarios = horarios.map(h => ({
                 ...h,
-                profesional_id: selectedProfId || undefined
+                profesional_id: selectedProfId
             }))
             const finalHorarios = [...otherHorarios, ...updatedHorarios]
 
@@ -826,15 +833,15 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
                 <div>
                     <h3 className="text-sm font-semibold text-foreground">Horarios de atención</h3>
-                    <p className="text-xs text-muted-foreground">Configurá la disponibilidad semanal general de la clínica o de un profesional en particular.</p>
+                    <p className="text-xs text-muted-foreground">Configurá la disponibilidad semanal de cada profesional del consultorio.</p>
                 </div>
                 <div className="flex items-center gap-2 text-foreground">
                     <Label htmlFor="target-select" className="text-xs shrink-0 text-foreground">Configurar para:</Label>
-                    <div className="w-48 relative">
+                    <div className="w-56 relative">
                         <GlassSelect
-                            value={selectedProfId || 'general'}
+                            value={selectedProfId}
                             onChange={(val) => {
-                                setSelectedProfId(val === 'general' ? null : val)
+                                setSelectedProfId(val)
                             }}
                             options={targetOptions}
                         />
@@ -878,7 +885,12 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
-    return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>
+    return (
+        <div className="space-y-1.5">
+            <Label className="text-xs text-foreground font-medium">{label}</Label>
+            {children}
+        </div>
+    )
 }
 
 /* ──────────── Tab: Sonidos/Alertas ──────────── */
@@ -921,7 +933,7 @@ function GlassSelect({ value, onChange, options, placeholder = 'Seleccionar...',
                 type="button"
                 disabled={disabled}
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between bg-background/30 backdrop-blur-md border border-border/30 hover:border-border/60 hover:bg-background/40 active:scale-[0.98] rounded-xl text-xs px-3 py-2 text-foreground cursor-pointer transition-all duration-200 select-none disabled:opacity-50 disabled:pointer-events-none"
+                className="w-full flex items-center justify-between bg-slate-900 dark:bg-[#0f172a] border border-slate-700/80 hover:border-slate-600 hover:bg-slate-800 active:scale-[0.98] rounded-xl text-xs px-3 py-2 text-foreground cursor-pointer transition-all duration-200 select-none disabled:opacity-50 disabled:pointer-events-none shadow-md"
             >
                 <span className="truncate font-medium">{selectedOption ? selectedOption.label : placeholder}</span>
                 <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 shrink-0 ml-1.5 ${isOpen ? 'rotate-180' : ''}`} />
@@ -934,7 +946,7 @@ function GlassSelect({ value, onChange, options, placeholder = 'Seleccionar...',
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -4, scale: 0.95 }}
                         transition={{ duration: 0.15, ease: 'easeOut' }}
-                        className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto glass shadow-glass rounded-xl p-1 border border-border/40 focus:outline-none scrollbar-thin scrollbar-thumb-border/50 scrollbar-track-transparent"
+                        className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto bg-slate-900 dark:bg-[#0f172a] shadow-[0_15px_35px_rgba(0,0,0,0.8)] rounded-xl p-1.5 border border-slate-700/90 focus:outline-none scrollbar-thin scrollbar-thumb-border/50 scrollbar-track-transparent"
                     >
                         <div className="space-y-0.5">
                             {options.map((option) => {
@@ -947,14 +959,14 @@ function GlassSelect({ value, onChange, options, placeholder = 'Seleccionar...',
                                             onChange(option.id)
                                             setIsOpen(false)
                                         }}
-                                        className={`w-full flex items-center justify-between text-left text-xs px-2.5 py-1.5 rounded-lg transition-all duration-150 cursor-pointer select-none ${
+                                        className={`w-full flex items-center justify-between text-left text-xs px-2.5 py-2 rounded-lg transition-all duration-150 cursor-pointer select-none ${
                                             isSelected
-                                                ? 'bg-primary/20 text-primary-foreground font-semibold'
-                                                : 'hover:bg-foreground/5 text-muted-foreground hover:text-foreground'
+                                                ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                                                : 'hover:bg-slate-800 text-slate-300 hover:text-white'
                                         }`}
                                     >
                                         <span className="truncate">{option.label}</span>
-                                        {isSelected && <Check className="h-3.5 w-3.5 text-primary shrink-0 ml-2" />}
+                                        {isSelected && <Check className="h-3.5 w-3.5 text-primary-foreground shrink-0 ml-2" />}
                                     </button>
                                 )
                             })}
