@@ -320,15 +320,6 @@ export function NuevoTurnoModal({
         return arr
     }, [fecha, profId, horarios])
 
-    // Sincronizar automáticamente la hora con el primer horario del turno si el actual no coincide
-    useEffect(() => {
-        if (open && !turnoAEditar && slots.length > 0) {
-            if (!slots.includes(hora)) {
-                setHora(slots[0])
-            }
-        }
-    }, [open, turnoAEditar, slots, hora])
-
     function isSlotOccupied(slotHora: string) {
         const slotDate = new Date(`${fecha}T${slotHora}:00`)
         const trat = tiposTratamiento.find((t: any) => String(t.id) === String(tratId))
