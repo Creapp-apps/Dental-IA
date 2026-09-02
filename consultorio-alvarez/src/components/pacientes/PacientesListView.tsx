@@ -8,7 +8,7 @@ import { Search, Plus, Phone, Mail, User, Pencil, Trash, Loader2 } from 'lucide-
 import { Input } from '@/components/ui/input'
 import { GlassButton } from '@/components/ui/glass-button'
 import { cn } from '@/lib/utils'
-import { eliminarPaciente } from '@/lib/actions/pacientes'
+import { eliminarPaciente, searchPacientesAction } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 
@@ -36,6 +36,7 @@ interface PacientesListViewProps {
 export function PacientesListView({ pacientes, initialQuery }: PacientesListViewProps) {
     const [inputQuery, setInputQuery] = useState(initialQuery)
     const [activeQuery, setActiveQuery] = useState(initialQuery)
+    const [serverResults, setServerResults] = useState<any[]>([])
     const router = useRouter()
     const [isNavigating, startNavigation] = useTransition()
     const [isDeleting, startDeleting] = useTransition()
@@ -43,6 +44,14 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     const [navigatingId, setNavigatingId] = useState<string | null>(null)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [isCreatingNew, setIsCreatingNew] = useState(false)
+
+    // Fusionar pacientes iniciales + resultados del servidor (sin duplicados)
+    const combinedPool = useMemo(() => {
+        if (!serverResults || serverResults.length === 0) return pacientes
+        const seen = new Set(pacientes.map(p => p.id))
+        const added = serverResults.filter(p => !seen.has(p.id))
+        return [...pacientes, ...added]
+    }, [pacientes, serverResults])
 
     const filteredPacientes = useMemo(() => {
         const q = activeQuery.trim()
@@ -54,7 +63,7 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
         const normQuery = normalizeStr(q)
         const tokens = normQuery.split(/\s+/).filter(Boolean)
 
-        return pacientes.filter((p: any) => {
+        return combinedPool.filter((p: any) => {
             const nombre = normalizeStr(p.nombre || '')
             const apellido = normalizeStr(p.apellido || '')
             const dni = normalizeStr(p.dni || '')
@@ -71,7 +80,7 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                 return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
             })
         })
-    }, [pacientes, activeQuery])
+    }, [pacientes, combinedPool, activeQuery])
 
 
     const [isSearching, setIsSearching] = useState(false)
@@ -80,17 +89,27 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     function handleSearchChange(val: string) {
         setInputQuery(val)
         setActiveQuery(val) // Filtra de forma 100% instantánea e in-memory
+        syncUrl(val)
 
-        if (val.trim() !== '') {
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current)
+        }
+
+        if (val.trim().length >= 2) {
             setIsSearching(true)
-            if (typingTimeoutRef.current) {
-                clearTimeout(typingTimeoutRef.current)
-            }
-            typingTimeoutRef.current = setTimeout(() => {
-                setIsSearching(false)
-            }, 300)
+            typingTimeoutRef.current = setTimeout(async () => {
+                try {
+                    const results = await searchPacientesAction(val.trim(), 50)
+                    setServerResults(results)
+                } catch (err) {
+                    console.error('Error searching patients:', err)
+                } finally {
+                    setIsSearching(false)
+                }
+            }, 200)
         } else {
             setIsSearching(false)
+            setServerResults([])
         }
     }
 

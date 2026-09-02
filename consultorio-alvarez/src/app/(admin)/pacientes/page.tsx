@@ -1,4 +1,4 @@
-import { getPacientes } from '@/lib/supabase/queries'
+import { getPacientes, searchPacientes } from '@/lib/supabase/queries'
 import { PacientesListView } from '@/components/pacientes/PacientesListView'
 
 export default async function PacientesPage({
@@ -8,11 +8,13 @@ export default async function PacientesPage({
 }) {
     const resolvedParams = await searchParams
     const query = resolvedParams?.q ?? ''
-    const allPacientes = await getPacientes()
+    const initialPacientes = query.trim()
+        ? await searchPacientes(query.trim(), 50)
+        : await getPacientes(50, 0)
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
-            <PacientesListView pacientes={allPacientes} initialQuery={query} />
+            <PacientesListView pacientes={initialPacientes} initialQuery={query} />
         </div>
     )
 }

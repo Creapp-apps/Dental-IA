@@ -14,6 +14,12 @@ async function getTenantId() {
     return data?.id ?? null
 }
 
+export async function searchPacientesAction(query: string, limit: number = 20) {
+    if (!query || query.trim().length < 2) return []
+    const { searchPacientes } = await import('@/lib/supabase/queries')
+    return await searchPacientes(query, limit)
+}
+
 export async function crearPaciente(formData: {
     nro_historia_clinica?: string
     nombre: string

@@ -1,5 +1,5 @@
 import { startOfWeek, endOfWeek, parseISO, format, addDays, startOfMonth, endOfMonth } from 'date-fns'
-import { getProfesionales, getTiposTratamiento, getTurnosSemana, getPacientes } from '@/lib/supabase/queries'
+import { getProfesionales, getTiposTratamiento, getTurnosSemana } from '@/lib/supabase/queries'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
 import { AgendaView } from '@/components/agenda/AgendaView'
 import { createAdminClient } from '@/lib/supabase/admin'
@@ -59,11 +59,10 @@ export default async function AgendaPage({ searchParams }: PageProps) {
         fin = endOfMonth(focusDate)
     }
 
-    const [profesionales, tiposTratamiento, turnos, pacientes, landingConfig] = await Promise.all([
+    const [profesionales, tiposTratamiento, turnos, landingConfig] = await Promise.all([
         getProfesionales(),
         getTiposTratamiento(),
         getTurnosSemana(inicio, fin),
-        getPacientes(),
         getLandingConfigAdmin(),
     ])
 
@@ -72,7 +71,6 @@ export default async function AgendaPage({ searchParams }: PageProps) {
             profesionales={profesionales}
             tiposTratamiento={tiposTratamiento}
             turnosIniciales={turnos}
-            pacientes={pacientes}
             fechaInicial={format(focusDate, 'yyyy-MM-dd')}
             landingConfig={landingConfig}
         />

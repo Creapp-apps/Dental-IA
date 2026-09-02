@@ -86,42 +86,97 @@ export async function getTiposTratamiento(onlyActive: boolean = true) {
 
 // ---- PACIENTES ----
 
-export async function getPacientes() {
+export async function getPacientes(limit: number = 50, offset: number = 0) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()
     if (!tenantId) return []
 
-    let allData: any[] = []
-    let page = 0
-    const pageSize = 1000
-    let hasMore = true
+    const query = supabase
+        .from('pacientes')
+        .select(`
+            id,
+            nro_historia_clinica,
+            nombre,
+            apellido,
+            dni,
+            cuit,
+            fecha_nacimiento,
+            genero,
+            telefono,
+            email,
+            direccion,
+            ciudad,
+            obra_social_id,
+            plan_obra_social,
+            n_afiliado,
+            alergias,
+            medicacion_actual,
+            antecedentes,
+            notas_internas,
+            registro_completo,
+            foto_url,
+            created_at,
+            obra_social:obras_sociales(id, nombre)
+        `)
+        .eq('tenant_id', tenantId)
+        .order('apellido', { ascending: true })
 
-    while (hasMore) {
-        const { data, error } = await supabase
-            .from('pacientes')
-            .select('*, obra_social:obras_sociales(*)')
-            .eq('tenant_id', tenantId)
-            .order('apellido')
-            .range(page * pageSize, (page + 1) * pageSize - 1)
-
-        if (error) {
-            console.error('getPacientes:', error)
-            break
-        }
-
-        if (data && data.length > 0) {
-            allData = allData.concat(data)
-            if (data.length < pageSize) {
-                hasMore = false
-            } else {
-                page++
-            }
-        } else {
-            hasMore = false
-        }
+    if (limit > 0) {
+        query.range(offset, offset + limit - 1)
     }
 
-    return allData
+    const { data, error } = await query
+    if (error) {
+        console.error('getPacientes error:', error)
+        return []
+    }
+
+    return data ?? []
+}
+
+export async function searchPacientes(searchTerm: string, limit: number = 20) {
+    const supabase = getAdmin()
+    const tenantId = await getTenantId()
+    if (!tenantId || !searchTerm.trim()) return []
+
+    const cleanTerm = searchTerm.trim()
+    const tokens = cleanTerm.split(/\s+/).filter(Boolean)
+
+    let query = supabase
+        .from('pacientes')
+        .select(`
+            id,
+            nro_historia_clinica,
+            nombre,
+            apellido,
+            dni,
+            telefono,
+            email,
+            obra_social_id,
+            plan_obra_social,
+            n_afiliado,
+            obra_social:obras_sociales(id, nombre)
+        `)
+        .eq('tenant_id', tenantId)
+        .limit(limit)
+
+    if (tokens.length === 1) {
+        const term = tokens[0]
+        query = query.or(`nombre.ilike.%${term}%,apellido.ilike.%${term}%,dni.ilike.%${term}%,nro_historia_clinica.ilike.%${term}%`)
+    } else {
+        // Multi-token: buscar coincidencia en nombre o apellido
+        const term1 = tokens[0]
+        const term2 = tokens[1]
+        query = query.or(`and(nombre.ilike.%${term1}%,apellido.ilike.%${term2}%),and(nombre.ilike.%${term2}%,apellido.ilike.%${term1}%),and(apellido.ilike.%${term1}%,nombre.ilike.%${term2}%)`)
+    }
+
+    const { data, error } = await query
+    if (error) {
+        console.error('searchPacientes error:', error)
+        return []
+    }
+
+    return data ?? []
 }
 
 export async function getPacienteById(id: string) {

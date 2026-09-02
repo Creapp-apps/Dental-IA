@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, CalendarIcon, Clock, Zap, UserPlus } from 'lucide-react'
+import { ChevronDown, CalendarIcon, Clock, Zap, UserPlus, Loader2 } from 'lucide-react'
 import {
     GlassDialog,
     GlassDialogContent,
@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Calendar } from '@/components/ui/calendar'
 import { GlassDatePicker } from '@/components/ui/glass-date-picker'
 import { crearTurno, editarTurno, getOcupacionProfesionalDia } from '@/lib/actions/turnos'
-import { crearPaciente } from '@/lib/actions/pacientes'
+import { crearPaciente, searchPacientesAction } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { type PrioridadTratamiento, PRIORIDAD_LABEL } from '@/types'
 
@@ -88,7 +88,7 @@ interface NuevoTurnoModalProps {
     onOpenChange: (open: boolean) => void
     profesionales: any[]
     tiposTratamiento: any[]
-    pacientes: any[]
+    pacientes?: any[]
     defaultProfesionalId?: string
     defaultFecha?: string
     defaultHora?: string
@@ -101,7 +101,7 @@ export function NuevoTurnoModal({
     onOpenChange,
     profesionales,
     tiposTratamiento,
-    pacientes,
+    pacientes = [],
     defaultProfesionalId = '',
     defaultFecha,
     defaultHora = '09:00',
@@ -112,6 +112,8 @@ export function NuevoTurnoModal({
     const [isLoadingOcupacion, setIsLoadingOcupacion] = useState(false)
     const [pacienteId, setPacienteId] = useState('')
     const [pacienteSearch, setPacienteSearch] = useState('')
+    const [searchedPacientes, setSearchedPacientes] = useState<any[]>([])
+    const [isSearchingPacientes, setIsSearchingPacientes] = useState(false)
     const [profId, setProfId] = useState(defaultProfesionalId || (profesionales[0]?.id ?? ''))
     const [tratId, setTratId] = useState('')
     const [fecha, setFecha] = useState(defaultFecha || format(new Date(), 'yyyy-MM-dd'))
@@ -136,6 +138,62 @@ export function NuevoTurnoModal({
     const [nuevoDni, setNuevoDni] = useState('')
     const [nuevoTelefono, setNuevoTelefono] = useState('')
 
+    // Búsqueda dinámica de pacientes en tiempo real con debounce
+    useEffect(() => {
+        const query = pacienteSearch.trim()
+        if (query.length < 2) {
+            setSearchedPacientes([])
+            setIsSearchingPacientes(false)
+            return
+        }
+
+        // Si ya tenemos una lista en memoria (fallback), filtramos primero
+        if (pacientes && pacientes.length > 0) {
+            const normalizeStr = (str: string) => 
+                str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            const normQuery = normalizeStr(query)
+            const tokens = normQuery.split(/\s+/).filter(Boolean)
+            const localMatches = pacientes.filter((p: any) => {
+                const nombre = normalizeStr(p.nombre || '')
+                const apellido = normalizeStr(p.apellido || '')
+                const dni = normalizeStr(p.dni || '')
+                const dniWithoutDots = dni.replace(/\./g, '')
+                const nroHistoria = normalizeStr(p.nro_historia_clinica || '')
+                const nroHistoriaWithoutDots = nroHistoria.replace(/\./g, '')
+                const fullText = `${apellido} ${nombre} ${apellido}, ${nombre} ${nombre} ${apellido} ${dni} ${dniWithoutDots} ${nroHistoria} ${nroHistoriaWithoutDots}`
+                return tokens.every(token => {
+                    const tokenWithoutDots = token.replace(/\./g, '')
+                    return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
+                })
+            }).slice(0, 10)
+            if (localMatches.length > 0) {
+                setSearchedPacientes(localMatches)
+            }
+        }
+
+        let isMounted = true
+        setIsSearchingPacientes(true)
+        const timer = setTimeout(async () => {
+            try {
+                const results = await searchPacientesAction(query, 12)
+                if (isMounted) {
+                    setSearchedPacientes(results)
+                }
+            } catch (err) {
+                console.error('Error buscando pacientes:', err)
+            } finally {
+                if (isMounted) {
+                    setIsSearchingPacientes(false)
+                }
+            }
+        }, 180)
+
+        return () => {
+            isMounted = false
+            clearTimeout(timer)
+        }
+    }, [pacienteSearch, pacientes])
+
     useEffect(() => {
         if (open) {
             setModoNuevoPaciente(false)
@@ -143,6 +201,7 @@ export function NuevoTurnoModal({
             setNuevoApellido('')
             setNuevoDni('')
             setNuevoTelefono('')
+            setSearchedPacientes([])
             
             if (turnoAEditar) {
                 setPacienteId(turnoAEditar.paciente_id)
@@ -246,29 +305,7 @@ export function NuevoTurnoModal({
         }
     }
 
-    const filteredPacientes = pacienteSearch.trim().length >= 2
-        ? pacientes.filter((p: any) => {
-            const normalizeStr = (str: string) => 
-                str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-
-            const normQuery = normalizeStr(pacienteSearch)
-            const tokens = normQuery.split(/\s+/).filter(Boolean)
-
-            const nombre = normalizeStr(p.nombre || '')
-            const apellido = normalizeStr(p.apellido || '')
-            const dni = normalizeStr(p.dni || '')
-            const dniWithoutDots = dni.replace(/\./g, '')
-            const nroHistoria = normalizeStr(p.nro_historia_clinica || '')
-            const nroHistoriaWithoutDots = nroHistoria.replace(/\./g, '')
-
-            const fullText = `${apellido} ${nombre} ${apellido}, ${nombre} ${nombre} ${apellido} ${dni} ${dniWithoutDots} ${nroHistoria} ${nroHistoriaWithoutDots}`
-
-            return tokens.every(token => {
-                const tokenWithoutDots = token.replace(/\./g, '')
-                return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
-            })
-        }).slice(0, 8)
-        : []
+    const filteredPacientes = searchedPacientes
 
     async function handleGuardar() {
         const isPatientInvalid = !modoNuevoPaciente ? !pacienteId : (!nuevoNombre.trim() || !nuevoApellido.trim() || !nuevoDni.trim() || !nuevoTelefono.trim())
@@ -506,16 +543,24 @@ export function NuevoTurnoModal({
                             </div>
                         ) : (
                             <>
-                                <Input
-                                    placeholder="Buscar por nombre o DNI..."
-                                    value={pacienteSearch}
-                                    onChange={(e) => {
-                                        setPacienteSearch(e.target.value)
-                                        setPacienteId('')
-                                        setShowResults(true)
-                                    }}
-                                    onFocus={() => setShowResults(true)}
-                                />
+                                <div className="relative">
+                                    <Input
+                                        placeholder="Buscar por nombre o DNI..."
+                                        value={pacienteSearch}
+                                        onChange={(e) => {
+                                            setPacienteSearch(e.target.value)
+                                            setPacienteId('')
+                                            setShowResults(true)
+                                        }}
+                                        onFocus={() => setShowResults(true)}
+                                        className="pr-9"
+                                    />
+                                    {isSearchingPacientes && (
+                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                                        </div>
+                                    )}
+                                </div>
                                 <AnimatePresence>
                                     {showResults && (pacienteSearch.length >= 2 || filteredPacientes.length > 0) && (
                                         <motion.div

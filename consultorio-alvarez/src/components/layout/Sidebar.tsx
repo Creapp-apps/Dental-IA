@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useTransition } from 'react'
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import {
     LayoutDashboard,
     Calendar,
@@ -173,6 +173,7 @@ function TodaySummaryWidget({ summary }: { summary?: TodaySummary }) {
 
 export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert, todaySummary }: SidebarProps) {
     const pathname = usePathname()
+    const router = useRouter()
     const { theme, setTheme } = useTheme()
     const [mounted, setMounted] = useState(false)
     const [pendingPath, setPendingPath] = useState<string | null>(null)
@@ -191,6 +192,14 @@ export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert, t
         })
     }
 
+    function handleNuevoTurnoClick(e: React.MouseEvent) {
+        setIsOpen(false)
+        if (pathname === '/agenda' || pathname.startsWith('/agenda')) {
+            e.preventDefault()
+            window.dispatchEvent(new CustomEvent('open-nuevo-turno-modal'))
+        }
+    }
+
     const SidebarContent = () => (
         <>
             {/* Logo */}
@@ -205,7 +214,9 @@ export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert, t
             {/* Quick Action Button */}
             <div className="px-3 pt-4 pb-2 shrink-0">
                 <Link
-                    href="/agenda"
+                    href="/agenda?nuevo=true"
+                    prefetch={true}
+                    onClick={handleNuevoTurnoClick}
                     className="flex items-center justify-center gap-2.5 w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99] group cursor-pointer"
                     style={{ backgroundColor: themeColor || 'var(--sidebar-primary)' }}
                 >
@@ -231,6 +242,7 @@ export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert, t
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                prefetch={true}
                                 onClick={() => {
                                     if (!isActuallyActive) setPendingPath(item.href)
                                 }}
@@ -265,6 +277,7 @@ export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert, t
                             <Link
                                 key={item.href}
                                 href={item.href}
+                                prefetch={true}
                                 onClick={() => {
                                     if (!isActuallyActive) setPendingPath(item.href)
                                 }}

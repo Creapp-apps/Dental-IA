@@ -95,7 +95,7 @@ interface AgendaViewProps {
     profesionales: any[]
     tiposTratamiento: any[]
     turnosIniciales: any[]
-    pacientes: any[]
+    pacientes?: any[]
     fechaInicial?: string
     landingConfig?: any
 }
@@ -104,7 +104,7 @@ export function AgendaView({
     profesionales,
     tiposTratamiento,
     turnosIniciales,
-    pacientes,
+    pacientes = [],
     fechaInicial,
     landingConfig,
 }: AgendaViewProps) {
@@ -366,6 +366,27 @@ export function AgendaView({
             router.replace(url.pathname + url.search, { scroll: false })
         }
     }, [editTurnoId, turnos, router])
+
+    const nuevoTurnoParam = searchParams.get('nuevo')
+    useEffect(() => {
+        if (nuevoTurnoParam === 'true' || nuevoTurnoParam === '1') {
+            setTurnoAEditar(null)
+            setModalOpen(true)
+            const url = new URL(window.location.href)
+            url.searchParams.delete('nuevo')
+            router.replace(url.pathname + url.search, { scroll: false })
+        }
+    }, [nuevoTurnoParam, router])
+
+    // Escuchar evento global desde el sidebar u otras vistas
+    useEffect(() => {
+        const handleOpenModal = () => {
+            setTurnoAEditar(null)
+            setModalOpen(true)
+        }
+        window.addEventListener('open-nuevo-turno-modal', handleOpenModal)
+        return () => window.removeEventListener('open-nuevo-turno-modal', handleOpenModal)
+    }, [])
 
 
     // ── Compute visible days based on view mode ────────────────
@@ -1910,7 +1931,7 @@ export function AgendaView({
                 defaultHora={modalHora}
                 turnoAEditar={turnoAEditar}
                 onSuccess={(turnoRaw, isEdit, nuevoPaciente) => {
-                    const pacienteObj = nuevoPaciente || pacientes.find(p => p.id === turnoRaw.paciente_id)
+                    const pacienteObj = nuevoPaciente || (pacientes || []).find(p => p.id === turnoRaw.paciente_id) || turnoRaw.paciente
                     const profesionalObj = profesionales.find(p => p.id === turnoRaw.profesional_id)
                     const tipoTratamientoObj = tiposTratamiento.find(t => t.id === turnoRaw.tipo_tratamiento_id)
                     
