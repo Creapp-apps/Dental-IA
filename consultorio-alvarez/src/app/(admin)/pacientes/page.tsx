@@ -8,9 +8,7 @@ export default async function PacientesPage({
 }) {
     const resolvedParams = await searchParams
     const query = resolvedParams?.q ?? ''
-    const initialPacientes = query.trim()
-        ? await searchPacientes(query.trim(), 50)
-        : await getPacientes(50, 0)
+    const initialPacientes = await getPacientes()
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto">

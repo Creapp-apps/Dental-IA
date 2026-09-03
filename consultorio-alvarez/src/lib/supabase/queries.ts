@@ -86,7 +86,7 @@ export async function getTiposTratamiento(onlyActive: boolean = true) {
 
 // ---- PACIENTES ----
 
-export async function getPacientes(limit: number = 50, offset: number = 0) {
+export async function getPacientes(limit: number = 0, offset: number = 0) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()
     if (!tenantId) return []

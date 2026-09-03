@@ -8,7 +8,7 @@ import { Search, Plus, Phone, Mail, User, Pencil, Trash, Loader2 } from 'lucide-
 import { Input } from '@/components/ui/input'
 import { GlassButton } from '@/components/ui/glass-button'
 import { cn } from '@/lib/utils'
-import { eliminarPaciente, searchPacientesAction } from '@/lib/actions/pacientes'
+import { eliminarPaciente } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 
@@ -36,7 +36,6 @@ interface PacientesListViewProps {
 export function PacientesListView({ pacientes, initialQuery }: PacientesListViewProps) {
     const [inputQuery, setInputQuery] = useState(initialQuery)
     const [activeQuery, setActiveQuery] = useState(initialQuery)
-    const [serverResults, setServerResults] = useState<any[]>([])
     const router = useRouter()
     const [isNavigating, startNavigation] = useTransition()
     const [isDeleting, startDeleting] = useTransition()
@@ -44,14 +43,6 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     const [navigatingId, setNavigatingId] = useState<string | null>(null)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [isCreatingNew, setIsCreatingNew] = useState(false)
-
-    // Fusionar pacientes iniciales + resultados del servidor (sin duplicados)
-    const combinedPool = useMemo(() => {
-        if (!serverResults || serverResults.length === 0) return pacientes
-        const seen = new Set(pacientes.map(p => p.id))
-        const added = serverResults.filter(p => !seen.has(p.id))
-        return [...pacientes, ...added]
-    }, [pacientes, serverResults])
 
     const filteredPacientes = useMemo(() => {
         const q = activeQuery.trim()
@@ -63,7 +54,7 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
         const normQuery = normalizeStr(q)
         const tokens = normQuery.split(/\s+/).filter(Boolean)
 
-        return combinedPool.filter((p: any) => {
+        return pacientes.filter((p: any) => {
             const nombre = normalizeStr(p.nombre || '')
             const apellido = normalizeStr(p.apellido || '')
             const dni = normalizeStr(p.dni || '')
@@ -80,37 +71,20 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                 return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
             })
         })
-    }, [pacientes, combinedPool, activeQuery])
+    }, [pacientes, activeQuery])
 
-
-    const [isSearching, setIsSearching] = useState(false)
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
     function handleSearchChange(val: string) {
         setInputQuery(val)
-        setActiveQuery(val) // Filtra de forma 100% instantánea e in-memory
-        syncUrl(val)
+        setActiveQuery(val) // Filtra en 0ms in-memory instantáneamente
 
         if (typingTimeoutRef.current) {
             clearTimeout(typingTimeoutRef.current)
         }
-
-        if (val.trim().length >= 2) {
-            setIsSearching(true)
-            typingTimeoutRef.current = setTimeout(async () => {
-                try {
-                    const results = await searchPacientesAction(val.trim(), 50)
-                    setServerResults(results)
-                } catch (err) {
-                    console.error('Error searching patients:', err)
-                } finally {
-                    setIsSearching(false)
-                }
-            }, 200)
-        } else {
-            setIsSearching(false)
-            setServerResults([])
-        }
+        typingTimeoutRef.current = setTimeout(() => {
+            syncUrl(val)
+        }, 300)
     }
 
     // Limpieza al desmontar
@@ -198,11 +172,7 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
             {/* Search */}
             <motion.div custom={0} variants={sectionVariants} initial="hidden" animate="visible" className="flex items-center gap-2">
                 <div className="relative flex-1 w-full">
-                    {isSearching ? (
-                        <Loader2 className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-primary animate-spin" />
-                    ) : (
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    )}
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
                         placeholder="Buscar por nombre, DNI o N° HC..."
                         value={inputQuery}
@@ -219,22 +189,7 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
             </motion.div>
 
             {/* List */}
-            {isSearching ? (
-                <motion.div
-                    initial={{ opacity: 0, scale: 0.95 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    className="glass rounded-2xl shadow-glass p-20 flex flex-col items-center justify-center border border-border/50"
-                >
-                    <div className="relative flex items-center justify-center">
-                        <div className="absolute inset-0 rounded-full bg-primary/20 blur-xl h-16 w-16 animate-pulse" />
-                        <Loader2 className="h-12 w-12 text-primary animate-spin relative z-10" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-foreground mt-6">Buscando paciente...</h3>
-                    <p className="text-xs text-muted-foreground mt-1.5 max-w-[280px] text-center">
-                        Filtrando en tiempo real por nombre, DNI o N° HC.
-                    </p>
-                </motion.div>
-            ) : filteredPacientes.length === 0 ? (
+            {filteredPacientes.length === 0 ? (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="glass rounded-2xl shadow-glass p-12 text-center">
                     <User className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
                     <h3 className="text-lg font-semibold text-foreground">

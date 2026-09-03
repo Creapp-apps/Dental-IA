@@ -113,6 +113,7 @@ export function NuevoTurnoModal({
     const [isPending, startTransition] = useTransition()
     const [isLoadingOcupacion, setIsLoadingOcupacion] = useState(false)
     const [pacienteId, setPacienteId] = useState('')
+    const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null)
     const [pacienteSearch, setPacienteSearch] = useState('')
     const [searchedPacientes, setSearchedPacientes] = useState<any[]>([])
     const [isSearchingPacientes, setIsSearchingPacientes] = useState(false)
@@ -204,9 +205,11 @@ export function NuevoTurnoModal({
             setNuevoDni('')
             setNuevoTelefono('')
             setSearchedPacientes([])
+            setPacienteSeleccionado(null)
             
             if (turnoAEditar) {
                 setPacienteId(turnoAEditar.paciente_id)
+                setPacienteSeleccionado(turnoAEditar.paciente || null)
                 setPacienteSearch(`${turnoAEditar.paciente?.apellido || ''}, ${turnoAEditar.paciente?.nombre || ''}`)
                 setProfId(turnoAEditar.profesional_id)
                 setTratId(turnoAEditar.tipo_tratamiento_id)
@@ -450,7 +453,8 @@ export function NuevoTurnoModal({
                 } else {
                     glassAlert.success({ title: 'Turno editado', description: `${format(parseISO(fecha), 'dd/MM/yyyy')} a las ${horaFormateada}` })
                     if (onSuccess && result.data) {
-                        onSuccess(result.data, true)
+                        const patObj = pacienteSeleccionado || result.data.paciente
+                        onSuccess(result.data, true, patObj)
                     }
                     onOpenChange(false)
                 }
@@ -472,14 +476,14 @@ export function NuevoTurnoModal({
                 } else {
                     glassAlert.success({ title: 'Turno creado', description: `${format(parseISO(fecha), 'dd/MM/yyyy')} a las ${horaFormateada}` })
                     if (onSuccess && result.data) {
-                        const newPatientObj = modoNuevoPaciente ? {
+                        const finalPatientObj = modoNuevoPaciente ? {
                             id: finalPacienteId,
                             nombre: nuevoNombre.trim(),
                             apellido: nuevoApellido.trim(),
                             telefono: nuevoTelefono.trim(),
                             dni: nuevoDni.trim()
-                        } : undefined;
-                        onSuccess(result.data, false, newPatientObj)
+                        } : (pacienteSeleccionado || result.data.paciente);
+                        onSuccess(result.data, false, finalPatientObj)
                     }
                     onOpenChange(false)
                 }
@@ -601,6 +605,7 @@ export function NuevoTurnoModal({
                                         onChange={(e) => {
                                             setPacienteSearch(e.target.value)
                                             setPacienteId('')
+                                            setPacienteSeleccionado(null)
                                             setShowResults(true)
                                         }}
                                         onFocus={() => setShowResults(true)}
@@ -627,6 +632,7 @@ export function NuevoTurnoModal({
                                                         className="w-full text-left px-3 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer border-b border-border/50 last:border-0"
                                                         onClick={() => {
                                                             setPacienteId(p.id)
+                                                            setPacienteSeleccionado(p)
                                                             setPacienteSearch(`${p.apellido}, ${p.nombre}`)
                                                             setShowResults(false)
                                                         }}

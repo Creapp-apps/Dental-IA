@@ -57,7 +57,12 @@ export async function crearTurno(formData: {
             es_sobreturno: formData.es_sobreturno ?? false,
             numero_pieza: formData.numero_pieza || null,
         })
-        .select()
+        .select(`
+            *,
+            paciente:pacientes(*),
+            profesional:profesionales(*),
+            tipo_tratamiento:tipos_tratamiento(*)
+        `)
         .single()
 
     if (error) return { error: error.message }
@@ -348,7 +353,12 @@ export async function editarTurno(turnoId: string, formData: {
             numero_pieza: formData.numero_pieza || null,
         })
         .eq('id', turnoId)
-        .select()
+        .select(`
+            *,
+            paciente:pacientes(*),
+            profesional:profesionales(*),
+            tipo_tratamiento:tipos_tratamiento(*)
+        `)
         .single()
 
     if (error) return { error: error.message }

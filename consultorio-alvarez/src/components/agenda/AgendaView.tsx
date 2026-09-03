@@ -1934,13 +1934,14 @@ export function AgendaView({
                 defaultHora={modalHora}
                 turnoAEditar={turnoAEditar}
                 onSuccess={(turnoRaw, isEdit, nuevoPaciente) => {
-                    const pacienteObj = nuevoPaciente || (pacientes || []).find(p => p.id === turnoRaw.paciente_id) || turnoRaw.paciente
-                    const profesionalObj = profesionales.find(p => p.id === turnoRaw.profesional_id)
-                    const tipoTratamientoObj = tiposTratamiento.find(t => t.id === turnoRaw.tipo_tratamiento_id)
+                    const pacienteObj = nuevoPaciente || turnoRaw.paciente || (pacientes || []).find((p: any) => p.id === turnoRaw.paciente_id)
+                    const profesionalObj = turnoRaw.profesional || profesionales.find((p: any) => p.id === turnoRaw.profesional_id)
+                    const tipoTratamientoObj = turnoRaw.tipo_tratamiento || tiposTratamiento.find((t: any) => t.id === turnoRaw.tipo_tratamiento_id)
                     
                     const turnoCompleto = {
                         ...turnoRaw,
                         paciente: pacienteObj ? {
+                            ...pacienteObj,
                             id: pacienteObj.id,
                             nombre: pacienteObj.nombre,
                             apellido: pacienteObj.apellido,
