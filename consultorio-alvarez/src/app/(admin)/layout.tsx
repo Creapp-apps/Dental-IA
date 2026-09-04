@@ -8,6 +8,7 @@ import { NotificationProvider } from '@/components/providers/NotificationProvide
 import { getCurrentUsuario, getTodayOperationalSummary } from '@/lib/supabase/queries'
 import { getBillingConfig } from '@/lib/actions/billing'
 import { BillingGuard } from '@/components/providers/BillingGuard'
+import { NumpadTabProvider } from '@/components/providers/NumpadTabProvider'
 
 export default async function AdminLayout({
     children,
@@ -96,7 +97,9 @@ export default async function AdminLayout({
                         <main className="flex-1 overflow-y-auto">
                             <div className="min-h-full p-4 sm:p-6 lg:p-8 overflow-x-hidden">
                                 <BillingGuard isBlocked={isBlocked}>
-                                    {children}
+                                    <NumpadTabProvider>
+                                        {children}
+                                    </NumpadTabProvider>
                                 </BillingGuard>
                             </div>
                         </main>
