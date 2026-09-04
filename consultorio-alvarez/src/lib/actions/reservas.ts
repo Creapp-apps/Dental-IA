@@ -171,9 +171,16 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
         }
         
         return Array.from(slotsSet).sort();
+    }    // Helper to get effective schedule for a professional on a given day of week
+    function getHorarioProf(schedules: typeof allSchedules, profId: string, dayOfWeek: number) {
+        const customSchedules = schedules.filter(h => h.profesional_id === profId)
+        if (customSchedules.length > 0) {
+            return customSchedules.find(h => h.dia === dayOfWeek) || null
+        }
+        // Fallback to general clinic schedule only if professional has no custom configuration at all
+        return schedules.find(h => !h.profesional_id && h.dia === dayOfWeek) || null
     }
 
-    // Determine which schedules to use
     const allSchedules = (tenant.horarios || []) as Array<{
         dia: number;
         profesional_id?: string | null;
@@ -186,24 +193,12 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
         cierre?: string;
     }>
 
-    let schedules = allSchedules
-    if (profesionalId && profesionalId !== 'sin-preferencia') {
-        const profSchedules = allSchedules.filter(h => h.profesional_id === profesionalId)
-        if (profSchedules.length > 0) {
-            // Use specific professional schedule (if all are activo: false, schedules has no active days -> 0 slots)
-            schedules = profSchedules
-        } else {
-            // Fallback: general clinic schedules only if professional has no custom configuration
-            schedules = allSchedules.filter(h => !h.profesional_id)
-        }
-    } else {
-        schedules = allSchedules.filter(h => !h.profesional_id)
-    }
+    const isSpecificProf = Boolean(profesionalId && profesionalId !== 'sin-preferencia')
+    const targetProfs = isSpecificProf
+        ? (activeProfs ?? []).filter(p => p.id === profesionalId)
+        : (activeProfs ?? [])
 
-    const diasConfig = new Map<number, any>()
-    for (const h of schedules) {
-        diasConfig.set(h.dia, h)
-    }
+    if (targetProfs.length === 0) return []
 
     const days: { date: string; dayOfWeek: number; dayNum: number; month: number; slots: string[] }[] = []
 
@@ -219,37 +214,37 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
         const dow = localD.getDay()
         const monthIndex = month - 1
 
-        const configDia = diasConfig.get(dow)
-        if (!configDia || !configDia.activo) continue
+        // Collect all slots that have at least one active professional available
+        const availableSlotsSet = new Set<string>()
 
-        const slotsForDay = generarSlotsParaDia(configDia)
+        for (const prof of targetProfs) {
+            const h = getHorarioProf(allSchedules, prof.id, dow)
+            if (!h || !h.activo) continue
 
-        // Filter available slots
-        let available = slotsForDay.filter(slot => {
-            const key = `${dateStr}|${slot}`
-            const bookedProfs = slotBookedProfs.get(key)
-            if (profesionalId && profesionalId !== 'sin-preferencia') {
-                // Available if the selected professional is not booked at this slot
-                return !(bookedProfs?.has(profesionalId) ?? false)
-            } else {
-                // Available if booked count is less than total active professionals
-                const bookedCount = bookedProfs?.size ?? 0
-                return bookedCount < totalProfs
+            const profSlots = generarSlotsParaDia(h)
+            for (const slot of profSlots) {
+                const key = `${dateStr}|${slot}`
+                const booked = slotBookedProfs.get(key)
+                if (!booked || !booked.has(prof.id)) {
+                    availableSlotsSet.add(slot)
+                }
             }
-        })
+        }
+
+        let availableSlots = Array.from(availableSlotsSet).sort()
 
         // If today, filter out slots that are in the past
         if (dateStr === todayStr) {
-            available = available.filter(slot => slot > currentHHMM)
+            availableSlots = availableSlots.filter(slot => slot > currentHHMM)
         }
 
-        if (available.length > 0) {
+        if (availableSlots.length > 0) {
             days.push({
                 date: dateStr,
                 dayOfWeek: dow,
                 dayNum: dayNum,
                 month: monthIndex,
-                slots: available,
+                slots: availableSlots,
             })
         }
     }
@@ -299,44 +294,78 @@ export async function crearReservaPublica(data: {
         cierre?: string;
     }>
 
+    function getHorarioProf(schedules: typeof allSchedules, profId: string, dayOfWeek: number) {
+        const customSchedules = schedules.filter(h => h.profesional_id === profId)
+        if (customSchedules.length > 0) {
+            return customSchedules.find(h => h.dia === dayOfWeek) || null
+        }
+        return schedules.find(h => !h.profesional_id && h.dia === dayOfWeek) || null
+    }
+
+    function profTieneSlot(horario: any, slot: string): boolean {
+        if (!horario || !horario.activo) return false
+        
+        const checkRange = (apertura?: string, cierre?: string) => {
+            if (!apertura || !cierre) return false
+            return slot >= apertura && slot < cierre
+        }
+
+        if (horario.apertura_manana) {
+            return checkRange(horario.apertura_manana, horario.cierre_manana) ||
+                   checkRange(horario.apertura_tarde, horario.cierre_tarde)
+        }
+        return checkRange(horario.apertura, horario.cierre)
+    }
+
+    // Fetch all active professionals
+    const { data: profs } = await supabase
+        .from('profesionales')
+        .select('id, nombre, apellido')
+        .eq('tenant_id', tenant.id)
+        .eq('activo', true)
+
+    if (!profs || profs.length === 0) return { error: 'No hay profesionales disponibles' }
+
+    // Find existing bookings at this exact datetime
+    const { data: ocupados } = await supabase
+        .from('turnos')
+        .select('profesional_id')
+        .eq('tenant_id', tenant.id)
+        .eq('fecha_inicio', fechaInicio.toISOString())
+        .in('estado', ['CONFIRMADO', 'PENDIENTE', 'EN_SALA'])
+
+    const ocupadosSet = new Set((ocupados ?? []).map(o => o.profesional_id))
+
     // Determine profesional
     let profesionalId = data.profesionalId
     if (!profesionalId || profesionalId === 'sin-preferencia') {
-        // Fetch all active professionals
-        const { data: profs } = await supabase
-            .from('profesionales')
-            .select('id')
-            .eq('tenant_id', tenant.id)
-            .eq('activo', true)
-
-        if (!profs || profs.length === 0) return { error: 'No hay profesionales disponibles' }
-
-        // Find existing bookings at this exact datetime
-        const { data: ocupados } = await supabase
-            .from('turnos')
-            .select('profesional_id')
-            .eq('tenant_id', tenant.id)
-            .eq('fecha_inicio', fechaInicio.toISOString())
-            .in('estado', ['CONFIRMADO', 'PENDIENTE', 'EN_SALA'])
-
-        const ocupadosSet = new Set((ocupados ?? []).map(o => o.profesional_id))
-
-        // Check which professional actually works on this day/hour and is not busy
+        // Find professional who works on this day, at this specific hour, and is NOT occupied
         const candidateProf = profs.find(p => {
             if (ocupadosSet.has(p.id)) return false
-
-            const customSchedules = allSchedules.filter(h => h.profesional_id === p.id)
-            if (customSchedules.length > 0) {
-                const daySchedule = customSchedules.find(h => h.dia === dow)
-                return !!daySchedule?.activo
-            }
-
-            // Fallback general schedule
-            const genSchedule = allSchedules.find(h => !h.profesional_id && h.dia === dow)
-            return !!genSchedule?.activo
+            const h = getHorarioProf(allSchedules, p.id, dow)
+            return profTieneSlot(h, data.hora)
         })
 
-        profesionalId = candidateProf?.id || profs[0].id
+        if (!candidateProf) {
+            return { error: 'No hay profesionales disponibles en el día y horario seleccionado' }
+        }
+
+        profesionalId = candidateProf.id
+    } else {
+        // Strict verification for specifically requested professional
+        const selectedProf = profs.find(p => p.id === profesionalId)
+        if (!selectedProf) {
+            return { error: 'El profesional seleccionado no se encuentra activo o no existe' }
+        }
+
+        if (ocupadosSet.has(profesionalId)) {
+            return { error: 'El profesional seleccionado ya se encuentra ocupado en ese horario' }
+        }
+
+        const h = getHorarioProf(allSchedules, profesionalId, dow)
+        if (!profTieneSlot(h, data.hora)) {
+            return { error: 'El profesional seleccionado no atiende en el día u horario elegido' }
+        }
     }
 
     if (!profesionalId) return { error: 'No hay profesionales disponibles' }

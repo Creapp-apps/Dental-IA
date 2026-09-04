@@ -8,7 +8,7 @@ import { Search, Plus, Phone, Mail, User, Pencil, Trash, Loader2 } from 'lucide-
 import { Input } from '@/components/ui/input'
 import { GlassButton } from '@/components/ui/glass-button'
 import { cn } from '@/lib/utils'
-import { eliminarPaciente } from '@/lib/actions/pacientes'
+import { eliminarPaciente, searchPacientesAction } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 
@@ -43,6 +43,8 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     const [navigatingId, setNavigatingId] = useState<string | null>(null)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [isCreatingNew, setIsCreatingNew] = useState(false)
+    const [serverResults, setServerResults] = useState<any[]>([])
+    const [isSearchingServer, setIsSearchingServer] = useState(false)
 
     const filteredPacientes = useMemo(() => {
         const q = activeQuery.trim()
@@ -72,6 +74,33 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
             })
         })
     }, [pacientes, activeQuery])
+
+    // Respaldo server-side si el filtro local no encuentra nada y hay término de búsqueda
+    useEffect(() => {
+        const term = activeQuery.trim()
+        if (term.length >= 2 && filteredPacientes.length === 0) {
+            let isCancelled = false
+            setIsSearchingServer(true)
+            searchPacientesAction(term, 50)
+                .then((res) => {
+                    if (!isCancelled) {
+                        setServerResults(res || [])
+                        setIsSearchingServer(false)
+                    }
+                })
+                .catch(() => {
+                    if (!isCancelled) setIsSearchingServer(false)
+                })
+            return () => {
+                isCancelled = true
+            }
+        } else {
+            setServerResults([])
+            setIsSearchingServer(false)
+        }
+    }, [activeQuery, filteredPacientes.length])
+
+    const displayedPacientes = filteredPacientes.length > 0 ? filteredPacientes : serverResults
 
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -155,8 +184,13 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Pacientes</h1>
-                    <p className="text-sm text-muted-foreground mt-0.5">
-                        {filteredPacientes.length} paciente{filteredPacientes.length !== 1 ? 's' : ''} {activeQuery ? 'encontrados' : 'registrados'}
+                    <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
+                        <span>{displayedPacientes.length} paciente{displayedPacientes.length !== 1 ? 's' : ''} {activeQuery ? 'encontrados' : 'registrados'}</span>
+                        {isSearchingServer && (
+                            <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
+                                <Loader2 className="h-3 w-3 animate-spin" /> Buscando...
+                            </span>
+                        )}
                     </p>
                 </div>
                 <GlassButton
@@ -189,35 +223,40 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
             </motion.div>
 
             {/* List */}
-            {filteredPacientes.length === 0 ? (
+            {displayedPacientes.length === 0 ? (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="glass rounded-2xl shadow-glass p-12 text-center">
-                    <User className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold text-foreground">
-                        {activeQuery ? 'No se encontraron pacientes' : 'Sin pacientes registrados'}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        {activeQuery ? 'Intentá con otro término de búsqueda' : 'Agregá el primer paciente para comenzar'}
-                    </p>
+                    {isSearchingServer ? (
+                        <>
+                            <Loader2 className="h-10 w-10 text-primary animate-spin mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-foreground">Buscando paciente...</h3>
+                            <p className="text-sm text-muted-foreground mt-1">Consultando base de datos completa...</p>
+                        </>
+                    ) : (
+                        <>
+                            <User className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+                            <h3 className="text-lg font-semibold text-foreground">
+                                {activeQuery ? 'No se encontraron pacientes' : 'Sin pacientes registrados'}
+                            </h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                                {activeQuery ? 'Intentá con otro término de búsqueda' : 'Agregá el primer paciente para comenzar'}
+                            </p>
+                        </>
+                    )}
                 </motion.div>
             ) : (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="grid gap-2">
-                    {filteredPacientes.map((p: any, i: number) => {
+                    {displayedPacientes.map((p: any) => {
                         const iniciales = `${p.nombre.charAt(0)}${p.apellido.charAt(0)}`
                         const isNavigatingCard = navigatingId === p.id
                         const isEditingThis = editingId === p.id
                         const isRowBusy = isNavigatingCard || isEditingThis
 
                         return (
-                            <motion.div
+                            <div
                                 key={p.id}
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                transition={{ delay: i * 0.02, duration: 0.2 }}
-                            >
-                                <div
-                                    onClick={(e) => handleCardClick(e, p.id)}
-                                    className={cn(
-                                        "flex items-center gap-4 glass rounded-xl px-4 py-3.5 shadow-glass transition-all duration-200 group relative overflow-hidden cursor-pointer select-none",
+                                onClick={(e) => handleCardClick(e, p.id)}
+                                className={cn(
+                                    "flex items-center gap-4 glass rounded-xl px-4 py-3.5 shadow-glass transition-all duration-200 group relative overflow-hidden cursor-pointer select-none",
                                         "hover:shadow-glass-lg hover:-translate-y-0.5 hover:border-primary/40 active:scale-[0.985] active:bg-primary/5",
                                         isNavigatingCard && "border-primary/60 bg-primary/10 shadow-primary/10 ring-2 ring-primary/30 animate-pulse",
                                         isEditingThis && "border-amber-500/60 bg-amber-500/10 shadow-amber-500/10 ring-2 ring-amber-500/30 animate-pulse"
@@ -315,7 +354,6 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                                         </button>
                                     </div>
                                 </div>
-                            </motion.div>
                         )
                     })}
                 </motion.div>

@@ -86,55 +86,80 @@ export async function getTiposTratamiento(onlyActive: boolean = true) {
 
 // ---- PACIENTES ----
 
+const PACIENTE_SELECT_FIELDS = `
+    id,
+    nro_historia_clinica,
+    nombre,
+    apellido,
+    dni,
+    cuit,
+    fecha_nacimiento,
+    genero,
+    telefono,
+    email,
+    direccion,
+    ciudad,
+    obra_social_id,
+    plan_obra_social,
+    n_afiliado,
+    alergias,
+    medicacion_actual,
+    antecedentes,
+    notas_internas,
+    registro_completo,
+    foto_url,
+    created_at,
+    obra_social:obras_sociales(id, nombre)
+`
+
 export async function getPacientes(limit: number = 0, offset: number = 0) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()
     if (!tenantId) return []
 
-    const query = supabase
-        .from('pacientes')
-        .select(`
-            id,
-            nro_historia_clinica,
-            nombre,
-            apellido,
-            dni,
-            cuit,
-            fecha_nacimiento,
-            genero,
-            telefono,
-            email,
-            direccion,
-            ciudad,
-            obra_social_id,
-            plan_obra_social,
-            n_afiliado,
-            alergias,
-            medicacion_actual,
-            antecedentes,
-            notas_internas,
-            registro_completo,
-            foto_url,
-            created_at,
-            obra_social:obras_sociales(id, nombre)
-        `)
-        .eq('tenant_id', tenantId)
-        .order('apellido', { ascending: true })
-
     if (limit > 0) {
-        query.range(offset, offset + limit - 1)
+        const { data, error } = await supabase
+            .from('pacientes')
+            .select(PACIENTE_SELECT_FIELDS)
+            .eq('tenant_id', tenantId)
+            .order('apellido', { ascending: true })
+            .range(offset, offset + limit - 1)
+
+        if (error) {
+            console.error('getPacientes error:', error)
+            return []
+        }
+        return data ?? []
     }
 
-    const { data, error } = await query
-    if (error) {
-        console.error('getPacientes error:', error)
-        return []
+    // Fetch in chunks of 1000 to bypass PostgREST max_rows: 1000 limit
+    const allPacientes: any[] = []
+    let currentOffset = 0
+    const CHUNK_SIZE = 1000
+
+    while (true) {
+        const { data, error } = await supabase
+            .from('pacientes')
+            .select(PACIENTE_SELECT_FIELDS)
+            .eq('tenant_id', tenantId)
+            .order('apellido', { ascending: true })
+            .range(currentOffset, currentOffset + CHUNK_SIZE - 1)
+
+        if (error) {
+            console.error('getPacientes chunk error:', error)
+            break
+        }
+        if (!data || data.length === 0) break
+
+        allPacientes.push(...data)
+        if (data.length < CHUNK_SIZE) break
+        currentOffset += CHUNK_SIZE
     }
 
-    return data ?? []
+    return allPacientes
 }
 
-export async function searchPacientes(searchTerm: string, limit: number = 20) {
+export async function searchPacientes(searchTerm: string, limit: number = 50) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()
     if (!tenantId || !searchTerm.trim()) return []
@@ -144,20 +169,9 @@ export async function searchPacientes(searchTerm: string, limit: number = 20) {
 
     let query = supabase
         .from('pacientes')
-        .select(`
-            id,
-            nro_historia_clinica,
-            nombre,
-            apellido,
-            dni,
-            telefono,
-            email,
-            obra_social_id,
-            plan_obra_social,
-            n_afiliado,
-            obra_social:obras_sociales(id, nombre)
-        `)
+        .select(PACIENTE_SELECT_FIELDS)
         .eq('tenant_id', tenantId)
+        .order('apellido', { ascending: true })
         .limit(limit)
 
     if (tokens.length === 1) {
