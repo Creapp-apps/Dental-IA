@@ -13,12 +13,27 @@ export async function proxy(request: NextRequest) {
     const isPortalLogin = /^\/portal\/[^/]+\/login/.test(pathname)
     const isPortalRoute = pathname.startsWith('/portal/') && !isPortalLogin
 
-    // Fast-path bypass if route is not protected or sensitive to auth state
-    if (!isRoot && !isAdminRoute && !isAdminLogin && !isPortalRoute && !isPortalLogin) {
-        return NextResponse.next()
+    // Extract and forward host for multi-tenant domain resolution
+    const rawHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || ''
+    const requestHeaders = new Headers(request.headers)
+    if (rawHost) {
+        requestHeaders.set('x-tenant-host', rawHost)
     }
 
-    let response = NextResponse.next({ request })
+    // Fast-path bypass if route is not protected or sensitive to auth state
+    if (!isRoot && !isAdminRoute && !isAdminLogin && !isPortalRoute && !isPortalLogin) {
+        return NextResponse.next({
+            request: {
+                headers: requestHeaders,
+            },
+        })
+    }
+
+    let response = NextResponse.next({
+        request: {
+            headers: requestHeaders,
+        },
+    })
 
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
         return response

@@ -4,6 +4,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { getNextNroHistoriaClinica } from './pacientes'
 import { normalizarTelefonoArgentino, limpiarTituloProfesional } from '@/lib/utils'
+import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
 
 async function getTenantBySlug(slug: string) {
     const supabase = createAdminClient()
@@ -534,10 +535,9 @@ export async function crearReservaPublica(data: {
     }
 
     // --- DISPARAR META WHATSAPP CLOUD API ---
-    console.log("=== WA DEBUG ===")
-    console.log("Token:", !!process.env.META_WA_ACCESS_TOKEN, "PhoneID:", !!process.env.META_WA_PHONE_NUMBER_ID, "Tel:", data.telefono)
+    const waCreds = await getWhatsAppCredentialsForTenant(tenant.id)
 
-    if (process.env.META_WA_ACCESS_TOKEN && process.env.META_WA_PHONE_NUMBER_ID && data.telefono) {
+    if (waCreds && data.telefono) {
         try {
             // Use robust helper to normalize the Argentine phone number for Meta Cloud API (omits 15 and 9)
             let cleanPhone = normalizarTelefonoArgentino(data.telefono)
@@ -592,10 +592,10 @@ export async function crearReservaPublica(data: {
 
             console.log("Intentando fetch hacia Meta a:", cleanPhone)
 
-            const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+            const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                    'Authorization': `Bearer ${waCreds.accessToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({
@@ -631,9 +631,8 @@ export async function crearReservaPublica(data: {
             console.error("❌ Excepción al ejecutar fetch hacia Meta:", e)
         }
     } else {
-        console.log("⚠️ No se disparó WhatsApp por falta de vars de entorno.")
+        console.log(`[WA LOG] No se disparó WhatsApp para el consultorio "${tenant.slug}" (sin credenciales activas o sin teléfono).`)
     }
-    console.log("=== FIN WA DEBUG ===")
 
     revalidatePath('/agenda')
     return { 
@@ -762,8 +761,9 @@ export async function notificarDemoraTurno(turnoId: string, demora: number, mens
     })
 
     if (metodo === 'OFICIAL') {
-        if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
-            return { success: false, error: 'La API Oficial de WhatsApp no está configurada en las variables de entorno' }
+        const waCreds = await getWhatsAppCredentialsForTenant(turno.tenant_id)
+        if (!waCreds) {
+            return { success: false, error: 'La API Oficial de WhatsApp no está configurada o activa para este consultorio' }
         }
 
         if (!paciente.telefono) {
@@ -791,10 +791,10 @@ export async function notificarDemoraTurno(turnoId: string, demora: number, mens
             const horaOriginal = formatTime(turno.fecha_inicio)
             const nuevaHora = formatTime(new Date(new Date(turno.fecha_inicio).getTime() + demora * 60000).toISOString())
 
-            const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+            const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                    'Authorization': `Bearer ${waCreds.accessToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({

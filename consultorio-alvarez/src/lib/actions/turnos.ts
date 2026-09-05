@@ -9,6 +9,7 @@ import { es } from 'date-fns/locale'
 import { sendPushToUser } from '@/lib/push-notifications/send-push'
 import { Resend } from 'resend'
 import { ConfirmacionTurnoEmail } from '@/components/emails/ConfirmacionTurnoEmail'
+import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
 
 
 // ============================================================
@@ -438,10 +439,6 @@ export async function notificarTurnoPorWhatsApp(
     templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' | 'aviso_ausencia' | 'solicitud_turnos'
 ) {
     console.log(`[WA LOG] Iniciando notificarTurnoPorWhatsApp para turnoId: ${turnoId}, plantilla: "${templateName}"`)
-    if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
-        console.log('[WA LOG] ⚠️ Variables de WhatsApp no configuradas en el entorno (META_WA_ACCESS_TOKEN o META_WA_PHONE_NUMBER_ID faltantes).')
-        return
-    }
 
     try {
         const admin = createAdminClient()
@@ -460,6 +457,12 @@ export async function notificarTurnoPorWhatsApp(
 
         if (fetchErr || !turno) {
             console.error(`[WA LOG] ❌ Turno ${turnoId} no encontrado para notificar WhatsApp (${templateName}). Error:`, fetchErr?.message)
+            return
+        }
+
+        const waCreds = await getWhatsAppCredentialsForTenant(turno.tenant_id)
+        if (!waCreds) {
+            console.log(`[WA LOG] ⚠️ No hay credenciales de WhatsApp configuradas o activas para el consultorio ${turno.tenant_id}.`)
             return
         }
 
@@ -544,10 +547,10 @@ export async function notificarTurnoPorWhatsApp(
 
         console.log(`[WA LOG] Realizando fetch a Graph Facebook para plantilla "${templateName}"...`)
 
-        const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+        const wpResponse = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                'Authorization': `Bearer ${waCreds.accessToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(requestBody)
@@ -584,9 +587,6 @@ export async function notificarTurnoPorWhatsApp(
 
 export async function enviarRecordatorioManual(turnoId: string) {
     console.log(`[WA LOG] Iniciando enviarRecordatorioManual para turnoId: ${turnoId}`)
-    if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
-        return { error: 'Variables de WhatsApp no configuradas en el entorno (META_WA_ACCESS_TOKEN o META_WA_PHONE_NUMBER_ID faltantes).' }
-    }
 
     try {
         const admin = createAdminClient()
@@ -606,6 +606,11 @@ export async function enviarRecordatorioManual(turnoId: string) {
 
         if (fetchErr || !turno) {
             return { error: `Turno no encontrado. Error: ${fetchErr?.message}` }
+        }
+
+        const waCreds = await getWhatsAppCredentialsForTenant(turno.tenant_id)
+        if (!waCreds) {
+            return { error: 'El consultorio no tiene configurada o activa la API oficial de WhatsApp.' }
         }
 
         const pct = turno.paciente as any
@@ -639,10 +644,10 @@ export async function enviarRecordatorioManual(turnoId: string) {
 
         console.log(`📤 Enviando recordatorio manual a ${pct.nombre} (${cleanPhone}) para turno ${turno.id}`)
 
-        const response = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+        const response = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                'Authorization': `Bearer ${waCreds.accessToken}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({

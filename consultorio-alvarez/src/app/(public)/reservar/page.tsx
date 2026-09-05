@@ -1,17 +1,18 @@
+import { headers } from 'next/headers'
+import { resolveTenant } from '@/lib/tenant'
 import { getLandingConfigPublica } from '@/lib/actions/landing'
 import { DEFAULT_LANDING_CONFIG } from '@/lib/types/landing'
 import { BookingSection } from '@/components/landing-v2/sections/BookingSection'
 import { MeshGradient } from '@/components/landing-v2/ui/MeshGradient'
-import { MOCK_TENANT } from '@/lib/mock/tenant'
-import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 export default async function ReservarPage() {
-    const slug = process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
+    const headersList = await headers()
+    const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
+    const tenant = await resolveTenant(rawHost)
+    const slug = tenant?.slug || process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
     const config = (await getLandingConfigPublica(slug)) ?? { id: '', tenant_id: '', ...DEFAULT_LANDING_CONFIG }
-
-    if (slug !== MOCK_TENANT.slug) notFound()
 
     return (
         <div style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}>
@@ -52,17 +53,19 @@ export default async function ReservarPage() {
             </div>
 
             <main className="relative z-10 min-h-screen flex flex-col justify-center pb-12">
-                <BookingSection config={config} />
+                <BookingSection config={config} slug={slug} />
             </main>
         </div>
     )
 }
 
 export async function generateMetadata() {
-    const slug = process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
-    if (slug !== MOCK_TENANT.slug) return {}
+    const headersList = await headers()
+    const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
+    const tenant = await resolveTenant(rawHost)
+    const nombre = tenant?.nombre || 'Consultorio Odontológico'
     return {
-        title: `Reservar turno — ${MOCK_TENANT.nombre}`,
-        description: `Solicitá tu turno online en ${MOCK_TENANT.nombre}`,
+        title: `Reservar turno — ${nombre}`,
+        description: `Solicitá tu turno online en ${nombre}`,
     }
 }

@@ -111,7 +111,7 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
                 {obrasSociales && obrasSociales.length > 0 && (
                     <ObrasSocialesSection config={config} obrasSociales={obrasSociales} />
                 )}
-                <BookingSection config={config} />
+                <BookingSection config={config} slug={slug} />
                 <FooterSection config={config} />
                 <FloatingChatbot
                     slug={slug}

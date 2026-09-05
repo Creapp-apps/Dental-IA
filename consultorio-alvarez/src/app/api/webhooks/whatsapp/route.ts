@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { normalizarTelefonoArgentino } from '@/lib/utils'
 import { notificarTurnoPorWhatsApp } from '@/lib/actions/turnos'
+import { resolveTenantByPhoneNumberId } from '@/lib/whatsapp'
 
 
 // GET: Webhook Verification (Meta Verification Challenge)
@@ -107,7 +108,6 @@ export async function POST(request: NextRequest) {
         
         // Registrar payload para depuración
         console.log('📬 Webhook WhatsApp recibido:', JSON.stringify(body, null, 2))
-        await logDebug('webhook_received', body)
 
         const change = body.entry?.[0]?.changes?.[0]?.value
         const message = change?.messages?.[0]
@@ -117,6 +117,21 @@ export async function POST(request: NextRequest) {
             await logDebug('no_message_in_payload', change)
             return NextResponse.json({ success: true, message: 'No message in payload' })
         }
+
+        // ── AISLAMIENTO MULTI-TENANT ESTRICTO POR PHONE_NUMBER_ID ──
+        const incomingPhoneNumberId = change?.metadata?.phone_number_id
+        if (!incomingPhoneNumberId) {
+            console.warn('[WA WEBHOOK] ⚠️ Payload sin metadata.phone_number_id. Petición ignorada por seguridad.')
+            return NextResponse.json({ success: true, message: 'No phone_number_id' })
+        }
+
+        const tenantId = await resolveTenantByPhoneNumberId(incomingPhoneNumberId)
+        if (!tenantId) {
+            console.warn(`[WA WEBHOOK] ⚠️ phone_number_id "${incomingPhoneNumberId}" no pertenece a ningún consultorio registrado. Petición ignorada para proteger aislamiento.`)
+            return NextResponse.json({ success: true, message: 'Unrecognized tenant ignored' })
+        }
+
+        await logDebug('webhook_received', body, tenantId)
 
         const from = message.from // Número del paciente (ej: 5491130174859)
         const cleanPhone = normalizarTelefonoArgentino(from)
@@ -171,10 +186,11 @@ export async function POST(request: NextRequest) {
                 const normalized = normalizeTextForMatch(textToAnalyze)
                 console.log(`🔍 Intentando deducir acción de texto normalizado: "${normalized}"`)
 
-                // Encontrar el último recordatorio enviado a este teléfono que esté pendiente de respuesta
+                // Encontrar el último recordatorio enviado a este teléfono que esté pendiente de respuesta dentro de este consultorio
                 const { data: lastRem } = await admin
                     .from('recordatorios')
                     .select('id, turno_id, tenant_id')
+                    .eq('tenant_id', tenantId)
                     .eq('telefono', cleanPhone)
                     .eq('estado_envio', 'ENVIADO')
                     .order('created_at', { ascending: false })
@@ -227,7 +243,7 @@ export async function POST(request: NextRequest) {
 
         // 3. Si se identificó un turno y una acción válida, actualizamos base de datos
         if (turnoIdToUpdate && respuestaPaciente) {
-            // Traer información del turno antes de actualizar
+            // Traer información del turno antes de actualizar asegurando pertenencia al consultorio del webhook
             const { data: turno } = await admin
                 .from('turnos')
                 .select(`
@@ -238,7 +254,13 @@ export async function POST(request: NextRequest) {
                     tipo_treatment:tipos_tratamiento(nombre)
                 `)
                 .eq('id', turnoIdToUpdate)
-                .single()
+                .eq('tenant_id', tenantId)
+                .maybeSingle()
+
+            if (!turno) {
+                console.warn(`[WA WEBHOOK] ⚠️ Turno ${turnoIdToUpdate} no encontrado o no pertenece al consultorio ${tenantId}. Acción ignorada por seguridad.`)
+                return NextResponse.json({ success: true, message: 'Turno not found or tenant mismatch' })
+            }
 
             // Si no es solicitud de reprogramar, actualizamos el estado físico del turno en la grilla
             if (respuestaPaciente !== 'REPROGRAMAR') {
@@ -247,9 +269,10 @@ export async function POST(request: NextRequest) {
                     .from('turnos')
                     .update({ estado: nuevoEstado })
                     .eq('id', turnoIdToUpdate)
-                console.log(`✅ Turno ${turnoIdToUpdate} actualizado a ${nuevoEstado}`)
+                    .eq('tenant_id', tenantId)
+                console.log(`✅ Turno ${turnoIdToUpdate} de consultorio ${tenantId} actualizado a ${nuevoEstado}`)
             } else {
-                console.log(`🔄 Turno ${turnoIdToUpdate} mantiene estado PENDIENTE, registrado pedido de reprogramación`)
+                console.log(`🔄 Turno ${turnoIdToUpdate} de consultorio ${tenantId} mantiene estado PENDIENTE, registrado pedido de reprogramación`)
             }
 
             // Actualizar tabla de recordatorios en base de datos
@@ -261,24 +284,23 @@ export async function POST(request: NextRequest) {
                     fecha_respuesta: new Date().toISOString()
                 })
                 .eq('turno_id', turnoIdToUpdate)
+                .eq('tenant_id', tenantId)
 
             // --- Enviar mensaje de respuesta automática (Plantilla de WhatsApp) al paciente ---
-            if (process.env.META_WA_ACCESS_TOKEN && process.env.META_WA_PHONE_NUMBER_ID) {
-                try {
-                    let templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' = 'turno_confirmado'
-                    if (respuestaPaciente === 'CONFIRMAR') {
-                        templateName = 'turno_confirmado'
-                    } else if (respuestaPaciente === 'CANCELAR') {
-                        templateName = 'turno_cancelado'
-                    } else if (respuestaPaciente === 'REPROGRAMAR') {
-                        templateName = 'turno_reprogramado'
-                    }
-
-                    console.log(`[WA WEBHOOK] Despachando plantilla automática "${templateName}" para turno ${turnoIdToUpdate}`)
-                    await notificarTurnoPorWhatsApp(turnoIdToUpdate, templateName)
-                } catch (waErr) {
-                    console.error('❌ Error al enviar respuesta de confirmación a WhatsApp:', waErr)
+            try {
+                let templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' = 'turno_confirmado'
+                if (respuestaPaciente === 'CONFIRMAR') {
+                    templateName = 'turno_confirmado'
+                } else if (respuestaPaciente === 'CANCELAR') {
+                    templateName = 'turno_cancelado'
+                } else if (respuestaPaciente === 'REPROGRAMAR') {
+                    templateName = 'turno_reprogramado'
                 }
+
+                console.log(`[WA WEBHOOK] Despachando plantilla automática "${templateName}" para turno ${turnoIdToUpdate}`)
+                await notificarTurnoPorWhatsApp(turnoIdToUpdate, templateName)
+            } catch (waErr) {
+                console.error('❌ Error al enviar respuesta de confirmación a WhatsApp:', waErr)
             }
 
             // --- Insertar Notificación Realtime en la base de datos para Dashboard y Toasts ---

@@ -8,7 +8,13 @@ import type { LandingConfig } from '@/lib/types/landing'
 
 gsap.registerPlugin(ScrollTrigger)
 
-export function BookingSection({ config }: { config?: Pick<LandingConfig, 'booking_titulo' | 'booking_subtitulo' | 'color_primary'> }) {
+export function BookingSection({
+    config,
+    slug = 'alvarez',
+}: {
+    config?: Pick<LandingConfig, 'booking_titulo' | 'booking_subtitulo' | 'color_primary'>
+    slug?: string
+}) {
     const sectionRef = useRef<HTMLDivElement>(null)
     const contentRef = useRef<HTMLDivElement>(null)
     const titleRef = useRef<HTMLDivElement>(null)
@@ -79,7 +85,7 @@ export function BookingSection({ config }: { config?: Pick<LandingConfig, 'booki
                     className="dark bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl shadow-black/40 overflow-hidden"
                     style={{ opacity: 0 }}
                 >
-                    <BookingForm />
+                    <BookingForm slug={slug} />
                 </div>
             </div>
         </section>

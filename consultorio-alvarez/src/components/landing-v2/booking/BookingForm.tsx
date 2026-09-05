@@ -480,6 +480,7 @@ function StepPatientData({
     nombreRef,
     apellidoRef,
     configSenia,
+    slug = 'alvarez',
 }: {
     datos: PatientFormData
     obrasSociales: any[]
@@ -490,6 +491,7 @@ function StepPatientData({
     nombreRef: React.RefObject<HTMLInputElement | null>
     apellidoRef: React.RefObject<HTMLInputElement | null>
     configSenia?: { requiereSenia: boolean; montoSenia: number; clinicaNombre?: string } | null
+    slug?: string
 }) {
     const [buscando, setBuscando] = useState(false)
     const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null)
@@ -512,7 +514,7 @@ function StepPatientData({
         onChange('pacienteExistenteId', '')
 
         try {
-            const res = await getPacientePorDni('alvarez', cleanDni)
+            const res = await getPacientePorDni(slug, cleanDni)
             if (res.error) {
                 setErrorBusqueda(res.error)
             } else if (res.data) {
@@ -840,7 +842,7 @@ function StepSuccess() {
 
 // ── Main BookingForm ─────────────────────────────────────────────
 
-export function BookingForm() {
+export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
     const [step, setStep] = useState(0)
     const [direction, setDirection] = useState(1)
     const [sent, setSent] = useState(false)
@@ -889,9 +891,9 @@ export function BookingForm() {
         async function loadData() {
             try {
                 const [profs, obras, seniaRes] = await Promise.all([
-                    getProfesionalesPublicos('alvarez'),
-                    getObrasSocialesPublicas('alvarez'),
-                    getConfiguracionSeniaPublica('alvarez'),
+                    getProfesionalesPublicos(slug),
+                    getObrasSocialesPublicas(slug),
+                    getConfiguracionSeniaPublica(slug),
                 ])
                 setProfessionals(profs as Professional[])
                 setObrasSociales(obras)
@@ -909,7 +911,7 @@ export function BookingForm() {
             }
         }
         loadData()
-    }, [])
+    }, [slug])
 
     // Fetch availability reactively when professional is selected
     useEffect(() => {
@@ -921,7 +923,7 @@ export function BookingForm() {
         async function loadAvailability() {
             setLoadingDays(true)
             try {
-                const days = await getTurnosDisponibles('alvarez', professionalId)
+                const days = await getTurnosDisponibles(slug, professionalId)
                 setAvailableDays(days)
             } catch (err) {
                 console.error('Error loading availability:', err)
@@ -930,12 +932,12 @@ export function BookingForm() {
             }
         }
         loadAvailability()
-    }, [professionalId])
+    }, [professionalId, slug])
 
     // Reusable refresh for availability (called after booking)
     async function refreshAvailability() {
         if (professionalId) {
-            const days = await getTurnosDisponibles('alvarez', professionalId)
+            const days = await getTurnosDisponibles(slug, professionalId)
             setAvailableDays(days)
         }
     }
@@ -1035,7 +1037,7 @@ export function BookingForm() {
             setSubmitting(true)
             try {
                 const result = await crearReservaPublica({
-                    tenantSlug: 'alvarez',
+                    tenantSlug: slug,
                     fecha: selectedDate!,
                     hora: selectedTime!,
                     profesionalId: professionalId,
@@ -1176,6 +1178,7 @@ export function BookingForm() {
                                 nombreRef={nombreRef}
                                 apellidoRef={apellidoRef}
                                 configSenia={configSenia}
+                                slug={slug}
                             />
                         )}
                     </motion.div>
