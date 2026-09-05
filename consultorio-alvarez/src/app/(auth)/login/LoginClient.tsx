@@ -7,9 +7,21 @@ import { loginAction } from '@/lib/actions/auth'
 
 const FloatingLines = dynamic(() => import('@/components/FloatingLines'), { ssr: false })
 
-export default function LoginClient({ errorMsg }: { errorMsg: string | null }) {
+export default function LoginClient({ 
+    errorMsg, 
+    tenantNombre, 
+    colorPrimary = '#2563eb', 
+    slug 
+}: { 
+    errorMsg: string | null
+    tenantNombre?: string
+    colorPrimary?: string
+    slug?: string 
+}) {
     const [showPassword, setShowPassword] = useState(false)
     const [loading, setLoading] = useState(false)
+
+    const isAlvarez = !slug || slug === 'alvarez'
 
     const friendlyError = errorMsg?.includes('Invalid login credentials')
         ? 'Email o contraseña incorrectos.'
@@ -21,7 +33,7 @@ export default function LoginClient({ errorMsg }: { errorMsg: string | null }) {
             {/* Animated background — mixBlendMode "normal" avoids GPU re-compositing on CSS repaints */}
             <div className="absolute inset-0 z-0" style={{ willChange: 'transform' }}>
                 <FloatingLines
-                    linesGradient={['#0a1628', '#1e3a8a', '#2563eb', '#3b82f6', '#93c5fd', '#ffffff']}
+                    linesGradient={['#0a1628', '#1e3a8a', colorPrimary, '#3b82f6', '#93c5fd', '#ffffff']}
                     enabledWaves={['top', 'middle', 'bottom']}
                     lineCount={[8, 8, 6]}
                     lineDistance={[8, 6, 8]}
@@ -51,17 +63,23 @@ export default function LoginClient({ errorMsg }: { errorMsg: string | null }) {
                         <div className="absolute -inset-2 rounded-3xl bg-gradient-to-br from-blue-500/30 to-blue-700/30 blur-xl opacity-0 group-hover:opacity-100 transition-opacity duration-700" />
                         <img
                             src="/LOGO-DENTAL.png"
-                            alt="Dental-IA"
+                            alt={tenantNombre || "Dental-IA"}
                             className="relative h-16 w-auto drop-shadow-[0_0_20px_rgba(59,130,246,0.35)]"
                         />
                     </div>
                     <div className="text-center">
-                        <h1 className="text-3xl font-bold tracking-tight text-white">
-                            Dental
-                            <span className="bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent">-IA</span>
+                        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+                            {isAlvarez ? (
+                                <>
+                                    Dental
+                                    <span className="bg-gradient-to-r from-blue-400 to-blue-200 bg-clip-text text-transparent">-IA</span>
+                                </>
+                            ) : (
+                                tenantNombre || 'Consultorio Odontológico'
+                            )}
                         </h1>
                         <p className="text-sm text-blue-300/70 mt-1.5 font-medium tracking-wide">
-                            Plataforma de gestión odontológica
+                            {isAlvarez ? 'Plataforma de gestión odontológica' : 'Panel de Gestión Odontológica'}
                         </p>
                     </div>
                 </div>
@@ -73,7 +91,9 @@ export default function LoginClient({ errorMsg }: { errorMsg: string | null }) {
 
                         <div className="mb-6">
                             <h2 className="text-lg font-semibold text-white">Iniciar sesión</h2>
-                            <p className="text-sm text-blue-200/50 mt-0.5">Ingresá con tus credenciales de acceso</p>
+                            <p className="text-sm text-blue-200/50 mt-0.5">
+                                {isAlvarez ? 'Ingresá con tus credenciales de acceso' : `Ingresá al panel de ${tenantNombre || 'tu consultorio'}`}
+                            </p>
                         </div>
 
                         {friendlyError && (
@@ -166,7 +186,12 @@ export default function LoginClient({ errorMsg }: { errorMsg: string | null }) {
                                     disabled={loading}
                                     className="group relative w-full py-3 px-6 rounded-xl text-sm font-semibold text-white overflow-hidden transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
                                 >
-                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-blue-500 transition-all duration-300 group-hover:from-blue-500 group-hover:to-blue-400" />
+                                    <div 
+                                        className="absolute inset-0 transition-all duration-300 group-hover:brightness-110" 
+                                        style={{
+                                            background: `linear-gradient(135deg, ${colorPrimary} 0%, ${colorPrimary}dd 100%)`
+                                        }}
+                                    />
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                                     <span className="relative flex items-center justify-center gap-2">
                                         {loading ? (
