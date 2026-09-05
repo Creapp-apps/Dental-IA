@@ -92,8 +92,31 @@ export async function proxy(request: NextRequest) {
     if (user && isAdminLogin) {
         const explicitSlug = request.nextUrl.searchParams.get('slug')
         if (!explicitSlug) {
+            const userEmail = user.email || ''
+            const isSuperadmin = 
+                userEmail === 'creapp.ar@gmail.com' ||
+                userEmail === 'mazasebastian@hotmail.com' || 
+                userEmail.endsWith('@creapp.com') || 
+                userEmail.endsWith('@dental-ia.com')
+
             const url = request.nextUrl.clone()
-            url.pathname = '/admin'
+            url.pathname = isSuperadmin ? '/superadmin' : '/admin'
+            return NextResponse.redirect(url)
+        }
+    }
+
+    if (user && (pathname === '/admin' || pathname === '/admin/')) {
+        const explicitSlug = request.nextUrl.searchParams.get('slug')
+        const userEmail = user.email || ''
+        const isSuperadmin = 
+            userEmail === 'creapp.ar@gmail.com' ||
+            userEmail === 'mazasebastian@hotmail.com' || 
+            userEmail.endsWith('@creapp.com') || 
+            userEmail.endsWith('@dental-ia.com')
+
+        if (isSuperadmin && !explicitSlug) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/superadmin'
             return NextResponse.redirect(url)
         }
     }

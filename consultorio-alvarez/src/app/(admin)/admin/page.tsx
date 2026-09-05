@@ -1,6 +1,7 @@
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Calendar, Clock, Users, AlertCircle, DollarSign, Stethoscope } from 'lucide-react'
+import { redirect } from 'next/navigation'
 import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario, getTurnosSinConfirmar } from '@/lib/supabase/queries'
 import { DashboardKPI } from '@/components/dashboard/DashboardKPI'
 import { TurnoCardGlass } from '@/components/dashboard/TurnoCardGlass'
@@ -8,7 +9,10 @@ import { TurnosSinConfirmarSection } from '@/components/dashboard/TurnosSinConfi
 import { DashboardLiveAlerts } from '@/components/dashboard/DashboardLiveAlerts'
 import { getBillingConfig } from '@/lib/actions/billing'
 
-export default async function DashboardPage() {
+export default async function DashboardPage(props: {
+    searchParams?: Promise<{ slug?: string; impersonate?: string }>
+}) {
+    const params = await props.searchParams
     const hoy = new Date()
     const [stats, turnos, profesionales, usuario, turnosSinConfirmar] = await Promise.all([
         getDashboardStats(),
@@ -17,6 +21,18 @@ export default async function DashboardPage() {
         getCurrentUsuario(),
         getTurnosSinConfirmar(),
     ])
+
+    const isSuperadmin = 
+        usuario?.rol === 'superadmin' || 
+        usuario?.email === 'creapp.ar@gmail.com' ||
+        usuario?.email === 'mazasebastian@hotmail.com' ||
+        usuario?.email?.endsWith('@creapp.com') ||
+        usuario?.email?.endsWith('@dental-ia.com')
+
+    // Si el usuario es Superadmin y no está impersonando un consultorio puntual, su panel natural es /superadmin
+    if (isSuperadmin && !params?.slug && !params?.impersonate) {
+        redirect('/superadmin')
+    }
 
     // Obtener configuración de cobros para banners de vencimiento
     const billing = usuario ? await getBillingConfig(usuario.tenant_id) : null
@@ -41,7 +57,6 @@ export default async function DashboardPage() {
 
     // Calcular banner de alerta de vencimiento
     let alertBanner = null
-    const isSuperadmin = usuario?.rol === 'superadmin' || usuario?.email === 'creapp.ar@gmail.com'
 
     if (settings?.fecha_vencimiento && !isSuperadmin) {
         const today = new Date()
