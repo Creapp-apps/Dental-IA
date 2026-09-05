@@ -18,7 +18,7 @@ export default async function ConfiguracionPage() {
     const tenantId = profile?.tenant_id
 
     const [tenant, profesionales, obrasSociales, tiposTratamiento, landingConfig, { data: integrations }] = await Promise.all([
-        getTenantConfig(),
+        getTenantConfig(tenantId),
         getProfesionales(false),
         getObrasSociales(false),
         getTiposTratamiento(false),

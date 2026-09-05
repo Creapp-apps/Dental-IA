@@ -12,7 +12,7 @@ function getAdmin() {
 }
 
 // Obtiene el tenant_id del usuario logueado desde public.usuarios (caching por request)
-const getTenantId = cache(async (): Promise<string | null> => {
+export const getTenantId = cache(async (): Promise<string | null> => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
@@ -26,6 +26,8 @@ const getTenantId = cache(async (): Promise<string | null> => {
 
     return data?.tenant_id ?? null
 })
+
+export const getAuthenticatedTenantId = getTenantId
 
 export const getCurrentUsuario = cache(async () => {
     const supabase = await createClient()

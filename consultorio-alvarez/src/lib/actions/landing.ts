@@ -176,8 +176,8 @@ export async function guardarLandingConfig(
     }
 
     if (!tenantId) {
-        const { data: tenant } = await supabase.from('tenants').select('id').limit(1).single()
-        tenantId = tenant?.id ?? null
+        const { getAuthenticatedTenantId } = await import('@/lib/supabase/queries')
+        tenantId = await getAuthenticatedTenantId()
     }
 
     if (!tenantId) return { error: 'Tenant no encontrado' }

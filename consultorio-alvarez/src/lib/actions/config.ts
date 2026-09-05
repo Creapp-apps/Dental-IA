@@ -1,6 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
 import { revalidatePath } from 'next/cache'
 
 // All config actions use the admin client (service_role key) to bypass RLS.
@@ -12,14 +13,15 @@ function getAdmin() {
 }
 
 async function getTenantId() {
-    const supabase = getAdmin()
-    const { data } = await supabase.from('tenants').select('id').eq('slug', 'alvarez').single()
-    return data?.id ?? null
+    return await getAuthenticatedTenantId()
 }
 
-export async function getTenantConfig() {
+export async function getTenantConfig(explicitTenantId?: string) {
     const supabase = getAdmin()
-    const { data } = await supabase.from('tenants').select('*').eq('slug', 'alvarez').single()
+    const tenantId = explicitTenantId || (await getTenantId())
+    if (!tenantId) return null
+
+    const { data } = await supabase.from('tenants').select('*').eq('id', tenantId).maybeSingle()
     return data
 }
 

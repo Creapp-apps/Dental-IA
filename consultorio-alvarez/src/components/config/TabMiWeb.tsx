@@ -145,7 +145,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
         })
     }
 
-    const landingUrl = slug === 'alvarez' ? '/' : `/?slug=${slug}`
+    const landingUrl = slug ? `/${slug}` : '/'
 
     return (
         <div className="space-y-5 max-w-3xl">

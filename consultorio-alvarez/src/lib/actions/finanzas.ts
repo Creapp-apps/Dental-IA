@@ -2,11 +2,10 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
 
 async function getTenantId() {
-    const supabase = await createClient()
-    const { data } = await supabase.from('tenants').select('id').eq('slug', 'alvarez').single()
-    return data?.id ?? null
+    return await getAuthenticatedTenantId()
 }
 
 // ============================================================

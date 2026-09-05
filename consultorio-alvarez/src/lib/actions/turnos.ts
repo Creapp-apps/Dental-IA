@@ -12,19 +12,14 @@ import { ConfirmacionTurnoEmail } from '@/components/emails/ConfirmacionTurnoEma
 import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
 
 
+import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
+
 // ============================================================
 // SERVER ACTIONS — Turnos
 // ============================================================
 
-// Temporal: obtener tenant_id sin auth
 async function getTenantId() {
-    const supabase = await createClient()
-    const { data } = await supabase
-        .from('tenants')
-        .select('id')
-        .eq('slug', 'alvarez')
-        .single()
-    return data?.id ?? null
+    return await getAuthenticatedTenantId()
 }
 
 export async function crearTurno(formData: {
