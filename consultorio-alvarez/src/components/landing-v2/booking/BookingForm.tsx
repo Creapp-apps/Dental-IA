@@ -15,7 +15,9 @@ import {
     crearReservaPublica,
     getObrasSocialesPublicas,
     getPacientePorDni,
+    getConfiguracionSeniaPublica,
 } from '@/lib/actions/reservas'
+import { crearPreferenciaPagoSenia } from '@/lib/actions/mercadopago'
 import {
     Check,
     ChevronLeft,
@@ -25,6 +27,8 @@ import {
     Clock,
     CheckCircle2,
     Loader2,
+    CreditCard,
+    ShieldCheck,
 } from 'lucide-react'
 import { glassAlert } from '@/components/ui/glass-alert'
 
@@ -475,6 +479,7 @@ function StepPatientData({
     telefonoRef,
     nombreRef,
     apellidoRef,
+    configSenia,
 }: {
     datos: PatientFormData
     obrasSociales: any[]
@@ -484,6 +489,7 @@ function StepPatientData({
     telefonoRef: React.RefObject<HTMLInputElement | null>
     nombreRef: React.RefObject<HTMLInputElement | null>
     apellidoRef: React.RefObject<HTMLInputElement | null>
+    configSenia?: { requiereSenia: boolean; montoSenia: number; clinicaNombre?: string } | null
 }) {
     const [buscando, setBuscando] = useState(false)
     const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null)
@@ -533,6 +539,34 @@ function StepPatientData({
     return (
         <div>
             <h2 className="text-base font-semibold text-white mb-4">Tus datos</h2>
+
+            {/* Banner informativo si el consultorio exige seña */}
+            {configSenia?.requiereSenia && (
+                <div className="rounded-xl border border-teal-500/30 bg-teal-500/10 p-4 mb-5 backdrop-blur-sm">
+                    <div className="flex items-start gap-3">
+                        <div className="h-9 w-9 rounded-lg bg-teal-500/20 flex items-center justify-center shrink-0 text-teal-300">
+                            <CreditCard className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                                <h4 className="text-sm font-semibold text-white">
+                                    Reserva con Seña Requerida
+                                </h4>
+                                <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-teal-400/20 text-teal-300 border border-teal-400/30">
+                                    ${configSenia.montoSenia.toLocaleString('es-AR')} ARS
+                                </span>
+                            </div>
+                            <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                                Para confirmar el turno en agenda es requisito abonar una seña de <strong className="text-white font-semibold">${configSenia.montoSenia.toLocaleString('es-AR')} ARS</strong> mediante Mercado Pago. Serás redirigido de forma automática e inmediata al confirmar tus datos.
+                            </p>
+                            <div className="flex items-center gap-1.5 text-[11px] text-teal-300/80 mt-2">
+                                <ShieldCheck className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                                <span>Pago protegido vía Mercado Pago. El monto abonado se descuenta del valor total de la consulta.</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
             
             {/* 1. Selector de tipo de paciente */}
             <div className="mb-5">
@@ -844,17 +878,30 @@ export function BookingForm() {
     const [obrasSociales, setObrasSociales] = useState<any[]>([])
     const [loadingDays, setLoadingDays] = useState(false)
     const [loadingProfs, setLoadingProfs] = useState(true)
+    const [configSenia, setConfigSenia] = useState<{
+        requiereSenia: boolean
+        montoSenia: number
+        clinicaNombre?: string
+    } | null>(null)
 
-    // Load initial data (professionals and health insurances)
+    // Load initial data (professionals, health insurances, and deposit requirement)
     useEffect(() => {
         async function loadData() {
             try {
-                const [profs, obras] = await Promise.all([
+                const [profs, obras, seniaRes] = await Promise.all([
                     getProfesionalesPublicos('alvarez'),
-                    getObrasSocialesPublicas('alvarez')
+                    getObrasSocialesPublicas('alvarez'),
+                    getConfiguracionSeniaPublica('alvarez'),
                 ])
                 setProfessionals(profs as Professional[])
                 setObrasSociales(obras)
+                if (seniaRes?.success && seniaRes.requiereSenia) {
+                    setConfigSenia({
+                        requiereSenia: seniaRes.requiereSenia,
+                        montoSenia: seniaRes.montoSenia || 0,
+                        clinicaNombre: seniaRes.clinicaNombre,
+                    })
+                }
             } catch (err) {
                 console.error('Error loading booking data:', err)
             } finally {
@@ -1006,7 +1053,34 @@ export function BookingForm() {
                 if (result.error) {
                     glassAlert.error({ title: 'Error', description: result.error })
                 } else {
-                    // Refresh availability so booked slot disappears
+                    // Si el consultorio tiene activada la seña obligatoria, redirigir a Mercado Pago
+                    if (result.requiereSenia && result.turnoId && result.montoSenia) {
+                        const prefResult = await crearPreferenciaPagoSenia({
+                            turnoId: result.turnoId,
+                            tenantId: result.tenantId,
+                            pacienteNombre: `${datos.nombre} ${datos.apellido}`.trim(),
+                            pacienteEmail: datos.email,
+                            monto: result.montoSenia,
+                            clinicaNombre: result.clinicaNombre,
+                        })
+
+                        if (prefResult.success && prefResult.initPoint) {
+                            // Redirigir al Checkout de Mercado Pago
+                            window.location.href = prefResult.initPoint
+                            return
+                        } else {
+                            console.error('Error al generar preferencia MP:', prefResult.error)
+                            glassAlert.warning({
+                                title: 'Turno registrado con aviso',
+                                description: 'Tu turno fue agendado, pero hubo un inconveniente al generar el link de pago de la seña. Te contactaremos a la brevedad para coordinar.',
+                            })
+                            await refreshAvailability()
+                            setSent(true)
+                            return
+                        }
+                    }
+
+                    // Flujo habitual sin seña previa requerida
                     await refreshAvailability()
                     setSent(true)
                 }
@@ -1101,6 +1175,7 @@ export function BookingForm() {
                                 telefonoRef={telefonoRef}
                                 nombreRef={nombreRef}
                                 apellidoRef={apellidoRef}
+                                configSenia={configSenia}
                             />
                         )}
                     </motion.div>
@@ -1140,7 +1215,17 @@ export function BookingForm() {
                     <StaggerButton
                         onClick={handleNext}
                         loading={submitting}
-                        text={step === 2 ? (submitting ? 'Enviando...' : 'Confirmar turno') : 'Continuar'}
+                        text={
+                            step === 2
+                                ? submitting
+                                    ? configSenia?.requiereSenia
+                                        ? 'Generando pago seguro...'
+                                        : 'Enviando...'
+                                    : configSenia?.requiereSenia
+                                      ? `Pagar seña ($${configSenia.montoSenia.toLocaleString('es-AR')}) y confirmar`
+                                      : 'Confirmar turno'
+                                : 'Continuar'
+                        }
                         direction="up"
                         className={cn(
                             'rounded-lg px-5 py-2.5 text-sm font-semibold text-white shadow-sm h-auto border-0 transition-all duration-300',
@@ -1148,7 +1233,15 @@ export function BookingForm() {
                         )}
                         style={{ backgroundColor: 'var(--landing-primary, #0d9488)' }}
                     >
-                        {step === 2 ? (submitting ? 'Enviando...' : 'Confirmar turno') : 'Continuar'}
+                        {step === 2
+                            ? submitting
+                                ? configSenia?.requiereSenia
+                                    ? 'Generando pago seguro...'
+                                    : 'Enviando...'
+                                : configSenia?.requiereSenia
+                                  ? `Pagar seña ($${configSenia.montoSenia.toLocaleString('es-AR')}) y confirmar`
+                                  : 'Confirmar turno'
+                            : 'Continuar'}
                     </StaggerButton>
                 </div>
             </div>

@@ -89,6 +89,7 @@ export default async function AdminLayout({
                     <NotificationProvider>
                         <Sidebar 
                             userEmail={user.email} 
+                            userRole={usuario.rol}
                             themeColor={primaryStr} 
                             logoConfig={config?.logo_config} 
                             showBillingAlert={showSidebarAlert}

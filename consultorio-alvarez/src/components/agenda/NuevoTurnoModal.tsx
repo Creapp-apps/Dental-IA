@@ -94,6 +94,7 @@ interface NuevoTurnoModalProps {
     defaultFecha?: string
     defaultHora?: string
     turnoAEditar?: any
+    readOnlyProfesional?: boolean
     onSuccess?: (turnoRaw: any, isEdit: boolean, nuevoPaciente?: any) => void
 }
 
@@ -108,6 +109,7 @@ export function NuevoTurnoModal({
     defaultFecha,
     defaultHora = '09:00',
     turnoAEditar,
+    readOnlyProfesional = false,
     onSuccess,
 }: NuevoTurnoModalProps) {
     const [isPending, startTransition] = useTransition()
@@ -678,12 +680,24 @@ export function NuevoTurnoModal({
                     <div className="grid grid-cols-1 sm:grid-cols-[1fr_1.4fr] gap-3">
                         <div className="space-y-1.5">
                             <Label>Profesional *</Label>
-                            <GlassSelect
-                                value={profId}
-                                onChange={setProfId}
-                                placeholder="Seleccionar..."
-                                options={profesionales.map(p => ({ value: p.id, label: `Dr. ${p.nombre} ${p.apellido}` }))}
-                            />
+                            {readOnlyProfesional ? (
+                                <div className="flex items-center gap-2 rounded-lg border border-input px-3 py-2 text-sm bg-accent/30 font-medium">
+                                    <span 
+                                        className="h-2.5 w-2.5 rounded-full shadow-sm shrink-0" 
+                                        style={{ backgroundColor: profesionales.find(p => p.id === profId)?.color_agenda || '#3b82f6' }} 
+                                    />
+                                    <span className="truncate">
+                                        Dr. {profesionales.find(p => p.id === profId)?.nombre} {profesionales.find(p => p.id === profId)?.apellido || ''}
+                                    </span>
+                                </div>
+                            ) : (
+                                <GlassSelect
+                                    value={profId}
+                                    onChange={setProfId}
+                                    placeholder="Seleccionar..."
+                                    options={profesionales.map(p => ({ value: p.id, label: `Dr. ${p.nombre} ${p.apellido}` }))}
+                                />
+                            )}
                         </div>
                         <div className="space-y-1.5">
                             <Label>Tratamiento *</Label>

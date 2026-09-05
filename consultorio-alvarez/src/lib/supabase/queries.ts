@@ -229,12 +229,12 @@ export async function getTurnosDelDia(fecha: Date) {
     return data ?? []
 }
 
-export async function getTurnosSemana(inicio: Date, fin: Date) {
+export async function getTurnosSemana(inicio: Date, fin: Date, profesionalId?: string) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()
     if (!tenantId) return []
 
-    const { data, error } = await supabase
+    let query = supabase
         .from('turnos')
         .select(`
             *,
@@ -245,7 +245,12 @@ export async function getTurnosSemana(inicio: Date, fin: Date) {
         .eq('tenant_id', tenantId)
         .gte('fecha_inicio', inicio.toISOString())
         .lte('fecha_inicio', fin.toISOString())
-        .order('fecha_inicio')
+
+    if (profesionalId) {
+        query = query.eq('profesional_id', profesionalId)
+    }
+
+    const { data, error } = await query.order('fecha_inicio')
 
     if (error) { console.error('getTurnosSemana:', error); return [] }
     return data ?? []

@@ -453,8 +453,23 @@ export async function crearReservaPublica(data: {
         pacienteId = newPat?.id ?? null
     }
 
+    // Verificar si el consultorio exige cobro de seña online
+    const { data: mpIntegracion } = await supabase
+        .from('tenant_integrations')
+        .select('credentials, is_active')
+        .eq('tenant_id', tenant.id)
+        .eq('provider', 'mercadopago')
+        .maybeSingle()
+
+    const mpCreds = mpIntegracion?.credentials as any
+    const requiereSenia = Boolean(mpIntegracion?.is_active && mpCreds?.cobrar_senia && Number(mpCreds?.monto_senia) > 0)
+    const montoSenia = requiereSenia ? Number(mpCreds?.monto_senia) : 0
+
     // Build notes with plan info
     let finalNotas = data.notas || ''
+    if (requiereSenia) {
+        finalNotas = `[SEÑA PENDIENTE: $${montoSenia.toLocaleString('es-AR')}]\n` + finalNotas
+    }
     if (data.obraSocialId || data.planSeleccionado) {
         let coberturaInfo = '[Cobertura: '
         if (data.obraSocialId) {
@@ -621,7 +636,44 @@ export async function crearReservaPublica(data: {
     console.log("=== FIN WA DEBUG ===")
 
     revalidatePath('/agenda')
-    return { success: true }
+    return { 
+        success: true, 
+        turnoId: turnoData?.id, 
+        requiereSenia, 
+        montoSenia, 
+        tenantId: tenant.id,
+        clinicaNombre: tenant.nombre 
+    }
+}
+
+export async function getConfiguracionSeniaPublica(tenantSlug: string) {
+    try {
+        const supabase = createAdminClient()
+        const tenant = await getTenantBySlug(tenantSlug)
+        if (!tenant) return { success: false, requiereSenia: false, montoSenia: 0, clinicaNombre: 'Consultorio', tenantId: '' }
+
+        const { data: mpIntegracion } = await supabase
+            .from('tenant_integrations')
+            .select('credentials, is_active')
+            .eq('tenant_id', tenant.id)
+            .eq('provider', 'mercadopago')
+            .maybeSingle()
+
+        const mpCreds = mpIntegracion?.credentials as any
+        const requiereSenia = Boolean(mpIntegracion?.is_active && mpCreds?.cobrar_senia && Number(mpCreds?.monto_senia) > 0)
+        const montoSenia = requiereSenia ? Number(mpCreds?.monto_senia) : 0
+
+        return {
+            success: true,
+            requiereSenia,
+            montoSenia,
+            clinicaNombre: tenant.nombre,
+            tenantId: tenant.id
+        }
+    } catch (err) {
+        console.error('Error al obtener configuración de seña pública:', err)
+        return { success: false, requiereSenia: false, montoSenia: 0, clinicaNombre: 'Consultorio', tenantId: '' }
+    }
 }
 
 function formatDniWithDots(dni: string): string {

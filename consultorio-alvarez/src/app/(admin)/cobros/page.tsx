@@ -1,11 +1,18 @@
 import { getCobros } from '@/lib/actions/finanzas'
 import { CobrosView } from '@/components/cobros/CobrosView'
+import { getCurrentUsuario } from '@/lib/supabase/queries'
+import { redirect } from 'next/navigation'
 
 export default async function CobrosPage({
     searchParams,
 }: {
     searchParams?: Promise<{ filtro?: string }>
 }) {
+    const usuario = await getCurrentUsuario()
+    if (usuario?.rol === 'profesional') {
+        redirect('/agenda')
+    }
+
     const params = await searchParams
     const filtro = (params?.filtro as any) ?? 'todos'
     const cobros = await getCobros(filtro)

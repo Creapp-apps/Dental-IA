@@ -45,6 +45,7 @@ export interface TodaySummary {
 
 interface SidebarProps {
     userEmail?: string
+    userRole?: string
     themeColor?: string
     logoConfig?: any
     showBillingAlert?: boolean
@@ -171,7 +172,7 @@ function TodaySummaryWidget({ summary }: { summary?: TodaySummary }) {
     )
 }
 
-export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert, todaySummary }: SidebarProps) {
+export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBillingAlert, todaySummary }: SidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const { theme, setTheme } = useTheme()
@@ -179,6 +180,8 @@ export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert, t
     const [pendingPath, setPendingPath] = useState<string | null>(null)
     const [isPending, startTransition] = useTransition()
     const [isOpen, setIsOpen] = useState(false)
+
+    const isProfesional = userRole === 'profesional'
 
     useEffect(() => {
         setMounted(true)
@@ -262,45 +265,47 @@ export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert, t
                     })}
                 </div>
 
-                {/* Categoría 2: GESTIÓN & CONFIGURACIÓN */}
-                <div className="space-y-1">
-                    <p className="text-[10px] font-bold tracking-wider text-sidebar-foreground/50 px-3 py-1 uppercase">
-                        Gestión
-                    </p>
-                    {navItems.slice(3).map((item) => {
-                        const isActuallyActive = pathname === item.href || pathname.startsWith(item.href + '/')
-                        const isOptimisticActive = pendingPath === item.href
-                        const isActive = isActuallyActive || isOptimisticActive
-                        const isWaiting = isOptimisticActive && !isActuallyActive
+                {/* Categoría 2: GESTIÓN & CONFIGURACIÓN (Solo para Admins y Superadmins) */}
+                {!isProfesional && (
+                    <div className="space-y-1">
+                        <p className="text-[10px] font-bold tracking-wider text-sidebar-foreground/50 px-3 py-1 uppercase">
+                            Gestión
+                        </p>
+                        {navItems.slice(3).map((item) => {
+                            const isActuallyActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                            const isOptimisticActive = pendingPath === item.href
+                            const isActive = isActuallyActive || isOptimisticActive
+                            const isWaiting = isOptimisticActive && !isActuallyActive
 
-                        return (
-                            <Link
-                                key={item.href}
-                                href={item.href}
-                                prefetch={true}
-                                onClick={() => {
-                                    if (!isActuallyActive) setPendingPath(item.href)
-                                }}
-                                className={cn(
-                                    'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
-                                    isActive
-                                        ? 'text-white shadow-sm font-semibold'
-                                        : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                                    isWaiting && 'opacity-80 animate-pulse'
-                                )}
-                                style={isActive ? { backgroundColor: themeColor || 'var(--sidebar-primary)' } : undefined}
-                            >
-                                <item.icon className="h-4 w-4 shrink-0" />
-                                <span className="flex-1">{item.label}</span>
-                                {item.href === '/mis-pagos' && showBillingAlert && (
-                                    <span className="animate-breathing text-xs flex items-center justify-center select-none" title="Abono próximo a vencer">
-                                        ⚠️
-                                    </span>
-                                )}
-                            </Link>
-                        )
-                    })}
-                </div>
+                            return (
+                                <Link
+                                    key={item.href}
+                                    href={item.href}
+                                    prefetch={true}
+                                    onClick={() => {
+                                        if (!isActuallyActive) setPendingPath(item.href)
+                                    }}
+                                    className={cn(
+                                        'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all',
+                                        isActive
+                                            ? 'text-white shadow-sm font-semibold'
+                                            : 'text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                                        isWaiting && 'opacity-80 animate-pulse'
+                                    )}
+                                    style={isActive ? { backgroundColor: themeColor || 'var(--sidebar-primary)' } : undefined}
+                                >
+                                    <item.icon className="h-4 w-4 shrink-0" />
+                                    <span className="flex-1">{item.label}</span>
+                                    {item.href === '/mis-pagos' && showBillingAlert && (
+                                        <span className="animate-breathing text-xs flex items-center justify-center select-none" title="Abono próximo a vencer">
+                                            ⚠️
+                                        </span>
+                                    )}
+                                </Link>
+                            )
+                        })}
+                    </div>
+                )}
 
                 {/* Widget de Resumen Operativo de Hoy (Mini Agenda) */}
                 <TodaySummaryWidget summary={todaySummary} />
@@ -320,10 +325,20 @@ export function Sidebar({ userEmail, themeColor, logoConfig, showBillingAlert, t
                         <p className="text-xs font-semibold text-sidebar-foreground truncate" title={userEmail}>
                             {userEmail || 'Usuario'}
                         </p>
-                        <p className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block"></span>
-                            En línea
-                        </p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                            <span className={cn(
+                                "text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-wider",
+                                isProfesional
+                                    ? "bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20"
+                                    : "bg-primary/10 text-primary border border-primary/20"
+                            )}>
+                                {isProfesional ? 'Profesional' : userRole === 'superadmin' ? 'Superadmin' : 'Admin'}
+                            </span>
+                            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-medium">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block"></span>
+                                En línea
+                            </span>
+                        </div>
                     </div>
                     <NotificationBell themeColor={themeColor} />
                 </div>

@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { getBillingConfig, getTenants } from '@/lib/actions/billing'
 import { MisPagosView } from '@/components/billing/MisPagosView'
+import { redirect } from 'next/navigation'
 
 export default async function MisPagosPage() {
     const supabase = await createClient()
@@ -17,6 +18,10 @@ export default async function MisPagosPage() {
         .select('tenant_id, rol')
         .eq('id', user.id)
         .single()
+
+    if (profile?.rol === 'profesional') {
+        redirect('/agenda')
+    }
 
     const tenantId = profile?.tenant_id
     if (!tenantId) {

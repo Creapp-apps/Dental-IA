@@ -1,5 +1,5 @@
 import { startOfWeek, endOfWeek, parseISO, format, addDays, startOfMonth, endOfMonth } from 'date-fns'
-import { getProfesionales, getTiposTratamiento, getTurnosSemana } from '@/lib/supabase/queries'
+import { getProfesionales, getTiposTratamiento, getTurnosSemana, getCurrentUsuario } from '@/lib/supabase/queries'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
 import { getTenantConfig } from '@/lib/actions/config'
 import { AgendaView } from '@/components/agenda/AgendaView'
@@ -10,6 +10,10 @@ interface PageProps {
 }
 
 export default async function AgendaPage({ searchParams }: PageProps) {
+    const usuario = await getCurrentUsuario()
+    const isProfesional = usuario?.rol === 'profesional' && !!usuario?.profesional_id
+    const profIdFiltro = isProfesional ? usuario.profesional_id : undefined
+
     const resolvedSearchParams = await searchParams
     let focusDate = new Date()
 
@@ -33,15 +37,6 @@ export default async function AgendaPage({ searchParams }: PageProps) {
 
     const vistaParam = (resolvedSearchParams?.vista as string) || 'semana'
 
-    let subtitle = 'Vista semanal — todos los profesionales'
-    if (vistaParam === 'hoy') {
-        subtitle = 'Vista diaria — todos los profesionales'
-    } else if (vistaParam === '15dias') {
-        subtitle = 'Vista de 15 días — todos los profesionales'
-    } else if (vistaParam === 'mes') {
-        subtitle = 'Vista mensual — todos los profesionales'
-    }
-
     let inicio = startOfWeek(focusDate, { weekStartsOn: 1 })
     let fin = endOfWeek(focusDate, { weekStartsOn: 1 })
 
@@ -63,7 +58,7 @@ export default async function AgendaPage({ searchParams }: PageProps) {
     const [profesionales, tiposTratamiento, turnos, landingConfig, tenantConfig] = await Promise.all([
         getProfesionales(),
         getTiposTratamiento(),
-        getTurnosSemana(inicio, fin),
+        getTurnosSemana(inicio, fin, profIdFiltro),
         getLandingConfigAdmin(),
         getTenantConfig(),
     ])
@@ -76,6 +71,7 @@ export default async function AgendaPage({ searchParams }: PageProps) {
             fechaInicial={format(focusDate, 'yyyy-MM-dd')}
             landingConfig={landingConfig}
             horarios={tenantConfig?.horarios || []}
+            currentUsuario={usuario}
         />
     )
 }

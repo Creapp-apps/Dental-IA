@@ -215,12 +215,19 @@ function WizardMercadoPago({ currentConfig }: { currentConfig: any }) {
     const [isPending, startTransition] = useTransition()
     const [publicKey, setPublicKey] = useState(currentConfig?.credentials?.public_key || '')
     const [accessToken, setAccessToken] = useState(currentConfig?.credentials?.access_token || '')
+    const [cobrarSenia, setCobrarSenia] = useState<boolean>(currentConfig?.credentials?.cobrar_senia ?? false)
+    const [montoSenia, setMontoSenia] = useState<string>(String(currentConfig?.credentials?.monto_senia || ''))
 
     function guardar() {
         startTransition(async () => {
-            const data = await guardarIntegracion('mercadopago', { public_key: publicKey, access_token: accessToken })
+            const data = await guardarIntegracion('mercadopago', { 
+                public_key: publicKey.trim(), 
+                access_token: accessToken.trim(),
+                cobrar_senia: cobrarSenia,
+                monto_senia: Number(montoSenia) || 0
+            })
             if (data.error) glassAlert.error({ title: 'Error', description: data.error })
-            else glassAlert.success({ title: '¡Mercado Pago conectado!', description: 'Credenciales guardadas con éxito.' })
+            else glassAlert.success({ title: '¡Mercado Pago conectado!', description: 'Credenciales y configuración de seña guardadas con éxito.' })
         })
     }
 
@@ -232,7 +239,7 @@ function WizardMercadoPago({ currentConfig }: { currentConfig: any }) {
                 </div>
                 <div>
                     <h2 className="text-lg font-bold text-foreground">Conectar Mercado Pago</h2>
-                    <p className="text-sm text-muted-foreground">Recibí pagos online directamente a tu cuenta</p>
+                    <p className="text-sm text-muted-foreground">Recibí pagos y señas de turnos online directamente a tu cuenta</p>
                 </div>
             </div>
 
@@ -267,6 +274,50 @@ function WizardMercadoPago({ currentConfig }: { currentConfig: any }) {
                         type="password"
                     />
                 </div>
+            </div>
+
+            {/* Módulo de Seña para Reservas Online */}
+            <div className="p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-4">
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h4 className="text-sm font-bold text-foreground flex items-center gap-2">
+                            <span>💳</span> Exigir Seña al Reservar Turno Online
+                        </h4>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Los pacientes deberán abonar una seña con Mercado Pago para confirmar su cita
+                        </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={cobrarSenia}
+                            onChange={e => setCobrarSenia(e.target.checked)}
+                            className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary"></div>
+                    </label>
+                </div>
+
+                {cobrarSenia && (
+                    <div className="space-y-1.5 pt-2 border-t border-primary/10">
+                        <Label className="text-xs font-semibold">Monto de la Seña en Pesos ($ ARS)</Label>
+                        <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-muted-foreground">$</span>
+                            <Input
+                                type="number"
+                                min="100"
+                                step="100"
+                                value={montoSenia}
+                                onChange={e => setMontoSenia(e.target.value)}
+                                placeholder="Ej: 5000"
+                                className="pl-7 font-mono"
+                            />
+                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                            Este importe se descontará del total del tratamiento el día de la consulta.
+                        </p>
+                    </div>
+                )}
             </div>
 
             <div className="flex justify-end pt-4 border-t border-border/50">

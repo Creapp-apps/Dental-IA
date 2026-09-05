@@ -1,10 +1,16 @@
 import { getTenantConfig } from '@/lib/actions/config'
-import { getProfesionales, getObrasSociales, getTiposTratamiento } from '@/lib/supabase/queries'
+import { getProfesionales, getObrasSociales, getTiposTratamiento, getCurrentUsuario } from '@/lib/supabase/queries'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
 import { ConfigView } from '@/components/config/ConfigView'
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 
 export default async function ConfiguracionPage() {
+    const usuario = await getCurrentUsuario()
+    if (usuario?.rol === 'profesional') {
+        redirect('/agenda')
+    }
+
     // Para simplificar la inyección de integraciones, las traemos directamente usando la session del usuario
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()

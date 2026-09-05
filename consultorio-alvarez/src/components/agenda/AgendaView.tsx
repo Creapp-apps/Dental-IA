@@ -99,6 +99,7 @@ interface AgendaViewProps {
     fechaInicial?: string
     landingConfig?: any
     horarios?: any[]
+    currentUsuario?: any
 }
 
 export function AgendaView({
@@ -109,11 +110,15 @@ export function AgendaView({
     fechaInicial,
     landingConfig,
     horarios = [],
+    currentUsuario,
 }: AgendaViewProps) {
     const router = useRouter()
     const searchParams = useSearchParams()
     const urlVista = (searchParams.get('vista') as ViewMode) || 'semana'
     const urlProf = searchParams.get('profesional') || 'todos'
+
+    const isProfesional = currentUsuario?.rol === 'profesional' && !!currentUsuario?.profesional_id
+    const lockedProfId = isProfesional ? currentUsuario.profesional_id : null
     
     const [turnos, setTurnos] = useState<any[]>(turnosIniciales || [])
     
@@ -137,11 +142,11 @@ export function AgendaView({
 
     // Controlled View & Filter States
     const [vistaActiva, setVistaActiva] = useState<ViewMode>(urlVista)
-    const [filtroProf, setFiltroProf] = useState<string>(urlProf)
+    const [filtroProf, setFiltroProf] = useState<string>(lockedProfId || urlProf)
     const [baseDate, setBaseDate] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
     const [diaSeleccionado, setDiaSeleccionado] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
     const [modalOpen, setModalOpen] = useState(false)
-    const [modalProfId, setModalProfId] = useState<string>('')
+    const [modalProfId, setModalProfId] = useState<string>(lockedProfId || '')
     const [modalHora, setModalHora] = useState<string>('09:00')
     const [turnoAEditar, setTurnoAEditar] = useState<any>(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -197,10 +202,10 @@ export function AgendaView({
         if (urlVista && urlVista !== vistaActiva) {
             setVistaActiva(urlVista)
         }
-        if (urlProf && urlProf !== filtroProf) {
+        if (urlProf && urlProf !== filtroProf && !isProfesional) {
             setFiltroProf(urlProf)
         }
-    }, [urlVista, urlProf])
+    }, [urlVista, urlProf, isProfesional])
 
     // Sync local baseDate, vistaActiva and filtroProf back to the URL parameters and Next.js router
     useEffect(() => {
@@ -258,6 +263,11 @@ export function AgendaView({
                         setTurnos(prev => prev.filter(t => t.id !== oldId))
                     } else if (eventType === 'INSERT' || eventType === 'UPDATE') {
                         const newRow = payload.new as any
+
+                        // Si el usuario es profesional, descartar eventos de otros profesionales
+                        if (isProfesional && lockedProfId && newRow.profesional_id !== lockedProfId) {
+                            return
+                        }
                         
                         // Check if we already have this patient in local list
                         let pacienteObj = pacientes.find(p => p.id === newRow.paciente_id)
@@ -1192,56 +1202,79 @@ export function AgendaView({
 
             {/* Desktop Professional Selector Bar (Pill Tabs) */}
             <motion.div custom={0.5} variants={sectionVariants} initial="hidden" animate="visible" className="hidden md:flex items-center justify-between gap-2.5 w-full bg-card/20 backdrop-blur-xl py-1 px-2.5 rounded-xl border border-border/40 shadow-sm">
-                <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-0.5">
-                    <span className="text-[11px] font-bold text-muted-foreground pl-0.5 pr-0.5 flex items-center gap-1.5 shrink-0 uppercase tracking-wider">
-                        <User className="h-3.5 w-3.5 text-primary" />
-                        Profesional:
-                    </span>
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            onClick={() => setFiltroProf('todos')}
-                            className={cn(
-                                'px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-200 shrink-0 flex items-center gap-1.5 border',
-                                filtroProf === 'todos'
-                                    ? 'bg-primary border-primary text-primary-foreground shadow-sm'
-                                    : 'glass border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10'
-                            )}
-                        >
-                            👥 Todos los profesionales
-                        </button>
-                        {profesionales.map(prof => {
-                            const isSelected = filtroProf === prof.id
-                            return (
+                {isProfesional ? (
+                    <div className="flex items-center gap-2 py-0.5 w-full justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] font-bold text-muted-foreground pl-0.5 flex items-center gap-1.5 shrink-0 uppercase tracking-wider">
+                                <User className="h-3.5 w-3.5 text-primary" />
+                                Mi Agenda:
+                            </span>
+                            <div className="flex items-center gap-2 px-3 py-1 rounded-lg border bg-primary/10 border-primary/20 text-foreground font-semibold text-xs shadow-sm">
+                                <span className="h-2.5 w-2.5 rounded-full shadow-sm" style={{ backgroundColor: selectedProfObj?.color_agenda || '#3b82f6' }} />
+                                Dr. {selectedProfObj?.nombre} {selectedProfObj?.apellido || ''}
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 pr-0.5 shrink-0">
+                            <span className="text-[10px] font-bold text-emerald-500 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                Vista Profesional Exclusiva
+                            </span>
+                        </div>
+                    </div>
+                ) : (
+                    <>
+                        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-0.5">
+                            <span className="text-[11px] font-bold text-muted-foreground pl-0.5 pr-0.5 flex items-center gap-1.5 shrink-0 uppercase tracking-wider">
+                                <User className="h-3.5 w-3.5 text-primary" />
+                                Profesional:
+                            </span>
+                            <div className="flex items-center gap-1.5">
                                 <button
-                                    key={prof.id}
-                                    onClick={() => setFiltroProf(prof.id)}
+                                    onClick={() => setFiltroProf('todos')}
                                     className={cn(
                                         'px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-200 shrink-0 flex items-center gap-1.5 border',
-                                        isSelected
-                                            ? 'border-transparent text-white shadow-sm'
+                                        filtroProf === 'todos'
+                                            ? 'bg-primary border-primary text-primary-foreground shadow-sm'
                                             : 'glass border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10'
                                     )}
-                                    style={
-                                        isSelected
-                                            ? { backgroundColor: `${prof.color_agenda}45`, borderColor: prof.color_agenda, color: '#ffffff' }
-                                            : undefined
-                                    }
                                 >
-                                    <span className="h-2 w-2 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: prof.color_agenda }} />
-                                    Dr. {prof.nombre} {prof.apellido || ''}
+                                    👥 Todos los profesionales
                                 </button>
-                            )
-                        })}
-                    </div>
-                </div>
-                
-                {filtroProf !== 'todos' && selectedProfObj && (
-                    <div className="flex items-center gap-2 pr-0.5 shrink-0">
-                        <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg flex items-center gap-1">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Agenda Individual
-                        </span>
-                    </div>
+                                {profesionales.map(prof => {
+                                    const isSelected = filtroProf === prof.id
+                                    return (
+                                        <button
+                                            key={prof.id}
+                                            onClick={() => setFiltroProf(prof.id)}
+                                            className={cn(
+                                                'px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-200 shrink-0 flex items-center gap-1.5 border',
+                                                isSelected
+                                                    ? 'border-transparent text-white shadow-sm'
+                                                    : 'glass border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10'
+                                            )}
+                                            style={
+                                                isSelected
+                                                    ? { backgroundColor: `${prof.color_agenda}45`, borderColor: prof.color_agenda, color: '#ffffff' }
+                                                    : undefined
+                                            }
+                                        >
+                                            <span className="h-2 w-2 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: prof.color_agenda }} />
+                                            Dr. {prof.nombre} {prof.apellido || ''}
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                        
+                        {filtroProf !== 'todos' && selectedProfObj && (
+                            <div className="flex items-center gap-2 pr-0.5 shrink-0">
+                                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-lg flex items-center gap-1">
+                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                                    Agenda Individual
+                                </span>
+                            </div>
+                        )}
+                    </>
                 )}
             </motion.div>
 
@@ -1641,39 +1674,51 @@ export function AgendaView({
                     </div>
 
                     {/* Professional filter pills horizontal bar */}
-                    <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5 select-none w-full">
-                        <button
-                            onClick={() => setFiltroProf('todos')}
-                            className={cn(
-                                "px-3 py-1 text-[11px] font-bold rounded-full border transition-all duration-200 shrink-0",
-                                filtroProf === 'todos'
-                                    ? "bg-primary border-primary text-primary-foreground shadow-sm"
-                                    : "glass border-white/10 text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            Todos
-                        </button>
-                        {profesionales.map(prof => (
+                    {isProfesional ? (
+                        <div className="flex items-center justify-between gap-2 py-0.5 w-full">
+                            <div className="flex items-center gap-2 px-3 py-1 rounded-full border bg-primary/10 border-primary/20 text-foreground font-semibold text-xs shadow-sm">
+                                <span className="h-2 w-2 rounded-full shadow-sm" style={{ backgroundColor: selectedProfObj?.color_agenda || '#3b82f6' }} />
+                                <span>Mi Agenda: Dr. {selectedProfObj?.nombre} {selectedProfObj?.apellido || ''}</span>
+                            </div>
+                            <span className="text-[10px] font-bold text-emerald-500 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full shrink-0">
+                                Exclusiva
+                            </span>
+                        </div>
+                    ) : (
+                        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5 select-none w-full">
                             <button
-                                key={prof.id}
-                                onClick={() => setFiltroProf(prof.id)}
+                                onClick={() => setFiltroProf('todos')}
                                 className={cn(
-                                    "px-3 py-1 text-[11px] font-bold rounded-full border transition-all duration-200 shrink-0 flex items-center gap-1.5",
-                                    filtroProf === prof.id
-                                        ? "border-transparent text-foreground shadow-sm"
+                                    "px-3 py-1 text-[11px] font-bold rounded-full border transition-all duration-200 shrink-0",
+                                    filtroProf === 'todos'
+                                        ? "bg-primary border-primary text-primary-foreground shadow-sm"
                                         : "glass border-white/10 text-muted-foreground hover:text-foreground"
                                 )}
-                                style={
-                                    filtroProf === prof.id
-                                        ? { backgroundColor: `${prof.color_agenda}35`, border: `1px solid ${prof.color_agenda}` }
-                                        : undefined
-                                }
                             >
-                                <span className="h-2 w-2 rounded-full shadow-sm" style={{ backgroundColor: prof.color_agenda }} />
-                                Dr. {prof.nombre}
+                                Todos
                             </button>
-                        ))}
-                    </div>
+                            {profesionales.map(prof => (
+                                <button
+                                    key={prof.id}
+                                    onClick={() => setFiltroProf(prof.id)}
+                                    className={cn(
+                                        "px-3 py-1 text-[11px] font-bold rounded-full border transition-all duration-200 shrink-0 flex items-center gap-1.5",
+                                        filtroProf === prof.id
+                                            ? "border-transparent text-foreground shadow-sm"
+                                            : "glass border-white/10 text-muted-foreground hover:text-foreground"
+                                    )}
+                                    style={
+                                        filtroProf === prof.id
+                                            ? { backgroundColor: `${prof.color_agenda}35`, border: `1px solid ${prof.color_agenda}` }
+                                            : undefined
+                                    }
+                                >
+                                    <span className="h-2 w-2 rounded-full shadow-sm" style={{ backgroundColor: prof.color_agenda }} />
+                                    Dr. {prof.nombre}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Main mobile view renderer */}
@@ -1929,10 +1974,11 @@ export function AgendaView({
                 tiposTratamiento={tiposTratamiento}
                 pacientes={pacientes}
                 horarios={horarios}
-                defaultProfesionalId={modalProfId}
+                defaultProfesionalId={lockedProfId || modalProfId}
                 defaultFecha={format(diaSeleccionado, 'yyyy-MM-dd')}
                 defaultHora={modalHora}
                 turnoAEditar={turnoAEditar}
+                readOnlyProfesional={isProfesional}
                 onSuccess={(turnoRaw, isEdit, nuevoPaciente) => {
                     const pacienteObj = nuevoPaciente || turnoRaw.paciente || (pacientes || []).find((p: any) => p.id === turnoRaw.paciente_id)
                     const profesionalObj = turnoRaw.profesional || profesionales.find((p: any) => p.id === turnoRaw.profesional_id)
