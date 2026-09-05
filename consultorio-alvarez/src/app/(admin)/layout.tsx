@@ -44,7 +44,8 @@ export default async function AdminLayout({
 
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
-    const requestedTenant = await resolveTenant(rawHost)
+    const cleanHost = rawHost ? rawHost.split(':')[0].toLowerCase() : ''
+    const isLocalhost = cleanHost === 'localhost' || cleanHost === '127.0.0.1' || cleanHost.endsWith('.vercel.app')
 
     const isSuperadmin = 
         usuario.rol === 'superadmin' || 
@@ -53,8 +54,11 @@ export default async function AdminLayout({
         user.email?.endsWith('@creapp.com') || 
         user.email?.endsWith('@dental-ia.com')
 
-    if (requestedTenant && usuario.tenant_id !== requestedTenant.id && !isSuperadmin) {
-        redirect(`/login?slug=${requestedTenant.slug}&error=${encodeURIComponent(`Tenés una sesión activa de otro consultorio. Iniciá sesión con tu cuenta de ${requestedTenant.nombre}.`)}`)
+    if (!isLocalhost && !isSuperadmin) {
+        const requestedTenant = await resolveTenant(rawHost)
+        if (requestedTenant && requestedTenant.custom_domain && usuario.tenant_id !== requestedTenant.id) {
+            redirect(`/login?slug=${requestedTenant.slug}&error=${encodeURIComponent(`Tenés una sesión activa de otro consultorio. Iniciá sesión con tu cuenta de ${requestedTenant.nombre}.`)}`)
+        }
     }
 
     if (settings?.fecha_vencimiento && !isSuperadmin) {

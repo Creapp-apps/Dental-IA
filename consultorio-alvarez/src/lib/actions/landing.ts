@@ -90,24 +90,48 @@ export async function getLandingConfigAdmin(tenantSlug?: string): Promise<Landin
     if (!user) return null
 
     const adminSupabase = createAdminClient()
-    let query = adminSupabase.from('tenants').select('id, nombre, color_primario, color_secundario')
-    if (tenantSlug) {
-        query = query.eq('slug', tenantSlug)
-    }
-    const { data: userTenant } = await query.limit(1).single()
 
-    if (!userTenant) return null
+    let tenantId: string | null = null
+    let userTenant: any = null
+
+    if (tenantSlug) {
+        const { data } = await adminSupabase
+            .from('tenants')
+            .select('id, nombre, color_primario, color_secundario')
+            .eq('slug', tenantSlug)
+            .single()
+        userTenant = data
+        tenantId = data?.id ?? null
+    } else {
+        const { data: usuario } = await adminSupabase
+            .from('usuarios')
+            .select('tenant_id')
+            .eq('id', user.id)
+            .single()
+        
+        if (usuario?.tenant_id) {
+            tenantId = usuario.tenant_id
+            const { data } = await adminSupabase
+                .from('tenants')
+                .select('id, nombre, color_primario, color_secundario')
+                .eq('id', tenantId)
+                .single()
+            userTenant = data
+        }
+    }
+
+    if (!tenantId || !userTenant) return null
 
     const { data } = await adminSupabase
         .from('landing_config')
         .select('*')
-        .eq('tenant_id', userTenant.id)
-        .single()
+        .eq('tenant_id', tenantId)
+        .maybeSingle()
 
     if (!data) {
         return {
             id: '',
-            tenant_id: userTenant.id,
+            tenant_id: tenantId,
             ...DEFAULT_LANDING_CONFIG,
             meta_title: userTenant.nombre,
             color_primary: userTenant.color_primario || DEFAULT_LANDING_CONFIG.color_primary,
@@ -122,7 +146,19 @@ export async function getLandingConfigAdmin(tenantSlug?: string): Promise<Landin
             },
         }
     }
-    return data as LandingConfig
+
+    const config = { ...data } as LandingConfig
+    if (!config.logo_config || !config.logo_config.text) {
+        config.logo_config = {
+            type: 'text',
+            image_url: null,
+            text: userTenant.nombre,
+            font: 'font-sans',
+            icon: 'Stethoscope',
+            color_style: 'gradient',
+        }
+    }
+    return config
 }
 
 // ── Guardar / upsert ──────────────────────────────────────────────
