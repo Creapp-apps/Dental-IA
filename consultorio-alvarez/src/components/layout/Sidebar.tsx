@@ -17,6 +17,7 @@ import {
     Clock,
     CalendarCheck,
     ArrowUpRight,
+    ShieldCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/lib/actions/auth'
@@ -182,6 +183,12 @@ export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBilli
     const [isOpen, setIsOpen] = useState(false)
 
     const isProfesional = userRole === 'profesional'
+    const isSuperadmin = 
+        userRole === 'superadmin' || 
+        userEmail === 'creapp.ar@gmail.com' ||
+        userEmail === 'mazasebastian@hotmail.com' || 
+        userEmail?.endsWith('@creapp.com') || 
+        userEmail?.endsWith('@dental-ia.com')
 
     useEffect(() => {
         setMounted(true)
@@ -304,6 +311,19 @@ export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBilli
                                 </Link>
                             )
                         })}
+
+                        {isSuperadmin && (
+                            <div className="pt-2">
+                                <Link
+                                    href="/superadmin"
+                                    className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold bg-gradient-to-r from-indigo-500/15 via-cyan-500/10 to-indigo-500/15 text-cyan-400 hover:text-white border border-cyan-500/30 hover:border-cyan-500/50 transition-all shadow-sm group"
+                                >
+                                    <ShieldCheck className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition-transform" />
+                                    <span className="flex-1">Panel SaaS</span>
+                                    <ArrowUpRight className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100" />
+                                </Link>
+                            </div>
+                        )}
                     </div>
                 )}
 
