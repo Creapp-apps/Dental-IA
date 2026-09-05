@@ -26,7 +26,7 @@ interface LiveToast extends Notificacion {
     toastId: string
 }
 
-export function NotificationProvider({ children }: { children: ReactNode }) {
+export function NotificationProvider({ children, tenantId }: { children: ReactNode; tenantId?: string }) {
     const [notifications, setNotifications] = useState<Notificacion[]>([])
     const [toasts, setToasts] = useState<LiveToast[]>([])
     const [mounted, setMounted] = useState(false)
@@ -78,9 +78,15 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         let isMounted = true
 
         const fetchInitial = async () => {
+            if (!tenantId) {
+                setNotifications([])
+                return
+            }
+
             const { data } = await supabase
                 .from('notificaciones')
                 .select('*')
+                .eq('tenant_id', tenantId)
                 .order('created_at', { ascending: false })
                 .limit(50)
 
@@ -91,13 +97,24 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
         fetchInitial()
 
+        if (!tenantId) return
+
+        const channelName = `notificaciones-${tenantId}`
         const channel = supabase
-            .channel('notificaciones-changes')
+            .channel(channelName)
             .on(
                 'postgres_changes',
-                { event: 'INSERT', schema: 'public', table: 'notificaciones' },
+                { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'notificaciones',
+                    filter: `tenant_id=eq.${tenantId}`
+                },
                 (payload) => {
                     const newNotif = payload.new as Notificacion
+                    if (newNotif.tenant_id && newNotif.tenant_id !== tenantId) {
+                        return
+                    }
                     setNotifications(prev => [newNotif, ...prev])
                     
                     // Disparar Toast flotante en tiempo real
@@ -138,9 +155,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             )
             .on(
                 'postgres_changes',
-                { event: 'UPDATE', schema: 'public', table: 'notificaciones' },
+                { 
+                    event: 'UPDATE', 
+                    schema: 'public', 
+                    table: 'notificaciones',
+                    filter: `tenant_id=eq.${tenantId}`
+                },
                 (payload) => {
-                    setNotifications(prev => prev.map(n => n.id === payload.new.id ? payload.new as Notificacion : n))
+                    const updatedNotif = payload.new as Notificacion
+                    if (updatedNotif.tenant_id && updatedNotif.tenant_id !== tenantId) {
+                        return
+                    }
+                    setNotifications(prev => prev.map(n => n.id === updatedNotif.id ? updatedNotif : n))
                 }
             )
             .subscribe()
@@ -149,13 +175,17 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
             isMounted = false
             supabase.removeChannel(channel)
         }
-    }, [supabase])
+    }, [supabase, tenantId])
 
     const markAsRead = async (id: string) => {
         // Optimistic update
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, leida: true } : n))
         setToasts(prev => prev.filter(t => t.id !== id))
-        await supabase.from('notificaciones').update({ leida: true }).eq('id', id)
+        let query = supabase.from('notificaciones').update({ leida: true }).eq('id', id)
+        if (tenantId) {
+            query = query.eq('tenant_id', tenantId)
+        }
+        await query
     }
 
     const markAllAsRead = async () => {
@@ -165,7 +195,11 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
         // Optimistic update
         setNotifications(prev => prev.map(n => ({ ...n, leida: true })))
         setToasts([])
-        await supabase.from('notificaciones').update({ leida: true }).in('id', unreadIds)
+        let query = supabase.from('notificaciones').update({ leida: true }).in('id', unreadIds)
+        if (tenantId) {
+            query = query.eq('tenant_id', tenantId)
+        }
+        await query
     }
 
     const dismissToast = (toastId: string) => {

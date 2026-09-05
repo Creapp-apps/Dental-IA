@@ -100,7 +100,7 @@ export default async function AdminLayout({
             <div id="admin-layout-root" className="flex h-screen overflow-hidden bg-background relative selection:bg-primary/30 flex-col lg:flex-row">
                 <AdminBackground colorHex={primaryStr} />
                 <div className="relative z-10 flex w-full h-full flex-col lg:flex-row">
-                    <NotificationProvider>
+                    <NotificationProvider tenantId={usuario.tenant_id}>
                         <Sidebar 
                             userEmail={user.email} 
                             userRole={usuario.rol}

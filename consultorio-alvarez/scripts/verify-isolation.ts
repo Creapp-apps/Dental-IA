@@ -254,6 +254,41 @@ async function runAudit() {
         const leakedTurno = turnosAlvarez?.find((t: any) => t.id === turnoCuradent?.id)
         assert(!leakedTurno, 'Aislamiento de Agenda: El turno de Curadent es invisible e inaccesible para Álvarez')
 
+        // ── PRUEBA 7: Aislamiento de Notificaciones y Alertas ──
+        const { data: notifCuradent } = await supabase
+            .from('notificaciones')
+            .insert({
+                tenant_id: curadentTenant!.id,
+                titulo: '🌟 Turno Curadent Test',
+                mensaje: 'Notificación de prueba para validar aislamiento',
+                tipo: 'turno_nuevo',
+            })
+            .select()
+            .single()
+
+        // Consultar notificaciones filtradas por el tenant Álvarez
+        const { data: notifsAlvarez } = await supabase
+            .from('notificaciones')
+            .select('id, tenant_id')
+            .eq('tenant_id', alvarezTenant!.id)
+
+        const leakedNotif = notifsAlvarez?.find((n: any) => n.id === notifCuradent?.id)
+        assert(!leakedNotif, 'Aislamiento de Notificaciones: La alerta de Curadent no aparece para Álvarez')
+
+        // Consultar notificaciones filtradas por el tenant Curadent
+        const { data: notifsCuradentList } = await supabase
+            .from('notificaciones')
+            .select('id, tenant_id')
+            .eq('tenant_id', curadentTenant!.id)
+
+        const crossNotifAlvarezInCuradent = notifsCuradentList?.find((n: any) => n.tenant_id === alvarezTenant!.id)
+        assert(!crossNotifAlvarezInCuradent, 'Aislamiento de Notificaciones: Curadent tiene CERO alertas de Álvarez')
+
+        // Limpieza de notificación de prueba
+        if (notifCuradent?.id) {
+            await supabase.from('notificaciones').delete().eq('id', notifCuradent.id)
+        }
+
         // Limpieza de datos de prueba temporales
         if (turnoCuradent?.id) {
             await supabase.from('turnos').delete().eq('id', turnoCuradent.id)
