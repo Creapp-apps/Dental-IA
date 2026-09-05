@@ -17,33 +17,31 @@ import type { LandingConfig } from '@/lib/types/landing'
 
 gsap.registerPlugin(ScrollTrigger)
 
-function getBackground(progress: number): string {
-    if (progress < 0.45) {
-        const t = progress / 0.45
-        return `rgb(${Math.round(238 - t * 15)},${Math.round(246 - t * 20)},255)`
-    } else if (progress < 0.65) {
-        const t = (progress - 0.45) / 0.2
-        return `rgb(${Math.round(223 - t * 212)},${Math.round(226 - t * 205)},${Math.round(245 - t * 208)})`
-    } else if (progress < 0.82) {
-        return 'rgb(11,21,37)'
+function getBackground(progress: number, bgHero = '#f0fdfa', bgDark = '#0b1525'): string {
+    if (progress < 0.50) {
+        return bgHero
+    } else if (progress < 0.75) {
+        return bgDark
     } else {
-        const t = (progress - 0.82) / 0.18
-        return `rgb(${Math.round(11 + t * 230)},${Math.round(21 + t * 228)},${Math.round(37 + t * 218)})`
+        return bgHero
     }
 }
 
 interface LandingPageClientProps {
     slug: string
+    tenantNombre?: string
     config: LandingConfig & { id: string; tenant_id: string }
     professionals: any[]
     obrasSociales: any[]
 }
 
-export function LandingPageClient({ slug, config, professionals, obrasSociales }: LandingPageClientProps) {
+export function LandingPageClient({ slug, tenantNombre, config, professionals, obrasSociales }: LandingPageClientProps) {
     const [scrollProgress, setScrollProgress] = useState(0)
     const mainRef = useRef<HTMLDivElement>(null)
     const bgRef = useRef<HTMLDivElement>(null)
     const lenisRef = useRef<Lenis | null>(null)
+
+    const clinicName = tenantNombre || ((config as any)?.logo_config?.text) || config?.meta_title || 'Consultorio Odontológico'
 
     useEffect(() => {
         const lenis = new Lenis({
@@ -76,9 +74,13 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
 
     useEffect(() => {
         if (bgRef.current) {
-            bgRef.current.style.backgroundColor = getBackground(scrollProgress)
+            bgRef.current.style.backgroundColor = getBackground(
+                scrollProgress,
+                config.color_bg_hero,
+                config.color_bg_dark
+            )
         }
-    }, [scrollProgress])
+    }, [scrollProgress, config.color_bg_hero, config.color_bg_dark])
 
     const scrollToBooking = () => {
         const target = document.getElementById('reservar')
@@ -104,17 +106,18 @@ export function LandingPageClient({ slug, config, professionals, obrasSociales }
             />
             <MeshGradient scrollProgress={scrollProgress} />
             <main className="relative z-10">
-                <HeroSection onBookingClick={scrollToBooking} config={config} />
-                <AboutUsSection onBookingClick={scrollToBooking} colorPrimary={config.color_primary} />
+                <HeroSection onBookingClick={scrollToBooking} config={config} clinicName={clinicName} />
+                <AboutUsSection onBookingClick={scrollToBooking} colorPrimary={config.color_primary} bgHero={config.color_bg_hero} />
                 <ServicesSection onBookingClick={scrollToBooking} config={config} />
                 <TeamSection config={config} professionals={professionals} />
                 {obrasSociales && obrasSociales.length > 0 && (
                     <ObrasSocialesSection config={config} obrasSociales={obrasSociales} />
                 )}
                 <BookingSection config={config} slug={slug} />
-                <FooterSection config={config} />
+                <FooterSection config={config} clinicName={clinicName} />
                 <FloatingChatbot
                     slug={slug}
+                    clinicName={clinicName}
                     colorPrimary={config.color_primary}
                     professionals={professionals}
                     obrasSociales={obrasSociales}

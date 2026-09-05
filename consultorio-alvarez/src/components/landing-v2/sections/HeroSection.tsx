@@ -38,9 +38,10 @@ const SLIDES = [
 interface Props {
     onBookingClick: () => void
     config?: Pick<LandingConfig, 'hero_badge' | 'hero_titulo' | 'hero_subtitulo' | 'color_primary' | 'color_accent' | 'footer_address' | 'footer_phone' | 'logo_config'>
+    clinicName?: string
 }
 
-export function HeroSection({ onBookingClick, config }: Props) {
+export function HeroSection({ onBookingClick, config, clinicName }: Props) {
     const titleRef = useRef<HTMLHeadingElement>(null)
     const subtitleRef = useRef<HTMLParagraphElement>(null)
     const ctaRef = useRef<HTMLDivElement>(null)
@@ -60,8 +61,9 @@ export function HeroSection({ onBookingClick, config }: Props) {
         let currentStep = 0
 
         const interval = setInterval(() => {
-            currentStep++
-            setProgress((currentStep / steps) * 100)
+            currentStep += 1
+            const p = (currentStep / steps) * 100
+            setProgress(p)
 
             if (currentStep >= steps) {
                 setCurrentSlide((prev) => (prev + 1) % SLIDES.length)
@@ -71,7 +73,7 @@ export function HeroSection({ onBookingClick, config }: Props) {
         }, stepTime)
 
         return () => clearInterval(interval)
-    }, [currentSlide, isHovered])
+    }, [isHovered])
 
     const nextSlide = () => {
         setCurrentSlide((prev) => (prev + 1) % SLIDES.length)
@@ -83,16 +85,26 @@ export function HeroSection({ onBookingClick, config }: Props) {
         setProgress(0)
     }
 
-    // GSAP animations for slide content changes
+    // Slide transition animation
     useEffect(() => {
-        if (!titleRef.current || !subtitleRef.current || !ctaRef.current) return
+        const tl = gsap.timeline()
 
-        const tl = gsap.timeline({ defaults: { ease: 'power3.out' } })
-        
         tl.fromTo(
-            [titleRef.current, subtitleRef.current],
-            { opacity: 0, y: 15 },
-            { opacity: 1, y: 0, duration: 0.5, stagger: 0.1 }
+            containerRef.current,
+            { y: 15, opacity: 0 },
+            { y: 0, opacity: 1, duration: 0.6, ease: 'power3.out' }
+        )
+        tl.fromTo(
+            titleRef.current,
+            { y: 20, opacity: 0 },
+            { y: 0, opacity: 1, duration: 0.5, ease: 'power2.out' },
+            '-=0.3'
+        )
+        tl.fromTo(
+            subtitleRef.current,
+            { y: 15, opacity: 0 },
+            { y: 0, opacity: 1, duration: 0.5, ease: 'power2.out' },
+            '-=0.3'
         )
         tl.fromTo(
             ctaRef.current,
@@ -113,7 +125,7 @@ export function HeroSection({ onBookingClick, config }: Props) {
                     <TenantLogo
                         config={(config as any)?.logo_config}
                         colorPrimary={config?.color_primary}
-                        fallbackName={CLINIC.name}
+                        fallbackName={clinicName || ((config as any)?.logo_config?.text) || CLINIC.name}
                     />
                     
                     {/* Call-to-Action */}
@@ -161,11 +173,17 @@ export function HeroSection({ onBookingClick, config }: Props) {
                 </div>
 
                 {/* BLENDING GRADIENTS (Smooth transitions to web background) */}
-                {/* Top Fade to White/Ice Blue */}
-                <div className="absolute top-0 left-0 right-0 h-28 bg-gradient-to-b from-[#eef6ff] via-[#eef6ff]/35 to-transparent pointer-events-none z-10" />
+                {/* Top Fade to Web Background */}
+                <div 
+                    className="absolute top-0 left-0 right-0 h-28 pointer-events-none z-10"
+                    style={{ background: 'linear-gradient(to bottom, var(--landing-bg-hero, #f0fdfa), transparent)' }}
+                />
                 
-                {/* Bottom Fade to White/Ice Blue */}
-                <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#eef6ff] via-[#eef6ff]/50 to-transparent pointer-events-none z-10" />
+                {/* Bottom Fade to Web Background */}
+                <div 
+                    className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none z-10"
+                    style={{ background: 'linear-gradient(to top, var(--landing-bg-hero, #f0fdfa), transparent)' }}
+                />
 
                 {/* OVERLAY CARD (Left-aligned, white, rounded) */}
                 <div className="absolute left-6 md:left-20 lg:left-32 top-[55%] md:top-[50%] -translate-y-1/2 z-20 w-[calc(100%-3rem)] sm:w-auto sm:max-w-md">

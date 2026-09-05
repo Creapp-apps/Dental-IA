@@ -3,7 +3,8 @@ import { MapPin, Phone, Mail, Clock } from 'lucide-react'
 import type { LandingConfig } from '@/lib/types/landing'
 import { TenantLogo } from '@/components/ui/tenant-logo'
 
-export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
+export function FooterSection({ config, clinicName }: { config?: Partial<LandingConfig>; clinicName?: string }) {
+    const effectiveClinicName = clinicName || ((config as any)?.logo_config?.text) || CLINIC.name
     const address = config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`
     const phone = config?.footer_phone ?? CLINIC.phone
     const email = config?.footer_email ?? CLINIC.email
@@ -19,7 +20,7 @@ export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
                             <TenantLogo
                                 config={(config as any)?.logo_config}
                                 colorPrimary={config?.color_primary}
-                                fallbackName={CLINIC.name}
+                                fallbackName={effectiveClinicName}
                             />
                         </div>
                         <p className="text-sm text-gray-500 leading-relaxed max-w-xs mx-auto md:mx-0">
@@ -71,7 +72,7 @@ export function FooterSection({ config }: { config?: Partial<LandingConfig> }) {
 
                 <div className="mt-12 pt-6 border-t border-gray-100 text-center">
                     <p className="text-xs text-gray-400">
-                        © {new Date().getFullYear()} {((config as any)?.logo_config?.type === 'text' && (config as any)?.logo_config?.text) ? (config as any).logo_config.text : CLINIC.name}. Todos los derechos reservados.
+                        © {new Date().getFullYear()} {((config as any)?.logo_config?.type === 'text' && (config as any)?.logo_config?.text) ? (config as any).logo_config.text : effectiveClinicName}. Todos los derechos reservados.
                     </p>
                 </div>
             </div>

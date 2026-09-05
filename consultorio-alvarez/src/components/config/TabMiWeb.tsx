@@ -139,13 +139,13 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                 ...colores,
                 servicios,
                 logo_config: logoConfig
-            })
+            }, slug)
             if (r.error) glassAlert.error({ title: 'Error al guardar', description: r.error })
             else glassAlert.success({ title: '¡Landing actualizada!', description: 'Los cambios ya están publicados.' })
         })
     }
 
-    const landingUrl = `/`
+    const landingUrl = slug === 'alvarez' ? '/' : `/?slug=${slug}`
 
     return (
         <div className="space-y-5 max-w-3xl">

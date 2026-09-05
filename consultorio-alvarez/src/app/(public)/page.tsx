@@ -12,6 +12,8 @@ export default async function LandingPage() {
     const tenant = await resolveTenant(rawHost)
     const slug = tenant?.slug || process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
 
+    const tenantNombre = tenant?.nombre || 'Consultorio Odontológico'
+
     const [config, profesionales, obrasSociales] = await Promise.all([
         getLandingConfigPublica(slug).then(c => c ?? { id: '', tenant_id: '', ...DEFAULT_LANDING_CONFIG }),
         getProfesionalesPublicos(slug),
@@ -20,9 +22,14 @@ export default async function LandingPage() {
 
     return (
         <>
-            {/* Inject tenant CSS variables for colors */}
+            {/* Inject tenant CSS variables for colors, ensuring total congruence across Tailwind and landing tokens */}
             <style>{`
                 :root {
+                    --primary: ${config.color_primary};
+                    --primary-foreground: #ffffff;
+                    --color-primary: ${config.color_primary};
+                    --ring: ${config.color_primary};
+                    --color-ring: ${config.color_primary};
                     --landing-primary: ${config.color_primary};
                     --landing-primary-hover: ${config.color_primary_hover};
                     --landing-accent: ${config.color_accent};
@@ -32,6 +39,7 @@ export default async function LandingPage() {
             `}</style>
             <LandingPageClient
                 slug={slug}
+                tenantNombre={tenantNombre}
                 config={config}
                 professionals={profesionales}
                 obrasSociales={obrasSociales}

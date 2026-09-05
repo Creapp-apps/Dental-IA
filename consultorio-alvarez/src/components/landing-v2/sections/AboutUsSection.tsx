@@ -17,7 +17,7 @@ const SCENES: VideoScene[] = [
     {
         id: 'instalaciones',
         title: 'Instalaciones Premium & Sillones 3D',
-        subtitle: 'Consultorio climatizado y equipado con tecnología de alta precisión en Olivos.',
+        subtitle: 'Consultorio climatizado y equipado con tecnología médica de alta precisión.',
         badge: 'Equipamiento de Avanzada',
         src: '/videos/Consultorio%20VIDEO%201.mp4'
     },
@@ -40,9 +40,10 @@ const SCENES: VideoScene[] = [
 interface Props {
     onBookingClick: () => void
     colorPrimary?: string
+    bgHero?: string
 }
 
-export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488' }: Props) {
+export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHero }: Props) {
     const [currentSceneIdx, setCurrentSceneIdx] = useState(0)
     const [isMuted, setIsMuted] = useState(true)
     const [isPlaying, setIsPlaying] = useState(true)
@@ -104,7 +105,13 @@ export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488' }: Pro
     }
 
     return (
-        <section id="conocenos" className="w-full py-20 bg-gradient-to-b from-[#eef6ff] via-white to-[#eef6ff] relative overflow-hidden select-none">
+        <section 
+            id="conocenos" 
+            className="w-full py-20 relative overflow-hidden select-none"
+            style={{
+                background: `linear-gradient(to bottom, ${bgHero || 'var(--landing-bg-hero, #f0fdfa)'}, #ffffff, ${bgHero || 'var(--landing-bg-hero, #f0fdfa)'})`
+            }}
+        >
             {/* Background Ambient Glow */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
 
@@ -123,7 +130,7 @@ export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488' }: Pro
                     </h2>
 
                     <p className="text-sm sm:text-base text-slate-600 leading-relaxed font-medium">
-                        Recorré virtualmente nuestras instalaciones de vanguardia en Olivos. Tecnología de alta precisión, higiene médica rigurosa y máxima comodidad para tu atención.
+                        Recorré virtualmente nuestras instalaciones de vanguardia. Tecnología de alta precisión, higiene médica rigurosa y máxima comodidad para tu atención.
                     </p>
                 </div>
 
@@ -290,7 +297,7 @@ export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488' }: Pro
                                 <Clock className="h-5 w-5" />
                             </div>
                             <div>
-                                <h4 className="text-sm font-black text-slate-900 mb-0.5">Turnos Puntuales en Olivos</h4>
+                                <h4 className="text-sm font-black text-slate-900 mb-0.5">Turnos Puntuales y Sin Demoras</h4>
                                 <p className="text-xs text-slate-600 leading-relaxed">
                                     Gestión de agenda sin demoras para garantizar una atención relajada y personalizada.
                                 </p>

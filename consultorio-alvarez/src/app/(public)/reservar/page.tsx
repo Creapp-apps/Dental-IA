@@ -19,6 +19,11 @@ export default async function ReservarPage() {
             {/* CSS Variables maestro para el V2 BookingSection */}
             <style>{`
                 :root {
+                    --primary: ${config.color_primary};
+                    --primary-foreground: #ffffff;
+                    --color-primary: ${config.color_primary};
+                    --ring: ${config.color_primary};
+                    --color-ring: ${config.color_primary};
                     --landing-primary: ${config.color_primary};
                     --landing-primary-hover: ${config.color_primary_hover};
                     --landing-accent: ${config.color_accent};
