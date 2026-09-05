@@ -16,7 +16,12 @@ export async function proxy(request: NextRequest) {
     // Extract and forward host for multi-tenant domain resolution
     const rawHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || ''
     const requestHeaders = new Headers(request.headers)
-    if (rawHost) {
+    
+    // Soporte para pruebas y entornos de desarrollo/staging sin dominio final:
+    const explicitTenant = request.nextUrl.searchParams.get('slug') || request.nextUrl.searchParams.get('tenant')
+    if (explicitTenant) {
+        requestHeaders.set('x-tenant-host', explicitTenant)
+    } else if (rawHost) {
         requestHeaders.set('x-tenant-host', rawHost)
     }
 
