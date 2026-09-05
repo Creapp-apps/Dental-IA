@@ -5,17 +5,28 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 
 // ── LOGIN ──────────────────────────────────────────────────────
-export async function loginAction(formData: FormData) {
+export async function loginAction(formData: FormData): Promise<{
+    success?: boolean
+    redirectTo?: string
+    error?: string
+}> {
     const email = formData.get('email') as string
     const password = formData.get('password') as string
+
+    if (!email || !password) {
+        return { error: 'Por favor completá todos los campos requeridos.' }
+    }
 
     const supabase = await createClient()
 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
     if (error) {
-        // Encodeamos el error en la URL para mostrarlo en la UI
-        redirect(`/login?error=${encodeURIComponent(error.message)}`)
+        return { error: error.message }
+    }
+
+    if (!data.user) {
+        return { error: 'No se pudo verificar la sesión.' }
     }
 
     // Verificar si el usuario autenticado tiene rol de superadmin o es email propietario
@@ -35,11 +46,10 @@ export async function loginAction(formData: FormData) {
 
     revalidatePath('/', 'layout')
 
-    if (isSuperadmin) {
-        redirect('/superadmin')
+    return {
+        success: true,
+        redirectTo: isSuperadmin ? '/superadmin' : '/admin'
     }
-
-    redirect('/admin')
 }
 
 // ── LOGOUT ─────────────────────────────────────────────────────

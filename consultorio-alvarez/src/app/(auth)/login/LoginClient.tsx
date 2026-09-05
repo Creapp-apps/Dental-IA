@@ -19,13 +19,14 @@ export default function LoginClient({
     slug?: string 
 }) {
     const [showPassword, setShowPassword] = useState(false)
-    const [loading, setLoading] = useState(false)
+    const [status, setStatus] = useState<'idle' | 'verificando' | 'ingresando'>('idle')
+    const [localError, setLocalError] = useState<string | null>(null)
 
     const isAlvarez = !slug || slug === 'alvarez'
 
-    const friendlyError = errorMsg?.includes('Invalid login credentials')
+    const activeError = localError || (errorMsg?.includes('Invalid login credentials')
         ? 'Email o contraseña incorrectos.'
-        : errorMsg ?? null
+        : errorMsg ?? null)
 
     return (
         <div className="relative min-h-screen flex items-center justify-center overflow-hidden bg-[#050d1a]">
@@ -96,25 +97,43 @@ export default function LoginClient({
                             </p>
                         </div>
 
-                        {friendlyError && (
+                        {activeError && (
                             <div className="flex items-center gap-2.5 mb-5 rounded-xl bg-red-500/10 text-red-300 px-4 py-3 text-sm border border-red-500/20 animate-in slide-in-from-top-2 duration-300">
                                 <AlertCircle className="h-4 w-4 shrink-0" />
-                                <span>{friendlyError}</span>
+                                <span>{activeError}</span>
                             </div>
                         )}
 
                         <form
                             onSubmit={async (e) => {
                                 e.preventDefault()
-                                if (loading) return
-                                setLoading(true)
+                                if (status !== 'idle') return
+                                setStatus('verificando')
+                                setLocalError(null)
                                 const formData = new FormData(e.currentTarget)
                                 try {
-                                    await loginAction(formData)
+                                    const result = await loginAction(formData)
+                                    if (result?.error) {
+                                        setLocalError(
+                                            result.error.includes('Invalid login credentials')
+                                                ? 'Email o contraseña incorrectos.'
+                                                : result.error
+                                        )
+                                        setStatus('idle')
+                                        return
+                                    }
+
+                                    if (result?.success && result?.redirectTo) {
+                                        setStatus('ingresando')
+                                        window.location.assign(result.redirectTo)
+                                        return
+                                    }
+
+                                    setStatus('idle')
                                 } catch (err) {
                                     console.error(err)
-                                } finally {
-                                    setLoading(false)
+                                    setLocalError('Error de conexión con el servidor. Intente nuevamente.')
+                                    setStatus('idle')
                                 }
                             }}
                             className="space-y-4"
@@ -131,6 +150,7 @@ export default function LoginClient({
                                     id="email"
                                     name="email"
                                     type="email"
+                                    disabled={status !== 'idle'}
                                     placeholder="admin@consultorio.com"
                                     autoComplete="email"
                                     required
@@ -140,6 +160,7 @@ export default function LoginClient({
                                         transition-[border-color,background-color,box-shadow] duration-200 outline-none
                                         hover:border-white/20
                                         focus:border-blue-500/60 focus:bg-white/[0.09] focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-0
+                                        disabled:opacity-60 disabled:cursor-not-allowed
                                     "
                                 />
                             </div>
@@ -157,6 +178,7 @@ export default function LoginClient({
                                         id="password"
                                         name="password"
                                         type={showPassword ? 'text' : 'password'}
+                                        disabled={status !== 'idle'}
                                         autoComplete="current-password"
                                         placeholder="••••••••"
                                         required
@@ -166,13 +188,15 @@ export default function LoginClient({
                                             transition-[border-color,background-color,box-shadow] duration-200 outline-none
                                             hover:border-white/20
                                             focus:border-blue-500/60 focus:bg-white/[0.09] focus:ring-2 focus:ring-blue-500/20 focus:ring-offset-0
+                                            disabled:opacity-60 disabled:cursor-not-allowed
                                         "
                                     />
                                     <button
                                         type="button"
                                         tabIndex={-1}
+                                        disabled={status !== 'idle'}
                                         onClick={() => setShowPassword(v => !v)}
-                                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-blue-300/40 hover:text-blue-300 transition-colors duration-200"
+                                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-blue-300/40 hover:text-blue-300 transition-colors duration-200 disabled:opacity-40"
                                     >
                                         {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                     </button>
@@ -183,8 +207,8 @@ export default function LoginClient({
                             <div className="pt-2">
                                 <button
                                     type="submit"
-                                    disabled={loading}
-                                    className="group relative w-full py-3 px-6 rounded-xl text-sm font-semibold text-white overflow-hidden transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100"
+                                    disabled={status !== 'idle'}
+                                    className="group relative w-full py-3.5 px-6 rounded-xl text-sm font-semibold text-white overflow-hidden transition-all duration-200 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-85 disabled:cursor-wait disabled:hover:scale-100 shadow-lg shadow-blue-500/20"
                                 >
                                     <div 
                                         className="absolute inset-0 transition-all duration-300 group-hover:brightness-110" 
@@ -193,15 +217,22 @@ export default function LoginClient({
                                         }}
                                     />
                                     <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-                                    <span className="relative flex items-center justify-center gap-2">
-                                        {loading ? (
+                                    <span className="relative flex items-center justify-center gap-2.5">
+                                        {status === 'verificando' && (
                                             <>
-                                                <Loader2 className="h-4 w-4 animate-spin" />
-                                                Verificando...
+                                                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                                                <span>Verificando credenciales...</span>
                                             </>
-                                        ) : (
+                                        )}
+                                        {status === 'ingresando' && (
                                             <>
-                                                Ingresar al sistema
+                                                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                                                <span>Ingresando al panel...</span>
+                                            </>
+                                        )}
+                                        {status === 'idle' && (
+                                            <>
+                                                <span>Ingresar al sistema</span>
                                                 <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
                                             </>
                                         )}
