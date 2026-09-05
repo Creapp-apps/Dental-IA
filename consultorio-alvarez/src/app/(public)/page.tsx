@@ -5,6 +5,7 @@ import { getLandingConfigPublica } from '@/lib/actions/landing'
 import { getProfesionalesPublicos, getObrasSocialesPublicas } from '@/lib/actions/reservas'
 import { DEFAULT_LANDING_CONFIG } from '@/lib/types/landing'
 import { LandingPageClient } from '@/components/landing-v2/LandingPageClient'
+import { DentalIaLanding } from '@/components/landing-saas/DentalIaLanding'
 
 export async function generateMetadata(props: {
     searchParams?: Promise<{ slug?: string }>
@@ -13,7 +14,19 @@ export async function generateMetadata(props: {
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
     const tenant = await resolveTenant(searchParams?.slug || rawHost)
-    const slug = tenant?.slug || searchParams?.slug || 'alvarez'
+
+    if (!tenant) {
+        return {
+            title: 'Dental-IA | Software Clínico e Inteligencia Artificial para Consultorios Odontológicos',
+            description: 'Plataforma integral de gestión dental con Asistente Virtual por WhatsApp 24/7, Odontograma 3D, portal del paciente y automatización de agendas.',
+            icons: {
+                icon: '/favicon.ico',
+                apple: '/LOGO-NOTIF.png',
+            },
+        }
+    }
+
+    const slug = tenant.slug
     const config = await getLandingConfigPublica(slug)
 
     const title = slug === 'curadent'
@@ -37,9 +50,14 @@ export default async function LandingPage(props: {
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
     const tenant = await resolveTenant(searchParams?.slug || rawHost)
-    const slug = tenant?.slug || searchParams?.slug || process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
 
-    const tenantNombre = tenant?.nombre || (slug === 'curadent' ? 'Curadent Odontología' : 'Consultorio Odontológico')
+    // Si NO se resolvió ningún tenant (estamos en el dominio raíz SaaS ej. dental-ia.com o Vercel sin slug):
+    if (!tenant) {
+        return <DentalIaLanding />
+    }
+
+    const slug = tenant.slug
+    const tenantNombre = tenant.nombre || (slug === 'curadent' ? 'Curadent Odontología' : 'Consultorio Odontológico')
 
     const [config, profesionales, obrasSociales] = await Promise.all([
         getLandingConfigPublica(slug).then(c => c ?? { id: '', tenant_id: '', ...DEFAULT_LANDING_CONFIG }),

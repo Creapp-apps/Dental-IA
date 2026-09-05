@@ -25,6 +25,52 @@ export async function proxy(request: NextRequest) {
         requestHeaders.set('x-tenant-host', rawHost)
     }
 
+    // ── Soporte para slugs limpios de tenants en entornos sin subdominios (ej: /curadent, /alvarez) ──
+    const SYSTEM_RESERVED_ROUTES = [
+        'admin', 'agenda', 'pacientes', 'cobros', 'configuracion', 'mis-pagos',
+        'superadmin', 'login', 'portal', 'reservar', 'api', 'test-turnos',
+        'favicon.ico', 'sounds', 'images', 'manifest.json'
+    ]
+
+    const pathSegments = pathname.split('/').filter(Boolean)
+    const firstSegment = pathSegments[0]?.toLowerCase()
+
+    if (firstSegment && !SYSTEM_RESERVED_ROUTES.includes(firstSegment)) {
+        const potentialSlug = firstSegment
+        const remainingPath = pathSegments.slice(1).join('/')
+
+        if (remainingPath === 'reservar') {
+            const url = request.nextUrl.clone()
+            url.pathname = '/reservar'
+            url.searchParams.set('slug', potentialSlug)
+            requestHeaders.set('x-tenant-host', potentialSlug)
+            return NextResponse.rewrite(url, { request: { headers: requestHeaders } })
+        }
+
+        if (remainingPath === 'login') {
+            const url = request.nextUrl.clone()
+            url.pathname = '/login'
+            url.searchParams.set('slug', potentialSlug)
+            return NextResponse.redirect(url)
+        }
+
+        if (remainingPath === 'admin') {
+            const url = request.nextUrl.clone()
+            url.pathname = '/admin'
+            url.searchParams.set('slug', potentialSlug)
+            return NextResponse.redirect(url)
+        }
+
+        if (!remainingPath) {
+            // Rewrite transparente a la home inyectando el tenant slug
+            const url = request.nextUrl.clone()
+            url.pathname = '/'
+            url.searchParams.set('slug', potentialSlug)
+            requestHeaders.set('x-tenant-host', potentialSlug)
+            return NextResponse.rewrite(url, { request: { headers: requestHeaders } })
+        }
+    }
+
     // Fast-path bypass if route is not protected or sensitive to auth state
     if (!isRoot && !isAdminRoute && !isAdminLogin && !isPortalRoute && !isPortalLogin) {
         return NextResponse.next({

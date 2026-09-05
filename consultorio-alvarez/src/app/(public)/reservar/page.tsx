@@ -78,7 +78,7 @@ export default async function ReservarPage(props: {
             {/* Back button flotante minimalista */}
             <div className="absolute top-6 left-6 sm:top-8 sm:left-8 z-50">
                 <Link
-                    href="/"
+                    href={slug ? `/${slug}` : "/"}
                     className="flex justify-center items-center w-11 h-11 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition-all shadow-lg hover:scale-105 active:scale-95"
                 >
                     <ArrowLeft className="h-5 w-5" />

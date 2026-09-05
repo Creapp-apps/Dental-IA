@@ -12,15 +12,17 @@ export async function generateMetadata(props: {
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
     const tenant = await resolveTenant(searchParams?.slug || rawHost)
-    const slug = tenant?.slug || searchParams?.slug || 'alvarez'
+    const slug = tenant?.slug || searchParams?.slug || undefined
     
-    const title = slug === 'curadent' 
-        ? 'Curadent - Iniciar Sesión' 
-        : (tenant?.nombre ? `${tenant.nombre} - Iniciar Sesión` : 'Iniciar Sesión | Dental-IA')
+    const title = !slug
+        ? 'Iniciar Sesión | Dental-IA'
+        : (slug === 'curadent' 
+            ? 'Curadent - Iniciar Sesión' 
+            : (tenant?.nombre ? `${tenant.nombre} - Iniciar Sesión` : 'Iniciar Sesión | Dental-IA'))
 
     return {
         title,
-        description: 'Acceso a la plataforma de gestión odontológica',
+        description: 'Acceso a la plataforma de gestión odontológica Dental-IA',
         icons: {
             icon: '/favicon.ico',
             apple: '/LOGO-NOTIF.png',
@@ -38,8 +40,8 @@ export default async function LoginPage({
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
     const tenant = await resolveTenant(params?.slug || rawHost)
-    const slug = tenant?.slug || params?.slug || 'alvarez'
-    const config = await getLandingConfigPublica(slug)
+    const slug = tenant?.slug || params?.slug || undefined
+    const config = slug ? await getLandingConfigPublica(slug) : null
 
     // Si hay una sesión activa de otro tenant, cerrarla automáticamente
     const supabase = await createClient()
@@ -51,7 +53,7 @@ export default async function LoginPage({
         }
     }
 
-    const tenantNombre = tenant?.nombre || (slug === 'curadent' ? 'Curadent Odontología' : 'Consultorio Odontológico Álvarez')
+    const tenantNombre = tenant?.nombre || (slug === 'curadent' ? 'Curadent Odontología' : (slug === 'alvarez' ? 'Consultorio Odontológico Álvarez' : 'Dental-IA'))
     const colorPrimary = config?.color_primary || tenant?.color_primario || '#2563eb'
 
     return (

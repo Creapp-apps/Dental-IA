@@ -31,75 +31,67 @@ export function normalizeHost(rawHost: string): string {
 }
 
 /**
- * Resuelve un tenant a partir de un host (ej: "curadent.com.ar", "dentalva.ar")
+ * Resuelve un tenant a partir de un host (ej: "curadent.com.ar", "dentalva.ar", "curadent.dental-ia.com")
  * o de un slug explícito (ej: "alvarez", "curadent").
+ * 
+ * Si el host corresponde al dominio principal de la plataforma (ej: "dental-ia.com", "localhost")
+ * y no se especificó un slug de consultorio, retorna `null` (indicando que es la plataforma Dental-IA SaaS).
  */
 export async function resolveTenant(hostOrSlug?: string | null): Promise<TenantInfo | null> {
     const supabase = createAdminClient()
     const cleanIdentifier = hostOrSlug ? normalizeHost(hostOrSlug) : ''
 
-    // 1. Si no hay identificador o es localhost/vercel dev, fallback seguro al slug por defecto
-    const defaultSlug = process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
-    const isLocalOrInternal = !cleanIdentifier || 
-        cleanIdentifier === 'localhost' || 
-        cleanIdentifier === '127.0.0.1' || 
-        cleanIdentifier.endsWith('.vercel.app')
+    if (!cleanIdentifier) {
+        return null
+    }
 
-    if (!isLocalOrInternal) {
-        // 2. Buscar primero por custom_domain exacto (si la columna existe en el schema)
-        try {
-            const { data: tenantByDomain, error: domainErr } = await supabase
-                .from('tenants')
-                .select('*')
-                .eq('custom_domain', cleanIdentifier)
-                .eq('activo', true)
-                .maybeSingle()
+    // 1. Buscar primero por slug directo (ej: "curadent", "alvarez")
+    const { data: tenantBySlug } = await supabase
+        .from('tenants')
+        .select('*')
+        .eq('slug', cleanIdentifier)
+        .eq('activo', true)
+        .maybeSingle()
 
-            if (tenantByDomain && !domainErr) {
-                return tenantByDomain as TenantInfo
-            }
-        } catch {
-            // Ignorar si la columna custom_domain aún no existe en Supabase
-        }
+    if (tenantBySlug) {
+        return tenantBySlug as TenantInfo
+    }
 
-        // 3. Buscar por slug directo (ej: "curadent", "alvarez")
-        const { data: tenantBySlug } = await supabase
+    // 2. Buscar por custom_domain exacto (ej: "dentalva.ar", "turnos.curadent.com.ar")
+    try {
+        const { data: tenantByDomain, error: domainErr } = await supabase
             .from('tenants')
             .select('*')
-            .eq('slug', cleanIdentifier)
+            .eq('custom_domain', cleanIdentifier)
             .eq('activo', true)
             .maybeSingle()
 
-        if (tenantBySlug) {
-            return tenantBySlug as TenantInfo
+        if (tenantByDomain && !domainErr) {
+            return tenantByDomain as TenantInfo
         }
+    } catch {
+        // Ignorar si la columna custom_domain aún no existe en Supabase
+    }
 
-        // 4. Buscar por subdominio (ej: "curadent.local", "curadent.localhost", "curadent.vercel.app")
-        const parts = cleanIdentifier.split('.')
-        if (parts.length > 1) {
-            const sub = parts[0]
-            if (sub && sub !== 'www') {
-                const { data: tenantBySub } = await supabase
-                    .from('tenants')
-                    .select('*')
-                    .eq('slug', sub)
-                    .eq('activo', true)
-                    .maybeSingle()
+    // 3. Buscar por subdominio (ej: "curadent.dental-ia.com", "curadent.local", "curadent.localhost")
+    const parts = cleanIdentifier.split('.')
+    if (parts.length > 1) {
+        const sub = parts[0]
+        const reservedSubs = ['www', 'app', 'admin', 'superadmin', 'api', 'dental-ia', 'mail']
+        if (sub && !reservedSubs.includes(sub)) {
+            const { data: tenantBySub } = await supabase
+                .from('tenants')
+                .select('*')
+                .eq('slug', sub)
+                .eq('activo', true)
+                .maybeSingle()
 
-                if (tenantBySub) {
-                    return tenantBySub as TenantInfo
-                }
+            if (tenantBySub) {
+                return tenantBySub as TenantInfo
             }
         }
     }
 
-    // 5. Fallback: Cargar el tenant por defecto (Álvarez) para entornos locales o de desarrollo
-    const { data: defaultTenant } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('slug', defaultSlug)
-        .eq('activo', true)
-        .maybeSingle()
-
-    return defaultTenant ? (defaultTenant as TenantInfo) : null
+    // 4. Si es el dominio principal de la plataforma (ej: dental-ia.com, localhost, vercel.app) sin subdominio de tenant
+    return null
 }
