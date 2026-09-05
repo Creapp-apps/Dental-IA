@@ -3,12 +3,29 @@ import { MapPin, Phone, Mail, Clock } from 'lucide-react'
 import type { LandingConfig } from '@/lib/types/landing'
 import { TenantLogo } from '@/components/ui/tenant-logo'
 
-export function FooterSection({ config, clinicName }: { config?: Partial<LandingConfig>; clinicName?: string }) {
-    const effectiveClinicName = clinicName || ((config as any)?.logo_config?.text) || CLINIC.name
-    const address = config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`
-    const phone = config?.footer_phone ?? CLINIC.phone
-    const email = config?.footer_email ?? CLINIC.email
-    const hours = config?.footer_hours ?? CLINIC.hours
+export function FooterSection({ 
+    config, 
+    clinicName, 
+    slug 
+}: { 
+    config?: Partial<LandingConfig>
+    clinicName?: string
+    slug?: string 
+}) {
+    const isAlvarez = !slug || slug === 'alvarez'
+    const effectiveClinicName = clinicName || ((config as any)?.logo_config?.text) || (isAlvarez ? CLINIC.name : 'Consultorio Odontológico')
+    
+    const defaultEmail = isAlvarez 
+        ? CLINIC.email 
+        : (slug === 'curadent' ? 'turnos@curadent.com.ar' : `turnos@${slug}.com.ar`)
+    const defaultPhone = isAlvarez ? CLINIC.phone : '+54 9 11 0000-0000'
+    const defaultAddress = isAlvarez ? `${CLINIC.address}, ${CLINIC.city}` : 'Atención Odontológica Personalizada'
+    const defaultHours = isAlvarez ? CLINIC.hours : 'Lunes a Viernes 9–18hs'
+
+    const address = config?.footer_address || defaultAddress
+    const phone = config?.footer_phone || defaultPhone
+    const email = config?.footer_email || defaultEmail
+    const hours = config?.footer_hours || defaultHours
 
     return (
         <footer className="relative z-10 border-t border-gray-200/50 bg-white/80 backdrop-blur-sm">

@@ -820,7 +820,7 @@ function StepPatientData({
 
 // ── Success ──────────────────────────────────────────────────────
 
-function StepSuccess() {
+function StepSuccess({ slug }: { slug?: string }) {
     return (
         <div className="text-center py-10">
             <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: 'var(--landing-primary, #0d9488)1a' }}>
@@ -828,14 +828,16 @@ function StepSuccess() {
             </div>
             <h2 className="text-xl font-bold text-white mb-2">¡Turno reservado!</h2>
             <p className="text-slate-300 max-w-sm mx-auto text-sm leading-relaxed">
-                Tu turno ha sido registrado exitosamente. Nos comunicaremos a la brevedad para confirmar.
+                Tu turno ha sido registrado exitosamente. Te enviaremos la confirmación por WhatsApp a la brevedad.
             </p>
-            <p className="mt-4 text-sm text-slate-400">
-                También podés comunicarte al{' '}
-                <a href={`tel:${CLINIC.phone}`} className="font-medium underline animate-pulse" style={{ color: 'var(--landing-primary, #0d9488)' }}>
-                    {CLINIC.phone}
-                </a>
-            </p>
+            {(!slug || slug === 'alvarez') && (
+                <p className="mt-4 text-sm text-slate-400">
+                    También podés comunicarte al{' '}
+                    <a href={`tel:${CLINIC.phone}`} className="font-medium underline animate-pulse" style={{ color: 'var(--landing-primary, #0d9488)' }}>
+                        {CLINIC.phone}
+                    </a>
+                </p>
+            )}
         </div>
     )
 }
@@ -1098,7 +1100,7 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
     if (sent) {
         return (
             <div className="p-8">
-                <StepSuccess />
+                <StepSuccess slug={slug} />
             </div>
         )
     }

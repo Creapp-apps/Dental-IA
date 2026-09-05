@@ -12,7 +12,7 @@ export async function getLandingConfigPublica(tenantSlug: string): Promise<Landi
     const supabase = createAdminClient()
     const { data: tenant } = await supabase
         .from('tenants')
-        .select('id, nombre, color_primario, color_secundario, direccion, ciudad, telefono, email_contacto')
+        .select('id, slug, nombre, color_primario, color_secundario, direccion, ciudad, telefono, email_contacto')
         .eq('slug', tenantSlug)
         .single()
     if (!tenant) return null
@@ -23,17 +23,26 @@ export async function getLandingConfigPublica(tenantSlug: string): Promise<Landi
         .eq('tenant_id', tenant.id)
         .single()
 
+    const defaultEmail = tenant.email_contacto || (tenant.slug === 'alvarez' ? 'turnos@consultorioalvarez.com.ar' : `turnos@${tenant.slug}.com.ar`)
+    const defaultPhone = tenant.telefono || (tenant.slug === 'alvarez' ? '+54 9 11 4567-8900' : '+54 9 11 0000-0000')
+    const defaultAddress = tenant.direccion 
+        ? `${tenant.direccion}${tenant.ciudad ? `, ${tenant.ciudad}` : ''}` 
+        : (tenant.slug === 'alvarez' ? 'Av. Corrientes 1234, Piso 3, Of. 5, Buenos Aires' : 'Atención Odontológica Personalizada')
+    const defaultMetaTitle = tenant.slug === 'curadent' 
+        ? 'Curadent - Clinica Odontologica' 
+        : `${tenant.nombre || 'Consultorio'} - Clinica Odontologica`
+
     if (!data) {
         return {
             id: '',
             tenant_id: tenant.id,
             ...DEFAULT_LANDING_CONFIG,
-            meta_title: tenant.nombre,
+            meta_title: defaultMetaTitle,
             color_primary: tenant.color_primario || DEFAULT_LANDING_CONFIG.color_primary,
             color_primary_hover: tenant.color_secundario || DEFAULT_LANDING_CONFIG.color_primary_hover,
-            footer_address: tenant.direccion ? `${tenant.direccion}${tenant.ciudad ? `, ${tenant.ciudad}` : ''}` : null,
-            footer_phone: tenant.telefono || null,
-            footer_email: tenant.email_contacto || null,
+            footer_address: defaultAddress,
+            footer_phone: defaultPhone,
+            footer_email: defaultEmail,
             logo_config: {
                 type: 'text',
                 image_url: null,
@@ -46,7 +55,7 @@ export async function getLandingConfigPublica(tenantSlug: string): Promise<Landi
     }
 
     const config = { ...data } as LandingConfig
-    // Garantizar que el nombre del logo y el título pertenezcan a este tenant
+    // Garantizar que el nombre del logo, título y contacto pertenezcan a este tenant
     if (!config.logo_config || !config.logo_config.text) {
         config.logo_config = {
             type: 'text',
@@ -58,7 +67,16 @@ export async function getLandingConfigPublica(tenantSlug: string): Promise<Landi
         }
     }
     if (!config.meta_title) {
-        config.meta_title = tenant.nombre
+        config.meta_title = defaultMetaTitle
+    }
+    if (!config.footer_email) {
+        config.footer_email = defaultEmail
+    }
+    if (!config.footer_phone) {
+        config.footer_phone = defaultPhone
+    }
+    if (!config.footer_address) {
+        config.footer_address = defaultAddress
     }
 
     return config

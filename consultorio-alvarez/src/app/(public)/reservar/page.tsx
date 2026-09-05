@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import { resolveTenant } from '@/lib/tenant'
 import { getLandingConfigPublica } from '@/lib/actions/landing'
@@ -7,11 +8,38 @@ import { MeshGradient } from '@/components/landing-v2/ui/MeshGradient'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
-export default async function ReservarPage() {
+export async function generateMetadata(props: {
+    searchParams?: Promise<{ slug?: string }>
+}): Promise<Metadata> {
+    const searchParams = await props.searchParams
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
-    const tenant = await resolveTenant(rawHost)
-    const slug = tenant?.slug || process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
+    const tenant = await resolveTenant(searchParams?.slug || rawHost)
+    const slug = tenant?.slug || searchParams?.slug || 'alvarez'
+    const config = await getLandingConfigPublica(slug)
+
+    const title = slug === 'curadent'
+        ? 'Curadent - Reservar Turno'
+        : (tenant?.nombre ? `${tenant.nombre} - Reservar Turno` : 'Reservar Turno Online')
+
+    return {
+        title,
+        description: config?.meta_description || `Reservá tu turno odontológico online en ${tenant?.nombre || 'nuestro consultorio'}.`,
+        icons: {
+            icon: '/favicon.ico',
+            apple: '/LOGO-NOTIF.png',
+        },
+    }
+}
+
+export default async function ReservarPage(props: {
+    searchParams?: Promise<{ slug?: string }>
+}) {
+    const searchParams = await props.searchParams
+    const headersList = await headers()
+    const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
+    const tenant = await resolveTenant(searchParams?.slug || rawHost)
+    const slug = tenant?.slug || searchParams?.slug || process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
     const config = (await getLandingConfigPublica(slug)) ?? { id: '', tenant_id: '', ...DEFAULT_LANDING_CONFIG }
 
     return (
@@ -62,15 +90,4 @@ export default async function ReservarPage() {
             </main>
         </div>
     )
-}
-
-export async function generateMetadata() {
-    const headersList = await headers()
-    const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
-    const tenant = await resolveTenant(rawHost)
-    const nombre = tenant?.nombre || 'Consultorio Odontológico'
-    return {
-        title: `Reservar turno — ${nombre}`,
-        description: `Solicitá tu turno online en ${nombre}`,
-    }
 }

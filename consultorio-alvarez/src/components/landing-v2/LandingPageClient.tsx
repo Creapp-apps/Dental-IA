@@ -106,7 +106,7 @@ export function LandingPageClient({ slug, tenantNombre, config, professionals, o
             />
             <MeshGradient scrollProgress={scrollProgress} />
             <main className="relative z-10">
-                <HeroSection onBookingClick={scrollToBooking} config={config} clinicName={clinicName} />
+                <HeroSection onBookingClick={scrollToBooking} config={config} clinicName={clinicName} slug={slug} />
                 <AboutUsSection onBookingClick={scrollToBooking} colorPrimary={config.color_primary} bgHero={config.color_bg_hero} />
                 <ServicesSection onBookingClick={scrollToBooking} config={config} />
                 <TeamSection config={config} professionals={professionals} />
@@ -114,7 +114,7 @@ export function LandingPageClient({ slug, tenantNombre, config, professionals, o
                     <ObrasSocialesSection config={config} obrasSociales={obrasSociales} />
                 )}
                 <BookingSection config={config} slug={slug} />
-                <FooterSection config={config} clinicName={clinicName} />
+                <FooterSection config={config} clinicName={clinicName} slug={slug} />
                 <FloatingChatbot
                     slug={slug}
                     clinicName={clinicName}

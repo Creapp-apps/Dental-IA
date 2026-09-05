@@ -39,9 +39,15 @@ interface Props {
     onBookingClick: () => void
     config?: Pick<LandingConfig, 'hero_badge' | 'hero_titulo' | 'hero_subtitulo' | 'color_primary' | 'color_accent' | 'footer_address' | 'footer_phone' | 'logo_config'>
     clinicName?: string
+    slug?: string
 }
 
-export function HeroSection({ onBookingClick, config, clinicName }: Props) {
+export function HeroSection({ onBookingClick, config, clinicName, slug }: Props) {
+    const isAlvarez = !slug || slug === 'alvarez'
+    const fallbackAddress = isAlvarez ? `${CLINIC.address}, ${CLINIC.city}` : 'Atención Odontológica Personalizada'
+    const fallbackPhone = isAlvarez ? CLINIC.phone : '+54 9 11 0000-0000'
+    const currentAddress = config?.footer_address || fallbackAddress
+    const currentPhone = config?.footer_phone || fallbackPhone
     const titleRef = useRef<HTMLHeadingElement>(null)
     const subtitleRef = useRef<HTMLParagraphElement>(null)
     const ctaRef = useRef<HTMLDivElement>(null)
@@ -299,17 +305,17 @@ export function HeroSection({ onBookingClick, config, clinicName }: Props) {
 
                     {/* Address Chip */}
                     <a 
-                        href={`https://maps.google.com/?q=${encodeURIComponent(config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`)}`} 
+                        href={`https://maps.google.com/?q=${encodeURIComponent(currentAddress)}`} 
                         target="_blank" 
                         rel="noopener noreferrer" 
                         className="flex items-center gap-2 rounded-full bg-white/85 backdrop-blur-md border border-white/80 px-5 py-3 text-xs text-slate-800 font-black shadow-lg shadow-slate-200/50 hover:scale-[1.02] hover:bg-white transition-all cursor-pointer"
                     >
                         <MapPin className="h-4 w-4" style={{ color: config?.color_primary ?? '#0d9488' }} />
-                        {config?.footer_address ?? `${CLINIC.address}, ${CLINIC.city}`}
+                        {currentAddress}
                     </a>
 
                     {/* Phone / WhatsApp Chips */}
-                    {(config?.footer_phone ?? CLINIC.phone).split(/\|/).map((phoneStr, idx) => {
+                    {currentPhone.split(/\|/).map((phoneStr, idx) => {
                         const [num, lbl] = phoneStr.split('::')
                         const trimmedNum = num?.trim()
                         const trimmedLbl = lbl?.trim()
