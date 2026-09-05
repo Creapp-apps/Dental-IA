@@ -89,10 +89,13 @@ export async function proxy(request: NextRequest) {
         return NextResponse.redirect(url)
     }
 
-    if (user && (isAdminLogin || isRoot)) {
-        const url = request.nextUrl.clone()
-        url.pathname = '/admin'
-        return NextResponse.redirect(url)
+    if (user && isAdminLogin) {
+        const explicitSlug = request.nextUrl.searchParams.get('slug')
+        if (!explicitSlug) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/admin'
+            return NextResponse.redirect(url)
+        }
     }
 
     return response

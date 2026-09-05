@@ -1,4 +1,6 @@
 import { redirect } from 'next/navigation'
+import { headers } from 'next/headers'
+import { resolveTenant } from '@/lib/tenant'
 import { createClient } from '@/lib/supabase/server'
 import { Sidebar } from '@/components/layout/Sidebar'
 
@@ -40,12 +42,20 @@ export default async function AdminLayout({
     let isBlocked = false
     let showSidebarAlert = false
 
+    const headersList = await headers()
+    const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
+    const requestedTenant = await resolveTenant(rawHost)
+
     const isSuperadmin = 
         usuario.rol === 'superadmin' || 
         user.email === 'creapp.ar@gmail.com' ||
         user.email === 'mazasebastian@hotmail.com' || 
         user.email?.endsWith('@creapp.com') || 
         user.email?.endsWith('@dental-ia.com')
+
+    if (requestedTenant && usuario.tenant_id !== requestedTenant.id && !isSuperadmin) {
+        redirect(`/login?slug=${requestedTenant.slug}&error=${encodeURIComponent(`Tenés una sesión activa de otro consultorio. Iniciá sesión con tu cuenta de ${requestedTenant.nombre}.`)}`)
+    }
 
     if (settings?.fecha_vencimiento && !isSuperadmin) {
         const today = new Date()

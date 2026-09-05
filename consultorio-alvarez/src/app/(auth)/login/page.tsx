@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import { resolveTenant } from '@/lib/tenant'
 import { getLandingConfigPublica } from '@/lib/actions/landing'
+import { createClient } from '@/lib/supabase/server'
 import LoginClient from './LoginClient'
 
 export async function generateMetadata(props: {
@@ -39,6 +40,16 @@ export default async function LoginPage({
     const tenant = await resolveTenant(params?.slug || rawHost)
     const slug = tenant?.slug || params?.slug || 'alvarez'
     const config = await getLandingConfigPublica(slug)
+
+    // Si hay una sesión activa de otro tenant, cerrarla automáticamente
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user && tenant) {
+        const { data: usuario } = await supabase.from('usuarios').select('tenant_id').eq('id', user.id).single()
+        if (usuario && usuario.tenant_id !== tenant.id) {
+            await supabase.auth.signOut()
+        }
+    }
 
     const tenantNombre = tenant?.nombre || (slug === 'curadent' ? 'Curadent Odontología' : 'Consultorio Odontológico Álvarez')
     const colorPrimary = config?.color_primary || tenant?.color_primario || '#2563eb'
