@@ -3,10 +3,11 @@
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown } from 'lucide-react'
+import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown, Stethoscope, Sparkles, MapPin, Mail, Phone, Info } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
     actualizarTenant, actualizarHorarios,
@@ -23,17 +24,29 @@ import type { LandingConfig } from '@/lib/types/landing'
 import { createClient } from '@/lib/supabase/client'
 import { AvatarCropperModal } from '@/components/ui/avatar-cropper'
 
-const TABS = [
-    { id: 'consultorio', label: 'Consultorio', icon: Building2 },
-    { id: 'profesionales', label: 'Profesionales', icon: Users },
-    { id: 'obras_sociales', label: 'Obras Sociales', icon: CreditCard },
-    { id: 'horarios', label: 'Horarios', icon: Clock },
-    { id: 'sonidos', label: 'Sonidos/Alertas', icon: Volume2 },
-    { id: 'mi_web', label: 'Mi Web', icon: Globe },
-    { id: 'integraciones', label: 'Integraciones', icon: Blocks },
-] as const
+type TabId = 
+    | 'consultorio' 
+    | 'tratamientos' 
+    | 'profesionales' 
+    | 'obras_sociales' 
+    | 'horarios' 
+    | 'sonidos' 
+    | 'mi_web' 
+    | 'integraciones'
 
-type TabId = typeof TABS[number]['id']
+interface NavItem {
+    id: TabId
+    label: string
+    shortLabel: string
+    icon: any
+    desc: string
+    badge?: number
+}
+
+interface NavCategory {
+    category: string
+    items: NavItem[]
+}
 
 const DIA_LABEL = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
 
@@ -51,43 +64,164 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
     const [tab, setTab] = useState<TabId>('consultorio')
     const router = useRouter()
 
+    const navCategories: NavCategory[] = [
+        {
+            category: 'General',
+            items: [
+                { id: 'consultorio', label: 'Datos del Consultorio', shortLabel: 'Consultorio', icon: Building2, desc: 'Identidad, CUIT y contacto' },
+                { id: 'tratamientos', label: 'Tipos de Tratamiento', shortLabel: 'Tratamientos', icon: Stethoscope, desc: 'Prestaciones y duraciones', badge: tiposTratamiento.length },
+            ]
+        },
+        {
+            category: 'Equipo y Coberturas',
+            items: [
+                { id: 'profesionales', label: 'Profesionales', shortLabel: 'Equipo', icon: Users, desc: 'Odontólogos y matrículas', badge: profesionales.length },
+                { id: 'obras_sociales', label: 'Obras Sociales', shortLabel: 'Prepagas', icon: CreditCard, desc: 'Obras sociales y planes', badge: obrasSociales.length },
+            ]
+        },
+        {
+            category: 'Operación y Turnos',
+            items: [
+                { id: 'horarios', label: 'Horarios de Atención', shortLabel: 'Horarios', icon: Clock, desc: 'Días hábiles e intervalos' },
+                { id: 'sonidos', label: 'Sonidos y Alertas', shortLabel: 'Alertas', icon: Volume2, desc: 'Avisos acústicos en tiempo real' },
+            ]
+        },
+        {
+            category: 'Canales y Conexiones',
+            items: [
+                { id: 'mi_web', label: 'Mi Portal Web', shortLabel: 'Mi Web', icon: Globe, desc: 'Landing pública y marca' },
+                { id: 'integraciones', label: 'Integraciones', shortLabel: 'Conexiones', icon: Blocks, desc: 'WhatsApp Cloud, MP y Calendar' },
+            ]
+        }
+    ]
+
+    const allItems = navCategories.flatMap(c => c.items)
+
     return (
-        <div className="space-y-4">
-            <div className="flex gap-1 glass rounded-xl p-1 shadow-glass overflow-x-auto">
-                {TABS.map(t => (
-                    <button key={t.id} onClick={() => setTab(t.id)}
-                        className={cn(
-                            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all sm:flex-1 shrink-0 justify-center cursor-pointer whitespace-nowrap',
-                            tab === t.id ? 'bg-primary text-primary-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                        )}>
-                        <t.icon className="h-4 w-4" />
-                        <span className="hidden sm:inline">{t.label}</span>
-                    </button>
-                ))}
+        <div className="flex flex-col lg:flex-row gap-6 items-start w-full">
+            {/* Navegación Mobile / Tablet (Chips horizontales con scroll suave) */}
+            <div className="w-full lg:hidden overflow-x-auto pb-2 -mx-1 px-1 scrollbar-none">
+                <div className="flex gap-2">
+                    {allItems.map(item => {
+                        const Icon = item.icon
+                        const isActive = tab === item.id
+                        return (
+                            <button
+                                key={item.id}
+                                onClick={() => setTab(item.id)}
+                                className={cn(
+                                    "flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-medium whitespace-nowrap transition-all cursor-pointer shrink-0 border",
+                                    isActive
+                                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                                        : "bg-card/70 hover:bg-card text-muted-foreground hover:text-foreground border-border/50"
+                                )}
+                            >
+                                <Icon className="h-3.5 w-3.5" />
+                                <span>{item.shortLabel}</span>
+                                {item.badge !== undefined && (
+                                    <span className={cn(
+                                        "text-[10px] px-1.5 py-0.2 rounded-full font-mono font-semibold",
+                                        isActive ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                                    )}>
+                                        {item.badge}
+                                    </span>
+                                )}
+                            </button>
+                        )
+                    })}
+                </div>
             </div>
-            <AnimatePresence mode="wait">
-                <motion.div key={tab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
-                    {tab === 'consultorio' && <TabConsultorio tenant={tenant} tiposTratamiento={tiposTratamiento} />}
-                    {tab === 'profesionales' && <TabProfesionales tenantId={tenant.id} profesionales={profesionales} router={router} />}
-                    {tab === 'obras_sociales' && <TabObrasSociales obrasSociales={obrasSociales} />}
-                    {tab === 'horarios' && <TabHorarios horarios={tenant.horarios} profesionales={profesionales} />}
-                    {tab === 'sonidos' && <TabSonidos />}
-                    {tab === 'mi_web' && landingConfig && <TabMiWeb config={landingConfig} slug={slug} />}
-                    {tab === 'mi_web' && !landingConfig && (
-                        <div className="glass rounded-2xl p-8 text-center text-muted-foreground text-sm">
-                            Ejecutá el script SQL para habilitar la personalización de tu landing.
+
+            {/* Sub-Sidebar Desktop Categorizado */}
+            <aside className="hidden lg:block w-72 shrink-0 sticky top-4">
+                <div className="glass rounded-2xl p-3 border border-border/60 shadow-sm space-y-5">
+                    {navCategories.map(cat => (
+                        <div key={cat.category} className="space-y-1">
+                            <h4 className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-wider px-3 mb-1.5">
+                                {cat.category}
+                            </h4>
+                            <div className="space-y-0.5">
+                                {cat.items.map(item => {
+                                    const Icon = item.icon
+                                    const isActive = tab === item.id
+                                    return (
+                                        <button
+                                            key={item.id}
+                                            onClick={() => setTab(item.id)}
+                                            className={cn(
+                                                "w-full flex items-center justify-between text-left p-2.5 rounded-xl text-sm transition-all duration-150 cursor-pointer group",
+                                                isActive
+                                                    ? "bg-primary/10 text-primary border border-primary/25 shadow-xs font-semibold"
+                                                    : "hover:bg-muted/60 text-muted-foreground hover:text-foreground border border-transparent"
+                                            )}
+                                        >
+                                            <div className="flex items-center gap-3 min-w-0">
+                                                <div className={cn(
+                                                    "p-1.5 rounded-lg transition-colors shrink-0",
+                                                    isActive ? "bg-primary text-primary-foreground shadow-xs" : "bg-muted/60 text-muted-foreground group-hover:text-foreground"
+                                                )}>
+                                                    <Icon className="h-4 w-4" />
+                                                </div>
+                                                <div className="min-w-0">
+                                                    <div className="text-xs font-semibold truncate leading-tight">
+                                                        {item.label}
+                                                    </div>
+                                                    <div className="text-[10px] text-muted-foreground/80 truncate mt-0.5">
+                                                        {item.desc}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            {item.badge !== undefined && (
+                                                <span className={cn(
+                                                    "text-[10px] font-mono px-1.5 py-0.5 rounded-full shrink-0 ml-1.5 font-bold",
+                                                    isActive
+                                                        ? "bg-primary text-primary-foreground"
+                                                        : "bg-muted text-muted-foreground group-hover:bg-muted/80"
+                                                )}>
+                                                    {item.badge}
+                                                </span>
+                                            )}
+                                        </button>
+                                    )
+                                })}
+                            </div>
                         </div>
-                    )}
-                    {tab === 'integraciones' && <TabIntegraciones integrations={integrations} />}
-                </motion.div>
-            </AnimatePresence>
+                    ))}
+                </div>
+            </aside>
+
+            {/* Contenido Principal */}
+            <main className="flex-1 min-w-0 w-full">
+                <AnimatePresence mode="wait">
+                    <motion.div
+                        key={tab}
+                        initial={{ opacity: 0, y: 6 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.15 }}
+                    >
+                        {tab === 'consultorio' && <TabConsultorio tenant={tenant} />}
+                        {tab === 'tratamientos' && <TabTratamientos tiposTratamiento={tiposTratamiento} />}
+                        {tab === 'profesionales' && <TabProfesionales tenantId={tenant.id} profesionales={profesionales} router={router} />}
+                        {tab === 'obras_sociales' && <TabObrasSociales obrasSociales={obrasSociales} />}
+                        {tab === 'horarios' && <TabHorarios horarios={tenant.horarios} profesionales={profesionales} />}
+                        {tab === 'sonidos' && <TabSonidos />}
+                        {tab === 'mi_web' && landingConfig && <TabMiWeb config={landingConfig} slug={slug} />}
+                        {tab === 'mi_web' && !landingConfig && (
+                            <div className="glass rounded-2xl p-8 text-center text-muted-foreground text-sm">
+                                Ejecutá el script SQL para habilitar la personalización de tu landing.
+                            </div>
+                        )}
+                        {tab === 'integraciones' && <TabIntegraciones integrations={integrations} />}
+                    </motion.div>
+                </AnimatePresence>
+            </main>
         </div>
     )
 }
 
 /* ──────────── Tab: Consultorio ──────────── */
-function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratamiento: any[] }) {
+function TabConsultorio({ tenant }: { tenant: any }) {
     const [isPending, startTransition] = useTransition()
     const [form, setForm] = useState({
         nombre: tenant.nombre || '', descripcion: tenant.descripcion || '',
@@ -95,17 +229,161 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
         direccion: tenant.direccion || '', ciudad: tenant.ciudad || '',
         provincia: tenant.provincia || '', cuit: tenant.cuit || '',
     })
+
+    function guardar() {
+        startTransition(async () => {
+            const r = await actualizarTenant(form)
+            r.error ? glassAlert.error({ title: 'Error', description: r.error }) : glassAlert.success({ title: 'Datos del consultorio actualizados' })
+        })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="glass rounded-2xl shadow-glass border border-border/60 overflow-hidden">
+                {/* Header de la tarjeta */}
+                <div className="p-6 border-b border-border/40 flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                            <Building2 className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-semibold text-foreground">Identidad y Datos del Consultorio</h2>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                Información legal, canales oficiales de atención al paciente y ubicación física de la sede
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Formulario segmentado */}
+                <div className="p-6 space-y-7">
+                    {/* Sección 1: Identidad */}
+                    <div className="space-y-3.5">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                            <Sparkles className="h-3.5 w-3.5 text-primary" />
+                            Identidad & Aspectos Fiscales
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Field label="Nombre del Consultorio / Razón Social">
+                                <Input 
+                                    value={form.nombre} 
+                                    onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} 
+                                    placeholder="Ej: Consultorio Odontológico Álvarez"
+                                />
+                            </Field>
+                            <Field label="CUIT / Identificación Tributaria">
+                                <Input 
+                                    value={form.cuit} 
+                                    onChange={e => setForm(f => ({ ...f, cuit: e.target.value }))} 
+                                    placeholder="30-12345678-9" 
+                                />
+                            </Field>
+                        </div>
+                        <Field label="Descripción / Especialidad Principal">
+                            <Textarea 
+                                value={form.descripcion} 
+                                onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))}
+                                placeholder="Breve descripción de las especialidades del consultorio (ej: Odontología general, implantes y ortodoncia invisible)..."
+                                className="min-h-[80px]"
+                            />
+                        </Field>
+                    </div>
+
+                    <div className="border-t border-border/40" />
+
+                    {/* Sección 2: Contacto */}
+                    <div className="space-y-3.5">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                            <Phone className="h-3.5 w-3.5 text-primary" />
+                            Canales Directos de Comunicación
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <Field label="Teléfono / WhatsApp de Recepción">
+                                <Input 
+                                    value={form.telefono} 
+                                    onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} 
+                                    placeholder="Ej: +54 9 11 6103-9248"
+                                />
+                            </Field>
+                            <Field label="Email Oficial de Contacto">
+                                <Input 
+                                    type="email"
+                                    value={form.email_contacto} 
+                                    onChange={e => setForm(f => ({ ...f, email_contacto: e.target.value }))} 
+                                    placeholder="contacto@consultorio.com"
+                                />
+                            </Field>
+                        </div>
+                    </div>
+
+                    <div className="border-t border-border/40" />
+
+                    {/* Sección 3: Ubicación */}
+                    <div className="space-y-3.5">
+                        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                            <MapPin className="h-3.5 w-3.5 text-primary" />
+                            Sede Física y Dirección
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <Field label="Dirección (Calle y Altura)">
+                                <Input 
+                                    value={form.direccion} 
+                                    onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))} 
+                                    placeholder="Ej: Av. Maipú 2841 1B"
+                                />
+                            </Field>
+                            <Field label="Ciudad / Localidad">
+                                <Input 
+                                    value={form.ciudad} 
+                                    onChange={e => setForm(f => ({ ...f, ciudad: e.target.value }))} 
+                                    placeholder="Ej: Olivos"
+                                />
+                            </Field>
+                            <Field label="Provincia">
+                                <Input 
+                                    value={form.provincia} 
+                                    onChange={e => setForm(f => ({ ...f, provincia: e.target.value }))} 
+                                    placeholder="Ej: Buenos Aires"
+                                />
+                            </Field>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Footer de guardado con feedback */}
+                <div className="bg-muted/20 border-t border-border/40 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Info className="h-4 w-4 text-primary shrink-0" />
+                        <span>Estos datos se sincronizan automáticamente en comprobantes y recordatorios.</span>
+                    </div>
+                    <GlassButton onClick={guardar} loading={isPending} className="w-full sm:w-auto">
+                        <Save className="h-4 w-4 mr-2" />
+                        Guardar cambios
+                    </GlassButton>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+/* ──────────── Tab: Tipos de Tratamiento (Dedicado) ──────────── */
+function TabTratamientos({ tiposTratamiento }: { tiposTratamiento: any[] }) {
+    const [isPending, startTransition] = useTransition()
     const [tratForm, setTratForm] = useState({ nombre: '', duracion_minutos: '30', color: '#3b82f6' })
     const [showTratForm, setShowTratForm] = useState(false)
     const [editingTratId, setEditingTratId] = useState<string | null>(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
-    function guardar() {
-        startTransition(async () => {
-            const r = await actualizarTenant(form)
-            r.error ? glassAlert.error({ title: 'Error', description: r.error }) : glassAlert.success({ title: 'Datos actualizados' })
-        })
-    }
+    const PRESET_COLORS = [
+        '#3b82f6', // Azul
+        '#06b6d4', // Cyan
+        '#10b981', // Esmeralda
+        '#8b5cf6', // Violeta
+        '#f59e0b', // Ámbar
+        '#ea580c', // Naranja
+        '#ec4899', // Rosa
+        '#64748b', // Slate
+    ]
 
     function abrirNuevoTratamiento() {
         setTratForm({ nombre: '', duracion_minutos: '30', color: '#3b82f6' })
@@ -124,10 +402,13 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
     }
 
     function guardarTratamiento() {
-        if (!tratForm.nombre) return
+        if (!tratForm.nombre.trim()) {
+            glassAlert.error({ title: 'Campo requerido', description: 'Por favor ingresá el nombre del tratamiento' })
+            return
+        }
         startTransition(async () => {
             const dataToSave = {
-                nombre: tratForm.nombre,
+                nombre: tratForm.nombre.trim(),
                 duracion_minutos: parseInt(tratForm.duracion_minutos) || 30,
                 color: tratForm.color,
             }
@@ -141,16 +422,12 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
 
             if (r.error) glassAlert.error({ title: 'Error', description: r.error })
             else {
-                glassAlert.success({ title: editingTratId ? 'Tratamiento actualizado' : 'Tratamiento creado' })
+                glassAlert.success({ title: editingTratId ? 'Tratamiento actualizado' : 'Tratamiento creado exitosamente' })
                 setTratForm({ nombre: '', duracion_minutos: '30', color: '#3b82f6' })
                 setEditingTratId(null)
                 setShowTratForm(false)
             }
         })
-    }
-
-    function borrarTratamiento(id: string) {
-        setConfirmDeleteId(id)
     }
 
     function onConfirmDelete() {
@@ -164,101 +441,188 @@ function TabConsultorio({ tenant, tiposTratamiento }: { tenant: any; tiposTratam
     }
 
     return (
-        <div className="space-y-5">
-            <div className="glass rounded-2xl shadow-glass p-5 space-y-4">
-                <h3 className="text-sm font-semibold text-foreground">Datos del consultorio</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Field label="Nombre"><Input value={form.nombre} onChange={e => setForm(f => ({ ...f, nombre: e.target.value }))} /></Field>
-                    <Field label="CUIT"><Input value={form.cuit} onChange={e => setForm(f => ({ ...f, cuit: e.target.value }))} placeholder="30-12345678-9" /></Field>
-                </div>
-                <Field label="Descripción"><Input value={form.descripcion} onChange={e => setForm(f => ({ ...f, descripcion: e.target.value }))} /></Field>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <Field label="Teléfono"><Input value={form.telefono} onChange={e => setForm(f => ({ ...f, telefono: e.target.value }))} /></Field>
-                    <Field label="Email"><Input value={form.email_contacto} onChange={e => setForm(f => ({ ...f, email_contacto: e.target.value }))} /></Field>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                    <Field label="Dirección"><Input value={form.direccion} onChange={e => setForm(f => ({ ...f, direccion: e.target.value }))} /></Field>
-                    <Field label="Ciudad"><Input value={form.ciudad} onChange={e => setForm(f => ({ ...f, ciudad: e.target.value }))} /></Field>
-                    <Field label="Provincia"><Input value={form.provincia} onChange={e => setForm(f => ({ ...f, provincia: e.target.value }))} /></Field>
-                </div>
-                <div className="flex justify-end">
-                    <GlassButton onClick={guardar} loading={isPending}><Save className="h-4 w-4 mr-2" />Guardar cambios</GlassButton>
-                </div>
-            </div>
-
-            {/* Tratamientos */}
-            <div className="glass rounded-2xl shadow-glass p-5 space-y-3">
-                <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-foreground">Tipos de tratamiento ({tiposTratamiento.length})</h3>
-                    <GlassButton size="sm" variant="glass" onClick={() => {
-                        if (showTratForm) {
-                            setShowTratForm(false)
-                            setEditingTratId(null)
-                        } else {
-                            abrirNuevoTratamiento()
-                        }
-                    }}>
-                        {showTratForm ? <X className="h-3 w-3 mr-1" /> : <Plus className="h-3 w-3 mr-1" />}
-                        {showTratForm ? 'Cancelar' : 'Agregar'}
-                    </GlassButton>
-                </div>
-                {showTratForm && (
-                    <div className="glass-subtle rounded-xl p-3 space-y-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
-                            <Input placeholder="Nombre" value={tratForm.nombre} onChange={e => setTratForm(f => ({ ...f, nombre: e.target.value }))} />
-
-                            <div className="relative flex items-center">
-                                <Input type="number" className="pr-16 text-right" placeholder="Duración" value={tratForm.duracion_minutos} onChange={e => setTratForm(f => ({ ...f, duracion_minutos: e.target.value }))} />
-                                <span className="absolute right-3 text-xs text-muted-foreground pointer-events-none">minutos</span>
-                            </div>
-
-                            <div className="flex gap-1">
-                                <input type="color" value={tratForm.color} onChange={e => setTratForm(f => ({ ...f, color: e.target.value }))} className="h-9 w-9 rounded cursor-pointer shrink-0" />
-                                <GlassButton size="sm" onClick={guardarTratamiento} loading={isPending} className="flex-1">
-                                    {editingTratId ? 'Guardar' : 'Crear'}
-                                </GlassButton>
-                            </div>
+        <div className="space-y-6">
+            <div className="glass rounded-2xl shadow-glass border border-border/60 p-6 space-y-6">
+                {/* Cabecera */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-5">
+                    <div className="flex items-center gap-3.5">
+                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                            <Stethoscope className="h-5 w-5" />
                         </div>
-                    </div>
-                )}
-                <div className="space-y-1">
-                    {tiposTratamiento.map((t: any) => (
-                        <div key={t.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 py-3 sm:py-2 px-3 rounded-xl hover:bg-muted/30 transition-colors group border-b border-border/10 last:border-b-0 sm:border-0">
-                            <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <div className="h-3 w-3 rounded-full shrink-0" style={{ backgroundColor: t.color }} />
-                                <span className="text-sm font-medium text-foreground break-words flex-1 min-w-0">
-                                    {t.nombre}
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-lg font-semibold text-foreground">Tipos de Tratamiento</h2>
+                                <span className="text-xs px-2 py-0.5 rounded-full font-mono bg-primary/10 text-primary font-semibold">
+                                    {tiposTratamiento.length} prestaciones
                                 </span>
                             </div>
-                            
-                            <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pl-6 sm:pl-0 shrink-0">
-                                <span className="text-xs text-muted-foreground shrink-0">{t.duracion_minutos} min</span>
-                                
-                                <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                    <button
-                                        onClick={() => abrirEditarTratamiento(t)}
-                                        className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
-                                        title="Modificar tratamiento"
-                                    >
-                                        <Pencil className="h-4 w-4" />
-                                    </button>
-                                    <button
-                                        onClick={() => borrarTratamiento(t.id)}
-                                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                                        title="Eliminar tratamiento"
-                                    >
-                                        <Trash className="h-4 w-4" />
-                                    </button>
-                                </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                Catálogo de prestaciones odontológicas, duraciones para el agendamiento y colores identificadores
+                            </p>
+                        </div>
+                    </div>
+                    <GlassButton 
+                        size="sm" 
+                        onClick={() => {
+                            if (showTratForm) {
+                                setShowTratForm(false)
+                                setEditingTratId(null)
+                            } else {
+                                abrirNuevoTratamiento()
+                            }
+                        }}
+                    >
+                        {showTratForm ? <X className="h-4 w-4 mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                        {showTratForm ? 'Cancelar' : 'Nuevo Tratamiento'}
+                    </GlassButton>
+                </div>
 
-                                <button onClick={() => { startTransition(async () => { await toggleTipoTratamiento(t.id, !t.activo) }) }}
-                                    className={cn('text-xs px-2 py-0.5 rounded-lg cursor-pointer shrink-0', t.activo ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300' : 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400')}>
+                {/* Formulario de Alta / Edición animado */}
+                <AnimatePresence>
+                    {showTratForm && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="p-5 rounded-2xl bg-card/90 border border-primary/30 shadow-md space-y-4">
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-primary">
+                                    {editingTratId ? 'Modificar Tratamiento' : 'Registrar Nuevo Tratamiento'}
+                                </h4>
+                                <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-end">
+                                    <div className="sm:col-span-6 space-y-1.5">
+                                        <Label className="text-xs text-foreground font-medium">Nombre del Tratamiento</Label>
+                                        <Input 
+                                            placeholder="Ej: Limpieza profunda / Cirugía de implante" 
+                                            value={tratForm.nombre} 
+                                            onChange={e => setTratForm(f => ({ ...f, nombre: e.target.value }))} 
+                                        />
+                                    </div>
+                                    <div className="sm:col-span-3 space-y-1.5">
+                                        <Label className="text-xs text-foreground font-medium">Duración Estimada</Label>
+                                        <div className="relative flex items-center">
+                                            <Input 
+                                                type="number" 
+                                                className="pr-14 text-right font-mono" 
+                                                placeholder="30" 
+                                                value={tratForm.duracion_minutos} 
+                                                onChange={e => setTratForm(f => ({ ...f, duracion_minutos: e.target.value }))} 
+                                            />
+                                            <span className="absolute right-3 text-xs text-muted-foreground pointer-events-none">min</span>
+                                        </div>
+                                    </div>
+                                    <div className="sm:col-span-3 space-y-1.5">
+                                        <Label className="text-xs text-foreground font-medium">Color de Agenda</Label>
+                                        <div className="flex items-center gap-2">
+                                            <input 
+                                                type="color" 
+                                                value={tratForm.color} 
+                                                onChange={e => setTratForm(f => ({ ...f, color: e.target.value }))} 
+                                                className="h-9 w-10 rounded-lg cursor-pointer shrink-0 border border-input p-0.5 bg-transparent" 
+                                            />
+                                            <div className="flex gap-1 flex-wrap">
+                                                {PRESET_COLORS.map(c => (
+                                                    <button
+                                                        key={c}
+                                                        type="button"
+                                                        onClick={() => setTratForm(f => ({ ...f, color: c }))}
+                                                        style={{ backgroundColor: c }}
+                                                        className={cn(
+                                                            "h-5 w-5 rounded-full transition-transform cursor-pointer shrink-0",
+                                                            tratForm.color === c ? "scale-125 ring-2 ring-foreground" : "hover:scale-110 opacity-80 hover:opacity-100"
+                                                        )}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex justify-end gap-2 pt-2 border-t border-border/30">
+                                    <GlassButton 
+                                        size="sm" 
+                                        variant="glass" 
+                                        onClick={() => { setShowTratForm(false); setEditingTratId(null); }}
+                                    >
+                                        Cancelar
+                                    </GlassButton>
+                                    <GlassButton 
+                                        size="sm" 
+                                        onClick={guardarTratamiento} 
+                                        loading={isPending}
+                                    >
+                                        {editingTratId ? 'Actualizar' : 'Guardar Tratamiento'}
+                                    </GlassButton>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                {/* Lista de Tratamientos */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {tiposTratamiento.map((t: any) => (
+                        <div 
+                            key={t.id} 
+                            className="flex items-center justify-between gap-3 p-3.5 rounded-xl border border-border/50 bg-card/40 hover:bg-card/70 hover:border-primary/30 transition-all duration-150 group shadow-xs"
+                        >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div 
+                                    className="h-3.5 w-3.5 rounded-full shrink-0 shadow-sm" 
+                                    style={{ backgroundColor: t.color, boxShadow: `0 0 8px ${t.color}66` }} 
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <div className="text-sm font-semibold text-foreground truncate">
+                                        {t.nombre}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground font-mono flex items-center gap-1.5 mt-0.5">
+                                        <Clock className="h-3 w-3" />
+                                        {t.duracion_minutos} min
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 shrink-0">
+                                <button 
+                                    onClick={() => { startTransition(async () => { await toggleTipoTratamiento(t.id, !t.activo) }) }}
+                                    className={cn(
+                                        'text-xs px-2.5 py-1 rounded-lg cursor-pointer font-medium transition-colors border',
+                                        t.activo 
+                                            ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20 hover:bg-emerald-500/20' 
+                                            : 'bg-muted text-muted-foreground border-border/50 hover:bg-muted/80'
+                                    )}
+                                >
                                     {t.activo ? 'Activo' : 'Inactivo'}
+                                </button>
+
+                                <button
+                                    onClick={() => abrirEditarTratamiento(t)}
+                                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                    title="Modificar tratamiento"
+                                >
+                                    <Pencil className="h-4 w-4" />
+                                </button>
+                                <button
+                                    onClick={() => setConfirmDeleteId(t.id)}
+                                    className="p-1.5 rounded-lg hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors cursor-pointer"
+                                    title="Eliminar tratamiento"
+                                >
+                                    <Trash className="h-4 w-4" />
                                 </button>
                             </div>
                         </div>
                     ))}
                 </div>
+
+                {tiposTratamiento.length === 0 && (
+                    <div className="text-center py-12 border border-dashed border-border/60 rounded-2xl space-y-2">
+                        <Stethoscope className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+                        <p className="text-sm font-medium text-muted-foreground">No hay tratamientos registrados aún</p>
+                        <GlassButton size="sm" onClick={abrirNuevoTratamiento}>
+                            Crear primer tratamiento
+                        </GlassButton>
+                    </div>
+                )}
             </div>
 
             <ConfirmModal
@@ -391,12 +755,27 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
     }
 
     return (
-        <div className="glass rounded-2xl shadow-glass p-5 space-y-4">
-            <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-foreground">Profesionales ({profesionales.length})</h3>
-                <GlassButton size="sm" variant="glass" onClick={showForm ? cerrarForm : abrirNuevo}>
-                    {showForm ? <X className="h-3 w-3 mr-1" /> : <Plus className="h-3 w-3 mr-1" />}
-                    {showForm ? 'Cancelar' : 'Agregar'}
+        <div className="glass rounded-2xl shadow-glass border border-border/60 p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-5">
+                <div className="flex items-center gap-3.5">
+                    <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                        <Users className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-semibold text-foreground">Equipo de Profesionales</h2>
+                            <span className="text-xs px-2 py-0.5 rounded-full font-mono bg-primary/10 text-primary font-semibold">
+                                {profesionales.length} registrados
+                            </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Gestión del equipo médico, especialidades, matrículas y credenciales de acceso a la plataforma
+                        </p>
+                    </div>
+                </div>
+                <GlassButton size="sm" onClick={showForm ? cerrarForm : abrirNuevo}>
+                    {showForm ? <X className="h-4 w-4 mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                    {showForm ? 'Cancelar' : 'Nuevo Profesional'}
                 </GlassButton>
             </div>
             {showForm && (
@@ -602,10 +981,25 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
     }
 
     return (
-        <div className="glass rounded-2xl shadow-glass p-5 space-y-4">
-            <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-foreground">Obras Sociales ({obrasSociales.length})</h3>
-                <GlassButton size="sm" variant="glass" onClick={() => {
+        <div className="glass rounded-2xl shadow-glass border border-border/60 p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-5">
+                <div className="flex items-center gap-3.5">
+                    <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                        <CreditCard className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-semibold text-foreground">Obras Sociales y Prepagas</h2>
+                            <span className="text-xs px-2 py-0.5 rounded-full font-mono bg-primary/10 text-primary font-semibold">
+                                {obrasSociales.length} convenios
+                            </span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Gestión de coberturas médicas, códigos de prestador y planes arancelarios admitidos
+                        </p>
+                    </div>
+                </div>
+                <GlassButton size="sm" onClick={() => {
                     if (showForm) {
                         setShowForm(false)
                         setEditingId(null)
@@ -613,8 +1007,8 @@ function TabObrasSociales({ obrasSociales }: { obrasSociales: any[] }) {
                         abrirNueva()
                     }
                 }}>
-                    {showForm ? <X className="h-3 w-3 mr-1" /> : <Plus className="h-3 w-3 mr-1" />}
-                    {showForm ? 'Cancelar' : 'Agregar'}
+                    {showForm ? <X className="h-4 w-4 mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                    {showForm ? 'Cancelar' : 'Nueva Obra Social'}
                 </GlassButton>
             </div>
             {showForm && (
@@ -829,14 +1223,23 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
     }
 
     return (
-        <div className="glass rounded-2xl shadow-glass p-5 space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-4">
-                <div>
-                    <h3 className="text-sm font-semibold text-foreground">Horarios de atención</h3>
-                    <p className="text-xs text-muted-foreground">Configurá la disponibilidad semanal de cada profesional del consultorio.</p>
+        <div className="glass rounded-2xl shadow-glass border border-border/60 p-6 space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border/40 pb-5">
+                <div className="flex items-center gap-3.5">
+                    <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                        <Clock className="h-5 w-5" />
+                    </div>
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <h2 className="text-lg font-semibold text-foreground">Horarios de Atención</h2>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                            Disponibilidad operativa semanal, turnos matutinos y vespertinos por profesional
+                        </p>
+                    </div>
                 </div>
                 <div className="flex items-center gap-2 text-foreground">
-                    <Label htmlFor="target-select" className="text-xs shrink-0 text-foreground">Configurar para:</Label>
+                    <Label htmlFor="target-select" className="text-xs shrink-0 text-foreground font-medium">Configurar para:</Label>
                     <div className="w-56 relative">
                         <GlassSelect
                             value={selectedProfId}
@@ -1061,12 +1464,17 @@ function TabSonidos() {
     const selectOptions = [{ id: '', label: 'Desactivado' }, ...SONIDOS_DISPONIBLES]
 
     return (
-        <div className="glass rounded-2xl shadow-glass p-5 space-y-6">
-            <div className="border-b border-border/40 pb-4">
-                <h3 className="text-sm font-semibold text-foreground">Configuración de alertas y timbres</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                    Personalizá los sonidos y el volumen para cada tipo de notificación que recibe la administración.
-                </p>
+        <div className="glass rounded-2xl shadow-glass border border-border/60 p-6 space-y-6">
+            <div className="flex items-center gap-3.5 border-b border-border/40 pb-5">
+                <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                    <Volume2 className="h-5 w-5" />
+                </div>
+                <div>
+                    <h2 className="text-lg font-semibold text-foreground">Sonidos y Alertas Acústicas</h2>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                        Personalizá los timbres y el nivel de volumen para cada evento operativo del consultorio
+                    </p>
+                </div>
             </div>
 
             <div className="space-y-4">

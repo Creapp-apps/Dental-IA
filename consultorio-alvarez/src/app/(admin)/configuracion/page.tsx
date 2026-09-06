@@ -29,12 +29,14 @@ export default async function ConfiguracionPage() {
     if (!tenant) return <p className="text-muted-foreground">Tenant no encontrado</p>
 
     return (
-        <div className="space-y-6 max-w-4xl">
-            <div className="text-center md:text-left">
-                <h1 className="text-2xl font-bold text-foreground">Configuración</h1>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                    Administrá los datos del consultorio, profesionales y horarios
-                </p>
+        <div className="w-full max-w-7xl mx-auto space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-border/40 pb-4">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight text-foreground">Configuración General</h1>
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                        Administrá la identidad del consultorio, equipo médico, horarios y servicios
+                    </p>
+                </div>
             </div>
             <ConfigView
                 tenant={tenant}
