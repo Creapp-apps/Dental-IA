@@ -11,6 +11,7 @@ import { getCurrentUsuario, getTodayOperationalSummary } from '@/lib/supabase/qu
 import { getBillingConfig } from '@/lib/actions/billing'
 import { BillingGuard } from '@/components/providers/BillingGuard'
 import { NumpadTabProvider } from '@/components/providers/NumpadTabProvider'
+import { generateTenantCssTheme } from '@/lib/theme'
 
 export default async function AdminLayout({
     children,
@@ -82,17 +83,10 @@ export default async function AdminLayout({
         showSidebarAlert = diffDays <= 7 && !hasActivePayment
     }
 
-    // En Tailwind v4 inyectamos una etiqueta <style> global para asegurar que los componentes
-    // renderizados a través de Portals (como los Modales, Selects y Toasts) también hereden
-    // el color primario de la marca y no queden con el azul por defecto en el <body>.
+    // Inyectamos el tema CSS dinámico armonizado para toda la suite de componentes
+    // (inputs, selects, popovers, modales, checkboxes, tooltips)
     const primaryStr = config?.color_primary || '#2563eb'
-    const customStyle = `
-        html, body, :root, .dark {
-            --sidebar-primary: ${primaryStr} !important;
-            --primary: ${primaryStr} !important;
-            --ring: ${primaryStr} !important;
-        }
-    `
+    const customStyle = generateTenantCssTheme(primaryStr)
 
     return (
         <>

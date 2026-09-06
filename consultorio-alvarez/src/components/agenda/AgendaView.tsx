@@ -1431,7 +1431,7 @@ export function AgendaView({
                             !usesCustomWidth && "w-full"
                         )}>
                             {/* Time cell spacer */}
-                            <div className="w-[65px] shrink-0 border-r border-border flex items-end justify-center pb-2 text-[10px] font-semibold text-muted-foreground uppercase sticky left-0 bg-slate-950 dark:bg-[#0b0c10] z-20">
+                            <div className="w-[65px] shrink-0 border-r border-border flex items-end justify-center pb-2 text-[10px] font-semibold text-muted-foreground uppercase sticky left-0 bg-card z-20">
                                 Hora
                             </div>
                             {/* Column headers wrapper */}
@@ -1470,7 +1470,7 @@ export function AgendaView({
                             !usesCustomWidth && "w-full"
                         )}>
                             {/* Hours column */}
-                            <div className="w-[65px] shrink-0 border-r border-border bg-muted/5 select-none relative z-10 sticky left-0 bg-slate-950 dark:bg-[#0b0c10] z-20">
+                            <div className="w-[65px] shrink-0 border-r border-border select-none relative sticky left-0 bg-card z-20">
                                 {HOURS.map((hour) => (
                                     <div key={hour} className="text-right pr-2 text-[11px] font-semibold text-muted-foreground/85" style={{ height: `${HOUR_HEIGHT}px`, paddingTop: '4px' }}>
                                         {`${hour.toString().padStart(2, '0')}:00`}

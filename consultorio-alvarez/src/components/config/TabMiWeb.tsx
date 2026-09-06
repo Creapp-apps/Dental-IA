@@ -188,10 +188,10 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                                     value={logoConfig.type}
                                     onValueChange={(v) => setLogoConfig(l => ({ ...l, type: v as 'image' | 'text' }))}
                                 >
-                                    <SelectTrigger className="w-full bg-slate-900/50 border-white/10 hover:border-primary/50 transition-colors h-9 text-slate-200">
+                                    <SelectTrigger className="w-full bg-input/40 border-input hover:border-primary/50 transition-colors h-9 text-foreground">
                                         <SelectValue placeholder="Tipo de Logo" />
                                     </SelectTrigger>
-                                    <SelectContent alignItemWithTrigger={false} sideOffset={6} className="bg-slate-950/98 backdrop-blur-3xl border-white/10 shadow-2xl z-[100] text-slate-200">
+                                    <SelectContent alignItemWithTrigger={false} sideOffset={6} className="bg-popover backdrop-blur-3xl border-border shadow-2xl z-[100] text-popover-foreground">
                                         <SelectItem value="text">Elegante (Texto + Ícono)</SelectItem>
                                         <SelectItem value="image">Solo Imagen (.png)</SelectItem>
                                     </SelectContent>
@@ -212,10 +212,10 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                                             value={logoConfig.font}
                                             onValueChange={(v) => setLogoConfig(l => ({ ...l, font: v || 'font-sans' }))}
                                         >
-                                            <SelectTrigger className="w-full bg-slate-900/50 border-white/10 hover:border-primary/50 transition-colors h-9 text-slate-200">
+                                            <SelectTrigger className="w-full bg-input/40 border-input hover:border-primary/50 transition-colors h-9 text-foreground">
                                                 <SelectValue placeholder="Tipografía" />
                                             </SelectTrigger>
-                                            <SelectContent alignItemWithTrigger={false} sideOffset={6} className="bg-slate-950/98 backdrop-blur-3xl border-white/10 shadow-2xl z-[100] text-slate-200">
+                                            <SelectContent alignItemWithTrigger={false} sideOffset={6} className="bg-popover backdrop-blur-3xl border-border shadow-2xl z-[100] text-popover-foreground">
                                                 <SelectItem value="font-sans">Moderna (Sans)</SelectItem>
                                                 <SelectItem value="font-serif">Clásica (Serif)</SelectItem>
                                                 <SelectItem value="font-mono">Técnica (Mono)</SelectItem>
@@ -231,10 +231,10 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                                             value={logoConfig.icon}
                                             onValueChange={(v) => setLogoConfig(l => ({ ...l, icon: v || 'Stethoscope' }))}
                                         >
-                                            <SelectTrigger className="w-full bg-slate-900/50 border-white/10 hover:border-primary/50 transition-colors h-9 text-slate-200">
+                                            <SelectTrigger className="w-full bg-input/40 border-input hover:border-primary/50 transition-colors h-9 text-foreground">
                                                 <SelectValue placeholder="Ícono" />
                                             </SelectTrigger>
-                                            <SelectContent alignItemWithTrigger={false} sideOffset={6} className="bg-slate-950/98 backdrop-blur-3xl border-white/10 shadow-2xl z-[100] text-slate-200">
+                                            <SelectContent alignItemWithTrigger={false} sideOffset={6} className="bg-popover backdrop-blur-3xl border-border shadow-2xl z-[100] text-popover-foreground">
                                                 <SelectItem value="Stethoscope">Estetoscopio</SelectItem>
                                                 <SelectItem value="Leaf">Hoja / Etéreo</SelectItem>
                                                 <SelectItem value="Heart">Corazón</SelectItem>
@@ -251,10 +251,10 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                                             value={logoConfig.color_style}
                                             onValueChange={(v) => setLogoConfig(l => ({ ...l, color_style: v as any }))}
                                         >
-                                            <SelectTrigger className="w-full bg-slate-900/50 border-white/10 hover:border-primary/50 transition-colors h-9 text-slate-200">
+                                            <SelectTrigger className="w-full bg-input/40 border-input hover:border-primary/50 transition-colors h-9 text-foreground">
                                                 <SelectValue placeholder="Estilo de Color" />
                                             </SelectTrigger>
-                                            <SelectContent alignItemWithTrigger={false} sideOffset={6} className="bg-slate-950/98 backdrop-blur-3xl border-white/10 shadow-2xl z-[100] text-slate-200">
+                                            <SelectContent alignItemWithTrigger={false} sideOffset={6} className="bg-popover backdrop-blur-3xl border-border shadow-2xl z-[100] text-popover-foreground">
                                                 <SelectItem value="gradient">Gradiente dinámico</SelectItem>
                                                 <SelectItem value="solid">Color Sólido</SelectItem>
                                                 <SelectItem value="monochrome">Monocromático</SelectItem>

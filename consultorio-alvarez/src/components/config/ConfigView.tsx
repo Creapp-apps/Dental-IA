@@ -694,10 +694,10 @@ function TimeSelect({ value, onChange, disabled }: { value: string; onChange: (v
             value={value}
             onChange={e => onChange(e.target.value)}
             disabled={disabled}
-            className="bg-slate-900 dark:bg-[#0f172a] text-slate-100 rounded-lg px-2 py-1 text-xs h-8 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 w-[5.5rem] sm:w-24 font-mono cursor-pointer border border-slate-700/80 hover:bg-slate-800 transition-colors shadow-sm"
+            className="bg-input/50 text-foreground rounded-lg px-2 py-1 text-xs h-8 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50 w-[5.5rem] sm:w-24 font-mono cursor-pointer border border-input hover:bg-input/80 transition-colors shadow-sm"
         >
             {options.map(opt => (
-                <option key={opt} value={opt} className="bg-slate-900 text-slate-100 py-1">
+                <option key={opt} value={opt} className="bg-popover text-popover-foreground py-1">
                     {opt} hs
                 </option>
             ))}
@@ -933,7 +933,7 @@ function GlassSelect({ value, onChange, options, placeholder = 'Seleccionar...',
                 type="button"
                 disabled={disabled}
                 onClick={() => setIsOpen(!isOpen)}
-                className="w-full flex items-center justify-between bg-slate-900 dark:bg-[#0f172a] border border-slate-700/80 hover:border-slate-600 hover:bg-slate-800 active:scale-[0.98] rounded-xl text-xs px-3 py-2 text-foreground cursor-pointer transition-all duration-200 select-none disabled:opacity-50 disabled:pointer-events-none shadow-md"
+                className="w-full flex items-center justify-between bg-input/40 border border-input hover:bg-input/60 active:scale-[0.98] rounded-xl text-xs px-3 py-2 text-foreground cursor-pointer transition-all duration-200 select-none disabled:opacity-50 disabled:pointer-events-none shadow-md"
             >
                 <span className="truncate font-medium">{selectedOption ? selectedOption.label : placeholder}</span>
                 <ChevronDown className={`h-3.5 w-3.5 text-muted-foreground transition-transform duration-200 shrink-0 ml-1.5 ${isOpen ? 'rotate-180' : ''}`} />
@@ -946,7 +946,7 @@ function GlassSelect({ value, onChange, options, placeholder = 'Seleccionar...',
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -4, scale: 0.95 }}
                         transition={{ duration: 0.15, ease: 'easeOut' }}
-                        className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto bg-slate-900 dark:bg-[#0f172a] shadow-[0_15px_35px_rgba(0,0,0,0.8)] rounded-xl p-1.5 border border-slate-700/90 focus:outline-none scrollbar-thin scrollbar-thumb-border/50 scrollbar-track-transparent"
+                        className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto bg-popover text-popover-foreground shadow-[0_15px_35px_rgba(0,0,0,0.8)] rounded-xl p-1.5 border border-border focus:outline-none scrollbar-thin scrollbar-thumb-border/50 scrollbar-track-transparent"
                     >
                         <div className="space-y-0.5">
                             {options.map((option) => {
@@ -962,7 +962,7 @@ function GlassSelect({ value, onChange, options, placeholder = 'Seleccionar...',
                                         className={`w-full flex items-center justify-between text-left text-xs px-2.5 py-2 rounded-lg transition-all duration-150 cursor-pointer select-none ${
                                             isSelected
                                                 ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
-                                                : 'hover:bg-slate-800 text-slate-300 hover:text-white'
+                                                : 'hover:bg-accent hover:text-accent-foreground text-foreground'
                                         }`}
                                     >
                                         <span className="truncate">{option.label}</span>
