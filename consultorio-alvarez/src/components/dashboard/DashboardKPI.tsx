@@ -40,7 +40,7 @@ function AnimatedNumber({ value, delay = 0 }: { value: number; delay?: number })
 export function DashboardKPI({ icon, label, value, sub, color, delay = 0 }: DashboardKPIProps) {
     return (
         <motion.div
-            className="glass rounded-2xl shadow-glass p-5"
+            className="bg-card border border-border/60 rounded-2xl shadow-sm p-5 transition-all hover:shadow-md backdrop-blur-sm"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay, duration: 0.4, ease: 'easeOut' }}

@@ -19,15 +19,21 @@ export function AdminBackground({ colorHex = '#2563eb' }: { colorHex?: string })
     const colorArray = useMemo(() => hexToRGBArray(colorHex), [colorHex])
 
     return (
-        <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden mix-blend-screen opacity-20">
-            <Iridescence
-                color={colorArray}
-                speed={0.4}          // Slow, soothing motion
-                amplitude={0.03}     // Gentle ripples
-                mouseReact={true}
-            />
-            {/* Un pequeño viñeteo radial para oscurecer y enmarcar la app */}
-            <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(9,9,11,0.6)_100%)]" />
-        </div>
+        <>
+            {/* Fondo en Modo Oscuro (Shader Iridescence + Viñeteo) */}
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden mix-blend-screen opacity-20 hidden dark:block">
+                <Iridescence
+                    color={colorArray}
+                    speed={0.4}          // Slow, soothing motion
+                    amplitude={0.03}     // Gentle ripples
+                    mouseReact={true}
+                />
+                {/* Viñeteo radial para oscurecer y enmarcar la app en modo oscuro */}
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_0%,rgba(9,9,11,0.6)_100%)]" />
+            </div>
+
+            {/* Fondo en Modo Claro (Lienzo limpio con suave reflejo ambiental de marca) */}
+            <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden dark:hidden bg-[radial-gradient(ellipse_80%_60%_at_50%_-10%,var(--accent)_0%,transparent_70%)] opacity-50" />
+        </>
     )
 }

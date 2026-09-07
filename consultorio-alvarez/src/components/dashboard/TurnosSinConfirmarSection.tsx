@@ -254,7 +254,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                         {/* Desktop View: Animated Horizontal Cards */}
                         <div className="hidden md:block space-y-2.5">
                             {/* Header */}
-                            <div className="grid grid-cols-[1.5fr_1.3fr_1.2fr_1.2fr_1.1fr_1fr_auto] items-center px-4 py-2.5 bg-muted/20 rounded-xl text-xs font-bold text-muted-foreground uppercase tracking-wider border border-border/30">
+                            <div className="grid grid-cols-[1.5fr_1.3fr_1.2fr_1.2fr_1.1fr_1fr_auto] items-center px-4 py-2.5 bg-muted/50 dark:bg-muted/20 rounded-xl text-xs font-bold text-muted-foreground uppercase tracking-wider border border-border/60">
                                 <div>Fecha / Hora</div>
                                 <div>Paciente</div>
                                 <div>Profesional</div>
@@ -286,12 +286,12 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 className={cn(
                                                     "grid grid-cols-[1.5fr_1.3fr_1.2fr_1.2fr_1.1fr_1fr_auto] items-center px-4 py-3.5 rounded-2xl border relative will-change-transform transform-gpu shadow-sm",
                                                     isCancelled
-                                                        ? "bg-red-500/20 dark:bg-red-950/50 hover:bg-red-500/25 border-red-500/50 border-l-[6px] border-l-red-600 animate-card-pulse-red"
+                                                        ? "bg-red-500/15 dark:bg-red-950/50 hover:bg-red-500/20 border-red-500/40 border-l-[6px] border-l-red-600 animate-card-pulse-red"
                                                         : isPendingStatus
-                                                            ? "bg-amber-500/15 dark:bg-amber-950/40 hover:bg-amber-500/20 border-amber-500/40 border-l-[6px] border-l-amber-500 animate-card-pulse-amber"
+                                                            ? "bg-amber-500/10 dark:bg-amber-950/40 hover:bg-amber-500/15 border-amber-500/40 border-l-[6px] border-l-amber-500 animate-card-pulse-amber"
                                                             : isConfirmed 
-                                                                ? "bg-emerald-500/12 dark:bg-emerald-950/35 hover:bg-emerald-500/18 border-emerald-500/30 border-l-[5px] border-l-emerald-500" 
-                                                                : "glass border-border/40 hover:bg-muted/10"
+                                                                ? "bg-emerald-500/10 dark:bg-emerald-950/35 hover:bg-emerald-500/15 border-emerald-500/30 border-l-[5px] border-l-emerald-500" 
+                                                                : "bg-card border-border/60 hover:bg-muted/30"
                                                 )}
                                                 initial={{ opacity: 1 }}
                                                 exit={{ opacity: 0 }}

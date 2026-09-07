@@ -39,6 +39,7 @@ export function generateTenantCssTheme(primaryHex: string): string {
 
     return `
         /* ── TEMA INTEGRAL DEL TENANT ── */
+        /* Tokens Globales y Base (Modo Claro) */
         :root {
             --primary: ${primaryHex} !important;
             --primary-foreground: #ffffff !important;
@@ -47,16 +48,38 @@ export function generateTenantCssTheme(primaryHex: string): string {
             --sidebar-ring: ${primaryHex} !important;
             --color-primary: ${primaryHex} !important;
             --landing-primary: ${primaryHex} !important;
-            --input: hsl(${h}, 25%, 90%) !important;
-            --border: hsl(${h}, 20%, 88%) !important;
-            --accent: hsl(${h}, 45%, 93%) !important;
-            --accent-foreground: hsl(${h}, 80%, 25%) !important;
+            
+            /* Modo Claro: Superficies y Textos Limpios */
+            --background: hsl(${h}, 25%, 98%) !important;
+            --foreground: hsl(${h}, 25%, 12%) !important;
+            --card: #ffffff !important;
+            --card-foreground: hsl(${h}, 25%, 12%) !important;
+            
+            /* Inputs, Selectores y Bordes en Modo Claro */
+            --input: hsl(${h}, 15%, 93%) !important;
+            --border: hsl(${h}, 15%, 88%) !important;
+            --muted: hsl(${h}, 15%, 94%) !important;
+            --muted-foreground: hsl(${h}, 12%, 46%) !important;
+            
+            /* Menús Dropdown, Popovers y Modales en Modo Claro */
             --popover: #ffffff !important;
-            --popover-foreground: hsl(${h}, 30%, 15%) !important;
+            --popover-foreground: hsl(${h}, 25%, 15%) !important;
+            
+            /* Estados Hover / Focus en Modo Claro */
+            --accent: hsl(${h}, 45%, 94%) !important;
+            --accent-foreground: hsl(${h}, 80%, 25%) !important;
+            
+            /* Sidebar institucional con personalidad médica */
+            --sidebar: hsl(${h}, 25%, 9%) !important;
+            --sidebar-foreground: hsl(${h}, 10%, 94%) !important;
+            --sidebar-accent: hsl(${h}, 30%, 15%) !important;
+            --sidebar-border: hsl(${h}, 20%, 16%) !important;
+
             accent-color: ${primaryHex} !important;
         }
 
-        html, body, .dark, [data-theme="dark"] {
+        /* Tokens exclusivos para Modo Oscuro (.dark) */
+        .dark, [data-theme="dark"] {
             --primary: ${primaryHex} !important;
             --primary-foreground: #ffffff !important;
             --ring: ${primaryHex} !important;
@@ -65,25 +88,29 @@ export function generateTenantCssTheme(primaryHex: string): string {
             --color-primary: ${primaryHex} !important;
             --landing-primary: ${primaryHex} !important;
             
-            /* Fondos y superficies armónicas con la marca (reemplazan el azul slate hardcodeado) */
+            /* Fondos y superficies oscuras armónicas con la marca */
             --background: hsl(${h}, 22%, 7%) !important;
+            --foreground: hsl(${h}, 10%, 96%) !important;
             --card: hsl(${h}, 18%, 10%) !important;
             --card-foreground: hsl(${h}, 10%, 96%) !important;
             
-            /* Inputs y Selectores */
+            /* Inputs y Selectores en Modo Oscuro */
             --input: hsl(${h}, 22%, 14%) !important;
             --border: hsl(${h}, 20%, 18%) !important;
+            --muted: hsl(${h}, 20%, 14%) !important;
+            --muted-foreground: hsl(${h}, 15%, 60%) !important;
             
-            /* Menús Dropdown, Popovers y Modales */
+            /* Menús Dropdown, Popovers y Modales en Modo Oscuro */
             --popover: hsl(${h}, 22%, 9%) !important;
             --popover-foreground: hsl(${h}, 10%, 96%) !important;
             
-            /* Estados Hover / Focus en Dropdowns y listas */
+            /* Estados Hover / Focus en Modo Oscuro */
             --accent: hsl(${h}, 50%, 18%) !important;
             --accent-foreground: #ffffff !important;
             
-            /* Sidebar y navegación */
+            /* Sidebar y navegación en Modo Oscuro */
             --sidebar: hsl(${h}, 22%, 6%) !important;
+            --sidebar-foreground: hsl(${h}, 10%, 94%) !important;
             --sidebar-accent: hsl(${h}, 32%, 14%) !important;
             --sidebar-border: hsl(${h}, 20%, 15%) !important;
             
