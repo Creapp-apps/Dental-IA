@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { limpiarTituloProfesional } from '@/lib/utils'
+import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
 
 export async function GET(request: NextRequest) {
     return handleDailyCron(request)
@@ -21,10 +22,6 @@ async function handleDailyCron(request: NextRequest) {
         
         if (keyParam !== cronSecret && authHeader !== `Bearer ${cronSecret}`) {
             return NextResponse.json({ error: 'No autorizado' }, { status: 401 })
-        }
-
-        if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
-            return NextResponse.json({ error: 'Variables de entorno de WhatsApp no configuradas' }, { status: 500 })
         }
 
         const admin = createAdminClient()
@@ -77,11 +74,17 @@ async function handleDailyCron(request: NextRequest) {
                     cleanPhone = cleanPhone.replace(/^549/, '54')
                 }
 
+                const waCreds = await getWhatsAppCredentialsForTenant(pct.tenant_id)
+                if (!waCreds) {
+                    results.cumpleanos.push({ paciente_id: pct.id, status: 'SKIPPED', reason: 'WhatsApp no configurado para este consultorio' })
+                    continue
+                }
+
                 try {
-                    const response = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+                    const response = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
                         method: 'POST',
                         headers: {
-                            'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                            'Authorization': `Bearer ${waCreds.accessToken}`,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
@@ -186,11 +189,17 @@ async function handleDailyCron(request: NextRequest) {
 
                 const nombreProf = prof ? `${limpiarTituloProfesional(prof.nombre)} ${prof.apellido.trim()}` : 'el especialista'
 
+                const waCreds = await getWhatsAppCredentialsForTenant(t.tenant_id)
+                if (!waCreds) {
+                    results.seguimiento.push({ turno_id: t.id, status: 'SKIPPED', reason: 'WhatsApp no configurado para este consultorio' })
+                    continue
+                }
+
                 try {
-                    const response = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
+                    const response = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
                         method: 'POST',
                         headers: {
-                            'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
+                            'Authorization': `Bearer ${waCreds.accessToken}`,
                             'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({

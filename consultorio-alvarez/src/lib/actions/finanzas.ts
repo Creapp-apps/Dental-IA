@@ -67,11 +67,14 @@ export async function crearPresupuesto(formData: {
 
 export async function cambiarEstadoPresupuesto(id: string, estado: string) {
     const supabase = await createClient()
+    const tenantId = await getTenantId()
+    if (!tenantId) return { error: 'Tenant no encontrado' }
+
     const updates: any = { estado }
     if (estado === 'PRESENTADO') updates.fecha_presentacion = new Date().toISOString().split('T')[0]
     if (['APROBADO', 'RECHAZADO'].includes(estado)) updates.fecha_respuesta = new Date().toISOString().split('T')[0]
 
-    const { error } = await supabase.from('presupuestos').update(updates).eq('id', id)
+    const { error } = await supabase.from('presupuestos').update(updates).eq('id', id).eq('tenant_id', tenantId)
     if (error) return { error: error.message }
 
     revalidatePath('/pacientes')
@@ -135,8 +138,10 @@ export async function crearCobro(formData: {
 
 export async function registrarPago(cobroId: string, montoPago: number) {
     const supabase = await createClient()
+    const tenantId = await getTenantId()
+    if (!tenantId) return { error: 'Tenant no encontrado' }
 
-    const { data: cobro } = await supabase.from('cobros').select('monto_total, monto_pagado').eq('id', cobroId).single()
+    const { data: cobro } = await supabase.from('cobros').select('monto_total, monto_pagado').eq('id', cobroId).eq('tenant_id', tenantId).single()
     if (!cobro) return { error: 'Cobro no encontrado' }
 
     const nuevoMontoPagado = cobro.monto_pagado + montoPago
@@ -150,6 +155,7 @@ export async function registrarPago(cobroId: string, montoPago: number) {
             fecha_pago: new Date().toISOString().split('T')[0],
         })
         .eq('id', cobroId)
+        .eq('tenant_id', tenantId)
 
     if (error) return { error: error.message }
 

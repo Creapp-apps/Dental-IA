@@ -205,6 +205,7 @@ export async function actualizarPaciente(id: string, formData: {
         .from('pacientes')
         .update(cleanData)
         .eq('id', id)
+        .eq('tenant_id', tenantId)
 
     if (error) return { error: error.message }
 
@@ -217,11 +218,14 @@ export async function actualizarPaciente(id: string, formData: {
 
 export async function eliminarPaciente(id: string) {
     const supabase = await createClient()
+    const tenantId = await getTenantId()
+    if (!tenantId) return { error: 'Tenant no encontrado' }
 
     const { error } = await supabase
         .from('pacientes')
         .delete()
         .eq('id', id)
+        .eq('tenant_id', tenantId)
 
     if (error) return { error: error.message }
 

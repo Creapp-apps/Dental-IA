@@ -1,10 +1,38 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 
 function getAdmin() {
     return createAdminClient()
+}
+
+async function assertSuperadmin() {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) {
+        throw new Error('No autorizado. Sesión no encontrada.')
+    }
+    const admin = getAdmin()
+    const { data: profile } = await admin
+        .from('usuarios')
+        .select('id, email, rol')
+        .eq('id', user.id)
+        .maybeSingle()
+
+    const userEmail = user.email || ''
+    const isSuperadmin = 
+        profile?.rol === 'superadmin' || 
+        userEmail === 'creapp.ar@gmail.com' ||
+        userEmail === 'mazasebastian@hotmail.com' || 
+        userEmail.endsWith('@creapp.com') || 
+        userEmail.endsWith('@dental-ia.com')
+
+    if (!isSuperadmin) {
+        throw new Error('Acceso denegado. Se requieren permisos de Superadmin.')
+    }
+    return user
 }
 
 function safeRevalidatePath(path: string) {
@@ -69,6 +97,7 @@ export async function getSaasOverview(): Promise<{
     tenants: SaasTenantSummary[]
     metrics: SaasMetrics
 }> {
+    await assertSuperadmin()
     const supabase = getAdmin()
 
     // 1. Obtener todos los tenants ordenados por fecha de creación
@@ -215,6 +244,7 @@ export async function getSaasOverview(): Promise<{
  * Cambia el estado de facturación / servicio de un tenant (ACTIVO, SUSPENDIDO, PRUEBA, etc.)
  */
 export async function updateTenantStatus(tenantId: string, nuevoEstado: TenantBillingInfo['estado']) {
+    await assertSuperadmin()
     const supabase = getAdmin()
 
     // 1. Obtener settings existentes
@@ -260,6 +290,7 @@ export async function updateTenantStatus(tenantId: string, nuevoEstado: TenantBi
  * Extiende la fecha de vencimiento de un tenant (por defecto +30 días) y asegura estado ACTIVO.
  */
 export async function extendTenantDueDate(tenantId: string, dias: number = 30) {
+    await assertSuperadmin()
     const supabase = getAdmin()
 
     const { data: current } = await supabase
@@ -327,6 +358,7 @@ export async function updateTenantBillingDetails(
         mp_link?: string
     }
 ) {
+    await assertSuperadmin()
     const supabase = getAdmin()
 
     const { data: current } = await supabase
@@ -379,6 +411,7 @@ export async function registrarCobroSaaS(
         renovarVencimiento?: boolean
     }
 ) {
+    await assertSuperadmin()
     const supabase = getAdmin()
 
     // 1. Obtener pagos anteriores
@@ -436,6 +469,7 @@ export async function crearNuevoTenantSaaS(data: {
     telefono?: string
     colorPrimario?: string
 }) {
+    await assertSuperadmin()
     const supabase = getAdmin()
 
     const cleanSlug = data.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, '')

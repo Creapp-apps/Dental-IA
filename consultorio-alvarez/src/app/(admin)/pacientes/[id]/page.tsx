@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
+import { getProfesionales, getTiposTratamiento } from '@/lib/supabase/queries'
 import { ArrowLeft, Phone, Mail, MapPin, CreditCard, AlertCircle, Stethoscope, Edit2 } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
@@ -28,8 +29,6 @@ async function getPacienteCompleto(id: string) {
             items:presupuesto_items(*, tipo_tratamiento:tipos_tratamiento(nombre))
         `).eq('paciente_id', id).order('created_at', { ascending: false }),
         supabase.from('paciente_adjuntos').select('*').eq('paciente_id', id).order('created_at', { ascending: false }),
-        supabase.from('profesionales').select('id, nombre, apellido, especialidad').eq('activo', true),
-        supabase.from('tipos_tratamiento').select('id, nombre, precio_referencia, duracion_minutos').eq('activo', true)
     ])
 
     return {
@@ -39,8 +38,6 @@ async function getPacienteCompleto(id: string) {
         odontograma: odontogramaRes.data ?? [],
         presupuestos: presupuestosRes.data ?? [],
         adjuntos: adjuntosRes.data ?? [],
-        profesionales: [],
-        tipos_tratamiento: [],
     }
 }
 
@@ -53,14 +50,11 @@ export default async function FichaPacientePage({
     const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos } = await getPacienteCompleto(id)
     if (!p) notFound()
 
-    // Fetch lists separately since they don't depend on patient ID
-    const supabase = await createClient()
-    const [profRes, tratRes] = await Promise.all([
-        supabase.from('profesionales').select('id, nombre, apellido, especialidad').eq('activo', true),
-        supabase.from('tipos_tratamiento').select('id, nombre, precio_referencia, duracion_minutos').eq('activo', true)
+    // Cargar catálogos filtrados estrictamente por el tenant_id del consultorio
+    const [profesionales, tiposTratamiento] = await Promise.all([
+        getProfesionales(true),
+        getTiposTratamiento(true)
     ])
-    const profesionales = profRes.data ?? []
-    const tiposTratamiento = tratRes.data ?? []
 
     const iniciales = `${p.nombre.charAt(0)}${p.apellido.charAt(0)}`
     const edad = p.fecha_nacimiento

@@ -197,10 +197,14 @@ export async function searchPacientes(searchTerm: string, limit: number = 50) {
 
 export async function getPacienteById(id: string) {
     const supabase = getAdmin()
+    const tenantId = await getTenantId()
+    if (!tenantId) return null
+
     const { data, error } = await supabase
         .from('pacientes')
         .select('*, obra_social:obras_sociales(*)')
         .eq('id', id)
+        .eq('tenant_id', tenantId)
         .single()
     if (error) { console.error('getPacienteById:', error); return null }
     return data
