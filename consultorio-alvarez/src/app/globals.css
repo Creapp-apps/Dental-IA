@@ -82,14 +82,14 @@
   --ring: oklch(0.48 0.18 245);
   --radius: 0.6rem;
 
-  /* Sidebar oscuro (siempre) */
-  --sidebar: oklch(0.18 0.04 245);
-  --sidebar-foreground: oklch(0.92 0.02 245);
-  --sidebar-primary: oklch(0.55 0.18 245);
+  /* Sidebar Light Mode */
+  --sidebar: oklch(0.99 0.005 245);
+  --sidebar-foreground: oklch(0.18 0.04 245);
+  --sidebar-primary: oklch(0.48 0.18 245);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.26 0.05 245);
-  --sidebar-accent-foreground: oklch(0.92 0.02 245);
-  --sidebar-border: oklch(0.28 0.04 245);
+  --sidebar-accent: oklch(0.94 0.02 245);
+  --sidebar-accent-foreground: oklch(0.25 0.05 245);
+  --sidebar-border: oklch(0.88 0.02 245);
   --sidebar-ring: oklch(0.48 0.18 245);
 
   /* Glass tokens — Light */

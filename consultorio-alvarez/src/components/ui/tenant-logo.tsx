@@ -33,7 +33,7 @@ export function TenantLogo({
                 src={config.image_url}
                 alt="Logo"
                 style={{ height: `${heightPx}px` }}
-                className={cn("object-contain", className)}
+                className={cn("object-contain dark:drop-shadow-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)] transition-all", className)}
             />
         )
     }

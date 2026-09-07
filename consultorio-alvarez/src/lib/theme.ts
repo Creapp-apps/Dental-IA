@@ -69,11 +69,12 @@ export function generateTenantCssTheme(primaryHex: string): string {
             --accent: hsl(${h}, 45%, 94%) !important;
             --accent-foreground: hsl(${h}, 80%, 25%) !important;
             
-            /* Sidebar institucional con personalidad médica */
-            --sidebar: hsl(${h}, 25%, 9%) !important;
-            --sidebar-foreground: hsl(${h}, 10%, 94%) !important;
-            --sidebar-accent: hsl(${h}, 30%, 15%) !important;
-            --sidebar-border: hsl(${h}, 20%, 16%) !important;
+            /* Sidebar en Modo Claro (Limpio, luminoso y armónico) */
+            --sidebar: hsl(${h}, 20%, 98.5%) !important;
+            --sidebar-foreground: hsl(${h}, 25%, 15%) !important;
+            --sidebar-accent: hsl(${h}, 25%, 93%) !important;
+            --sidebar-accent-foreground: hsl(${h}, 80%, 25%) !important;
+            --sidebar-border: hsl(${h}, 15%, 88%) !important;
 
             accent-color: ${primaryHex} !important;
         }
