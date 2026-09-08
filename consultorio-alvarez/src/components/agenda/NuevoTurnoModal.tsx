@@ -306,8 +306,12 @@ export function NuevoTurnoModal({
         }
 
         if (profSchedule && profSchedule.activo) {
-            const morningSlots = generateShiftSlots(profSchedule.apertura_manana, profSchedule.cierre_manana)
-            const afternoonSlots = generateShiftSlots(profSchedule.apertura_tarde, profSchedule.cierre_tarde)
+            const morningSlots = (profSchedule.activo_manana !== false)
+                ? generateShiftSlots(profSchedule.apertura_manana, profSchedule.cierre_manana)
+                : []
+            const afternoonSlots = (profSchedule.activo_tarde !== false)
+                ? generateShiftSlots(profSchedule.apertura_tarde, profSchedule.cierre_tarde)
+                : []
             const combined = [...morningSlots, ...afternoonSlots]
             if (combined.length > 0) {
                 return combined

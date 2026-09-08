@@ -34,6 +34,18 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
         dia: number;
         profesional_id?: string | null;
         activo: boolean;
+        activo_manana?: boolean;
+        activo_tarde?: boolean;
+        apertura_manana?: string;
+        cierre_manana?: string;
+        apertura_tarde?: string;
+        cierre_tarde?: string;
+        apertura?: string;
+        cierre?: string;
+        web_personalizado?: boolean;
+        web_activo_manana?: boolean;
+        web_activo_tarde?: boolean;
+        web_slots_deshabilitados?: string[];
     }>
 
     // Check which professionals have at least one active day configured
@@ -52,6 +64,29 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
     // If no date/time provided, return active professionals with working hours
     if (!fecha || !hora) return availableProfs
 
+    // Parse date for day-of-week check
+    const [y, m, d] = fecha.split('-').map(Number)
+    const dow = new Date(y, m - 1, d).getDay()
+
+    function checkProfHasSlot(profId: string, slot: string): boolean {
+        const custom = allSchedules.filter(h => h.profesional_id === profId)
+        const h = custom.length > 0
+            ? custom.find(x => x.dia === dow)
+            : allSchedules.find(x => !x.profesional_id && x.dia === dow)
+        if (!h || !h.activo) return false
+        if (Array.isArray(h.web_slots_deshabilitados) && h.web_slots_deshabilitados.includes(slot)) return false
+
+        const morningActive = h.activo_manana !== false && h.web_activo_manana !== false
+        const afternoonActive = h.activo_tarde !== false && h.web_activo_tarde !== false
+        const checkRange = (ap?: string, ci?: string) => Boolean(ap && ci && slot >= ap && slot < ci)
+
+        if (h.apertura_manana || h.apertura_tarde) {
+            return (morningActive && checkRange(h.apertura_manana, h.cierre_manana)) ||
+                   (afternoonActive && checkRange(h.apertura_tarde, h.cierre_tarde))
+        }
+        return checkRange(h.apertura, h.cierre)
+    }
+
     // Build the UTC timestamp for the selected slot (Argentina = UTC-3)
     const localDateTime = new Date(`${fecha}T${hora}:00-03:00`)
     const utcStr = localDateTime.toISOString()
@@ -66,8 +101,8 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
 
     const ocupadosIds = new Set((ocupados ?? []).map(t => t.profesional_id))
 
-    // Filter out busy professionals
-    return availableProfs.filter(p => !ocupadosIds.has(p.id))
+    // Filter out busy professionals or those without this web slot
+    return availableProfs.filter(p => !ocupadosIds.has(p.id) && checkProfHasSlot(p.id, hora))
 }
 
 export async function getObrasSocialesPublicas(tenantSlug: string) {
@@ -164,15 +199,32 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
             }
         }
         
-        if (horario.apertura_manana) {
-            addSlots(horario.apertura_manana, horario.cierre_manana);
-            addSlots(horario.apertura_tarde, horario.cierre_tarde);
-        } else {
+        const morningActive = horario.activo_manana !== false && horario.web_activo_manana !== false;
+        const afternoonActive = horario.activo_tarde !== false && horario.web_activo_tarde !== false;
+
+        if (horario.apertura_manana || horario.apertura_tarde) {
+            if (morningActive && horario.apertura_manana && horario.cierre_manana) {
+                addSlots(horario.apertura_manana, horario.cierre_manana);
+            }
+            if (afternoonActive && horario.apertura_tarde && horario.cierre_tarde) {
+                addSlots(horario.apertura_tarde, horario.cierre_tarde);
+            }
+        } else if (horario.apertura && horario.cierre) {
             addSlots(horario.apertura, horario.cierre);
         }
         
-        return Array.from(slotsSet).sort();
-    }    // Helper to get effective schedule for a professional on a given day of week
+        let result = Array.from(slotsSet).sort();
+
+        // Filtrar slots específicamente deshabilitados para la web
+        if (Array.isArray(horario.web_slots_deshabilitados) && horario.web_slots_deshabilitados.length > 0) {
+            const excludedSet = new Set(horario.web_slots_deshabilitados);
+            result = result.filter(slot => !excludedSet.has(slot));
+        }
+
+        return result;
+    }
+
+    // Helper to get effective schedule for a professional on a given day of week
     function getHorarioProf(schedules: typeof allSchedules, profId: string, dayOfWeek: number) {
         const customSchedules = schedules.filter(h => h.profesional_id === profId)
         if (customSchedules.length > 0) {
@@ -186,12 +238,18 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
         dia: number;
         profesional_id?: string | null;
         activo: boolean;
+        activo_manana?: boolean;
+        activo_tarde?: boolean;
         apertura_manana?: string;
         cierre_manana?: string;
         apertura_tarde?: string;
         cierre_tarde?: string;
         apertura?: string;
         cierre?: string;
+        web_personalizado?: boolean;
+        web_activo_manana?: boolean;
+        web_activo_tarde?: boolean;
+        web_slots_deshabilitados?: string[];
     }>
 
     const isSpecificProf = Boolean(profesionalId && profesionalId !== 'sin-preferencia')
@@ -287,12 +345,18 @@ export async function crearReservaPublica(data: {
         dia: number;
         profesional_id?: string | null;
         activo: boolean;
+        activo_manana?: boolean;
+        activo_tarde?: boolean;
         apertura_manana?: string;
         cierre_manana?: string;
         apertura_tarde?: string;
         cierre_tarde?: string;
         apertura?: string;
         cierre?: string;
+        web_personalizado?: boolean;
+        web_activo_manana?: boolean;
+        web_activo_tarde?: boolean;
+        web_slots_deshabilitados?: string[];
     }>
 
     function getHorarioProf(schedules: typeof allSchedules, profId: string, dayOfWeek: number) {
@@ -303,17 +367,26 @@ export async function crearReservaPublica(data: {
         return schedules.find(h => !h.profesional_id && h.dia === dayOfWeek) || null
     }
 
-    function profTieneSlot(horario: any, slot: string): boolean {
+    function profTieneSlot(horario: any, slot: string, forWeb: boolean = true): boolean {
         if (!horario || !horario.activo) return false
         
+        // Exclusión granular de turnos web
+        if (forWeb && Array.isArray(horario.web_slots_deshabilitados) && horario.web_slots_deshabilitados.includes(slot)) {
+            return false
+        }
+
+        const morningActive = horario.activo_manana !== false && (!forWeb || horario.web_activo_manana !== false)
+        const afternoonActive = horario.activo_tarde !== false && (!forWeb || horario.web_activo_tarde !== false)
+
         const checkRange = (apertura?: string, cierre?: string) => {
             if (!apertura || !cierre) return false
             return slot >= apertura && slot < cierre
         }
 
-        if (horario.apertura_manana) {
-            return checkRange(horario.apertura_manana, horario.cierre_manana) ||
-                   checkRange(horario.apertura_tarde, horario.cierre_tarde)
+        if (horario.apertura_manana || horario.apertura_tarde) {
+            const inMorning = morningActive && checkRange(horario.apertura_manana, horario.cierre_manana)
+            const inAfternoon = afternoonActive && checkRange(horario.apertura_tarde, horario.cierre_tarde)
+            return inMorning || inAfternoon
         }
         return checkRange(horario.apertura, horario.cierre)
     }

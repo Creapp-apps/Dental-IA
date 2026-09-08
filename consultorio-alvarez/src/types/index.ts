@@ -8,14 +8,27 @@ export type PlanTenant = 'free' | 'pro' | 'elite'
 
 export interface HorarioAtencion {
   dia: 0 | 1 | 2 | 3 | 4 | 5 | 6 // 0=domingo, 1=lunes, ...
+  profesional_id?: string | null
+  activo: boolean
+
+  // Turnos operativos (Administración)
+  activo_manana?: boolean
   apertura_manana?: string // "09:00"
   cierre_manana?: string   // "13:00"
+
+  activo_tarde?: boolean
   apertura_tarde?: string  // "14:00"
   cierre_tarde?: string    // "18:00"
+
+  // Disponibilidad específica para Pacientes / Gestor de Turnos Web
+  web_personalizado?: boolean
+  web_activo_manana?: boolean
+  web_activo_tarde?: boolean
+  web_slots_deshabilitados?: string[] // slots específicos "HH:mm" excluidos del gestor de turnos online
+
   // Legacy
   apertura?: string
   cierre?: string
-  activo: boolean
 }
 
 export interface Tenant {

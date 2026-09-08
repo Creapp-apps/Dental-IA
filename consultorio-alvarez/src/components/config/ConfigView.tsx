@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown, Stethoscope, Sparkles, MapPin, Mail, Phone, Info } from 'lucide-react'
+import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown, ChevronUp, Stethoscope, Sparkles, MapPin, Mail, Phone, Info, Sun, Moon, Eye, EyeOff, SlidersHorizontal } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -1099,6 +1099,30 @@ function TimeSelect({ value, onChange, disabled }: { value: string; onChange: (v
     )
 }
 
+/* ──────────── Helper: Slots Generator ──────────── */
+function getSlotsForShift(apertura?: string, cierre?: string): string[] {
+    if (!apertura || !cierre) return []
+    const [apH, apM] = apertura.split(':').map(Number)
+    const [ciH, ciM] = cierre.split(':').map(Number)
+    let currH = apH
+    let currM = apM
+    const slots: string[] = []
+
+    while (currH < ciH || (currH === ciH && currM < ciM)) {
+        const endM = currM + 20
+        const endH = currH + Math.floor(endM / 60)
+        const rEndM = endM % 60
+        if (endH > ciH || (endH === ciH && rEndM > ciM)) break
+        slots.push(`${currH.toString().padStart(2, '0')}:${currM.toString().padStart(2, '0')}`)
+        currM += 20
+        if (currM >= 60) {
+            currH++
+            currM -= 60
+        }
+    }
+    return slots
+}
+
 /* ──────────── Tab: Horarios ──────────── */
 function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: any[]; profesionales: any[] }) {
     const [isPending, startTransition] = useTransition()
@@ -1107,6 +1131,7 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
         return activeProfs[0]?.id || profesionales[0]?.id || ''
     })
     const ordered = [1, 2, 3, 4, 5, 6, 0]
+    const [expandedWebDia, setExpandedWebDia] = useState<number | null>(null)
 
     const targetOptions = activeProfs.map(p => ({
         id: p.id,
@@ -1129,23 +1154,19 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
 
             const base = h ?? { dia: d, apertura_manana: '09:00', cierre_manana: '13:00', apertura_tarde: '14:00', cierre_tarde: '18:00', activo: false }
             
-            if (!base.apertura_manana && base.apertura) {
-                return {
-                    ...base,
-                    apertura_manana: base.apertura,
-                    cierre_manana: '13:00',
-                    apertura_tarde: '14:00',
-                    cierre_tarde: base.cierre,
-                    profesional_id: profId
-                }
-            }
-            
             return {
                 ...base,
-                apertura_manana: base.apertura_manana || '09:00',
+                activo: base.activo ?? false,
+                activo_manana: base.activo_manana !== undefined ? Boolean(base.activo_manana) : true,
+                activo_tarde: base.activo_tarde !== undefined ? Boolean(base.activo_tarde) : true,
+                apertura_manana: base.apertura_manana || (base.apertura || '09:00'),
                 cierre_manana: base.cierre_manana || '13:00',
                 apertura_tarde: base.apertura_tarde || '14:00',
-                cierre_tarde: base.cierre_tarde || '18:00',
+                cierre_tarde: base.cierre_tarde || (base.cierre || '18:00'),
+                web_personalizado: Boolean(base.web_personalizado),
+                web_activo_manana: base.web_activo_manana !== undefined ? Boolean(base.web_activo_manana) : true,
+                web_activo_tarde: base.web_activo_tarde !== undefined ? Boolean(base.web_activo_tarde) : true,
+                web_slots_deshabilitados: Array.isArray(base.web_slots_deshabilitados) ? base.web_slots_deshabilitados : [],
                 profesional_id: profId
             }
         })
@@ -1163,6 +1184,27 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
         setHorarios(h => h.map(item => item.dia === dia ? { ...item, [field]: value } : item))
     }
 
+    function toggleSlotWeb(dia: number, slot: string) {
+        const item = horarios.find(x => x.dia === dia)
+        if (!item) return
+        const currentSlots: string[] = item.web_slots_deshabilitados || []
+        const exists = currentSlots.includes(slot)
+        const updated = exists ? currentSlots.filter(s => s !== slot) : [...currentSlots, slot]
+        update(dia, 'web_slots_deshabilitados', updated)
+    }
+
+    function setAllSlotsWeb(dia: number, enableAll: boolean) {
+        const item = horarios.find(x => x.dia === dia)
+        if (!item) return
+        if (enableAll) {
+            update(dia, 'web_slots_deshabilitados', [])
+        } else {
+            const slotsM = item.activo_manana !== false ? getSlotsForShift(item.apertura_manana, item.cierre_manana) : []
+            const slotsT = item.activo_tarde !== false ? getSlotsForShift(item.apertura_tarde, item.cierre_tarde) : []
+            update(dia, 'web_slots_deshabilitados', [...slotsM, ...slotsT])
+        }
+    }
+
     function guardar() {
         if (!selectedProfId) {
             glassAlert.error({ title: 'Error', description: 'Seleccioná un profesional para guardar sus horarios.' })
@@ -1172,35 +1214,51 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
         for (const h of horarios) {
             if (!h.activo) continue;
             
-            const [apMH, apMM] = h.apertura_manana.split(':').map(Number)
-            const [ciMH, ciMM] = h.cierre_manana.split(':').map(Number)
-            const [apTH, apTM] = h.apertura_tarde.split(':').map(Number)
-            const [ciTH, ciTM] = h.cierre_tarde.split(':').map(Number)
-            
-            const minM = apMH * 60 + apMM
-            const maxM = ciMH * 60 + ciMM
-            const minT = apTH * 60 + apTM
-            const maxT = ciTH * 60 + ciTM
-            
+            const tieneManana = h.activo_manana !== false
+            const tieneTarde = h.activo_tarde !== false
             const labelDia = DIA_LABEL[h.dia]
-            
-            if (maxM <= minM) {
+
+            if (!tieneManana && !tieneTarde) {
                 glassAlert.error({
                     title: 'Error de Horarios',
-                    description: `En el día ${labelDia}, el horario de cierre de la mañana (${h.cierre_manana}) debe ser posterior a la apertura (${h.apertura_manana}).`
+                    description: `En el día ${labelDia}, debés activar al menos un turno (Mañana o Tarde), o desactivar el día completo.`
                 })
                 return
             }
-            
-            if (maxT <= minT) {
-                glassAlert.error({
-                    title: 'Error de Horarios',
-                    description: `En el día ${labelDia}, el horario de cierre de la tarde (${h.cierre_tarde}) debe ser posterior a la apertura (${h.apertura_tarde}).`
-                })
-                return
+
+            let minM = 0, maxM = 0, minT = 0, maxT = 0
+
+            if (tieneManana) {
+                const [apMH, apMM] = (h.apertura_manana || '09:00').split(':').map(Number)
+                const [ciMH, ciMM] = (h.cierre_manana || '13:00').split(':').map(Number)
+                minM = apMH * 60 + apMM
+                maxM = ciMH * 60 + ciMM
+
+                if (maxM <= minM) {
+                    glassAlert.error({
+                        title: 'Error de Horarios',
+                        description: `En el día ${labelDia}, el horario de cierre de la mañana (${h.cierre_manana}) debe ser posterior a la apertura (${h.apertura_manana}).`
+                    })
+                    return
+                }
             }
-            
-            if (minT < maxM) {
+
+            if (tieneTarde) {
+                const [apTH, apTM] = (h.apertura_tarde || '14:00').split(':').map(Number)
+                const [ciTH, ciTM] = (h.cierre_tarde || '18:00').split(':').map(Number)
+                minT = apTH * 60 + apTM
+                maxT = ciTH * 60 + ciTM
+
+                if (maxT <= minT) {
+                    glassAlert.error({
+                        title: 'Error de Horarios',
+                        description: `En el día ${labelDia}, el horario de cierre de la tarde (${h.cierre_tarde}) debe ser posterior a la apertura (${h.apertura_tarde}).`
+                    })
+                    return
+                }
+            }
+
+            if (tieneManana && tieneTarde && minT < maxM) {
                 glassAlert.error({
                     title: 'Error de Horarios',
                     description: `En el día ${labelDia}, el horario de inicio de la tarde (${h.apertura_tarde}) no puede ser anterior o superponerse con el cierre de la mañana (${h.cierre_manana}).`
@@ -1218,7 +1276,7 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
             const finalHorarios = [...otherHorarios, ...updatedHorarios]
 
             const r = await actualizarHorarios(finalHorarios)
-            r.error ? glassAlert.error({ title: 'Error', description: r.error }) : glassAlert.success({ title: 'Horarios actualizados' })
+            r.error ? glassAlert.error({ title: 'Error', description: r.error }) : glassAlert.success({ title: 'Horarios actualizados correctamente' })
         })
     }
 
@@ -1251,36 +1309,262 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
                     </div>
                 </div>
             </div>
-            <div className="space-y-2">
-                {horarios.map(h => (
-                    <div key={h.dia} className={cn('flex flex-col gap-2 py-3 px-4 rounded-xl transition-colors border', h.activo ? 'glass-subtle border-border' : 'opacity-50 border-transparent')}>
-                        <div className="flex items-center gap-3">
-                            <button onClick={() => update(h.dia, 'activo', !h.activo)}
-                                className={cn('h-5 w-5 rounded flex items-center justify-center cursor-pointer border', h.activo ? 'bg-primary border-primary text-primary-foreground' : 'border-border')}>
-                                {h.activo && <Check className="h-3 w-3" />}
-                            </button>
-                            <span className="text-sm font-semibold text-foreground">{DIA_LABEL[h.dia]}</span>
-                        </div>
-                        <div className="pl-8 grid grid-cols-1 sm:grid-cols-2 gap-3 mt-1">
-                            {/* Mañana */}
-                            <div className="flex items-center gap-2 bg-background/50 p-2 rounded-lg border border-border/50 justify-between sm:justify-start">
-                                <span className="text-xs font-medium text-muted-foreground w-12">Mañana</span>
-                                <TimeSelect value={h.apertura_manana} onChange={val => update(h.dia, 'apertura_manana', val)} disabled={!h.activo} />
-                                <span className="text-xs text-muted-foreground">a</span>
-                                <TimeSelect value={h.cierre_manana} onChange={val => update(h.dia, 'cierre_manana', val)} disabled={!h.activo} />
+
+            <div className="space-y-3">
+                {horarios.map(h => {
+                    const isExpandedWeb = expandedWebDia === h.dia
+                    const isMorningActive = h.activo && h.activo_manana !== false
+                    const isAfternoonActive = h.activo && h.activo_tarde !== false
+
+                    const slotsM = isMorningActive ? getSlotsForShift(h.apertura_manana, h.cierre_manana) : []
+                    const slotsT = isAfternoonActive ? getSlotsForShift(h.apertura_tarde, h.cierre_tarde) : []
+                    const totalSlots = [...slotsM, ...slotsT]
+                    const disabledSlots: string[] = h.web_slots_deshabilitados || []
+                    const activeWebSlotsCount = totalSlots.filter(s => !disabledSlots.includes(s)).length
+                    const hasWebRestrictions = disabledSlots.length > 0 || h.web_activo_manana === false || h.web_activo_tarde === false
+
+                    return (
+                        <div 
+                            key={h.dia} 
+                            className={cn(
+                                'flex flex-col gap-3 py-3.5 px-4 rounded-xl transition-all border', 
+                                h.activo ? 'glass-subtle border-border/80 shadow-sm' : 'opacity-50 border-transparent bg-muted/20'
+                            )}
+                        >
+                            {/* Dia Header */}
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <button 
+                                        type="button"
+                                        onClick={() => update(h.dia, 'activo', !h.activo)}
+                                        className={cn(
+                                            'h-5 w-5 rounded flex items-center justify-center cursor-pointer border transition-colors', 
+                                            h.activo ? 'bg-primary border-primary text-primary-foreground' : 'border-border bg-background'
+                                        )}
+                                        title={h.activo ? 'Desactivar día completo' : 'Activar día'}
+                                    >
+                                        {h.activo && <Check className="h-3 w-3 stroke-[3]" />}
+                                    </button>
+                                    <span className={cn('text-sm font-semibold', h.activo ? 'text-foreground' : 'text-muted-foreground')}>
+                                        {DIA_LABEL[h.dia]}
+                                    </span>
+                                </div>
+
+                                {h.activo && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setExpandedWebDia(isExpandedWeb ? null : h.dia)}
+                                        className={cn(
+                                            'inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all border cursor-pointer',
+                                            hasWebRestrictions
+                                                ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/20'
+                                                : 'bg-primary/10 text-primary border-primary/20 hover:bg-primary/20'
+                                        )}
+                                        title="Configurar qué horarios se exponen a los pacientes en el gestor web"
+                                    >
+                                        <Globe className="h-3.5 w-3.5" />
+                                        <span>Turnos Web</span>
+                                        {hasWebRestrictions ? (
+                                            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-amber-500/20 text-amber-700 dark:text-amber-300 font-mono">
+                                                {disabledSlots.length > 0 ? `-${disabledSlots.length}` : 'Limitado'}
+                                            </span>
+                                        ) : (
+                                            <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-mono">
+                                                100%
+                                            </span>
+                                        )}
+                                        {isExpandedWeb ? <ChevronUp className="h-3.5 w-3.5 ml-0.5" /> : <ChevronDown className="h-3.5 w-3.5 ml-0.5" />}
+                                    </button>
+                                )}
                             </div>
-                            {/* Tarde */}
-                            <div className="flex items-center gap-2 bg-background/50 p-2 rounded-lg border border-border/50 justify-between sm:justify-start">
-                                <span className="text-xs font-medium text-muted-foreground w-12">Tarde</span>
-                                <TimeSelect value={h.apertura_tarde} onChange={val => update(h.dia, 'apertura_tarde', val)} disabled={!h.activo} />
-                                <span className="text-xs text-muted-foreground">a</span>
-                                <TimeSelect value={h.cierre_tarde} onChange={val => update(h.dia, 'cierre_tarde', val)} disabled={!h.activo} />
+
+                            {/* Operational Shifts (Administration) */}
+                            <div className="pl-0 sm:pl-8 grid grid-cols-1 md:grid-cols-2 gap-3 mt-0.5">
+                                {/* Turno Mañana */}
+                                <div className={cn(
+                                    'flex flex-col gap-2 p-2.5 rounded-lg border transition-all',
+                                    isMorningActive 
+                                        ? 'bg-background/70 border-border/80 shadow-xs' 
+                                        : 'bg-muted/20 border-border/30 opacity-60'
+                                )}>
+                                    <div className="flex items-center justify-between border-b border-border/30 pb-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <Sun className={cn('h-3.5 w-3.5', isMorningActive ? 'text-amber-500' : 'text-muted-foreground')} />
+                                            <span className="text-xs font-semibold text-foreground">Turno Mañana</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => update(h.dia, 'activo_manana', !isMorningActive)}
+                                            disabled={!h.activo}
+                                            className={cn(
+                                                'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer border',
+                                                isMorningActive 
+                                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' 
+                                                    : 'bg-muted text-muted-foreground border-border/50 hover:bg-muted/80'
+                                            )}
+                                        >
+                                            {isMorningActive ? 'Habilitado' : 'Desactivado'}
+                                        </button>
+                                    </div>
+
+                                    {isMorningActive ? (
+                                        <div className="flex items-center gap-2 justify-start pt-0.5">
+                                            <TimeSelect 
+                                                value={h.apertura_manana} 
+                                                onChange={val => update(h.dia, 'apertura_manana', val)} 
+                                                disabled={!h.activo || !isMorningActive} 
+                                            />
+                                            <span className="text-xs text-muted-foreground font-medium">a</span>
+                                            <TimeSelect 
+                                                value={h.cierre_manana} 
+                                                onChange={val => update(h.dia, 'cierre_manana', val)} 
+                                                disabled={!h.activo || !isMorningActive} 
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="py-1 text-xs text-muted-foreground/80 italic flex items-center gap-1.5">
+                                            <span>Sin atención en turno matutino</span>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Turno Tarde */}
+                                <div className={cn(
+                                    'flex flex-col gap-2 p-2.5 rounded-lg border transition-all',
+                                    isAfternoonActive 
+                                        ? 'bg-background/70 border-border/80 shadow-xs' 
+                                        : 'bg-muted/20 border-border/30 opacity-60'
+                                )}>
+                                    <div className="flex items-center justify-between border-b border-border/30 pb-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <Moon className={cn('h-3.5 w-3.5', isAfternoonActive ? 'text-indigo-500' : 'text-muted-foreground')} />
+                                            <span className="text-xs font-semibold text-foreground">Turno Tarde</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => update(h.dia, 'activo_tarde', !isAfternoonActive)}
+                                            disabled={!h.activo}
+                                            className={cn(
+                                                'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer border',
+                                                isAfternoonActive 
+                                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30' 
+                                                    : 'bg-muted text-muted-foreground border-border/50 hover:bg-muted/80'
+                                            )}
+                                        >
+                                            {isAfternoonActive ? 'Habilitado' : 'Desactivado'}
+                                        </button>
+                                    </div>
+
+                                    {isAfternoonActive ? (
+                                        <div className="flex items-center gap-2 justify-start pt-0.5">
+                                            <TimeSelect 
+                                                value={h.apertura_tarde} 
+                                                onChange={val => update(h.dia, 'apertura_tarde', val)} 
+                                                disabled={!h.activo || !isAfternoonActive} 
+                                            />
+                                            <span className="text-xs text-muted-foreground font-medium">a</span>
+                                            <TimeSelect 
+                                                value={h.cierre_tarde} 
+                                                onChange={val => update(h.dia, 'cierre_tarde', val)} 
+                                                disabled={!h.activo || !isAfternoonActive} 
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="py-1 text-xs text-muted-foreground/80 italic flex items-center gap-1.5">
+                                            <span>Sin atención en turno vespertino</span>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
+
+                            {/* Subpanel: Disponibilidad en Turnos Web (Pacientes) */}
+                            {h.activo && isExpandedWeb && (
+                                <motion.div 
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: 'auto' }}
+                                    exit={{ opacity: 0, height: 0 }}
+                                    className="pl-0 sm:pl-8 mt-1 overflow-hidden"
+                                >
+                                    <div className="p-3.5 rounded-xl bg-muted/30 border border-primary/20 space-y-3">
+                                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-border/40 pb-2.5">
+                                            <div className="flex items-center gap-2">
+                                                <SlidersHorizontal className="h-4 w-4 text-primary" />
+                                                <span className="text-xs font-semibold text-foreground">
+                                                    Horarios Disponibles para Pacientes en la Web
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 text-xs">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAllSlotsWeb(h.dia, true)}
+                                                    className="px-2 py-0.5 rounded text-[11px] font-medium text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                                                >
+                                                    Habilitar todos
+                                                </button>
+                                                <span className="text-border">|</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setAllSlotsWeb(h.dia, false)}
+                                                    className="px-2 py-0.5 rounded text-[11px] font-medium text-destructive hover:bg-destructive/10 transition-colors"
+                                                >
+                                                    Ocultar todos
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                            Hacé click sobre los horarios para <strong>ocultarlos</strong> o <strong>habilitarlos</strong> en el gestor de turnos online de los pacientes. 
+                                            La administración <em>siempre</em> mantendrá la disponibilidad completa desde &quot;Nuevo Turno&quot;.
+                                        </p>
+
+                                        {totalSlots.length === 0 ? (
+                                            <div className="py-2 text-xs text-muted-foreground italic text-center">
+                                                No hay turnos activos configurados para este día.
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-wrap gap-1.5 pt-1">
+                                                {totalSlots.map(slot => {
+                                                    const isExcluded = disabledSlots.includes(slot)
+                                                    return (
+                                                        <button
+                                                            key={slot}
+                                                            type="button"
+                                                            onClick={() => toggleSlotWeb(h.dia, slot)}
+                                                            className={cn(
+                                                                'px-2.5 py-1 rounded-lg text-xs font-mono font-medium transition-all border cursor-pointer flex items-center gap-1.5 select-none',
+                                                                isExcluded
+                                                                    ? 'bg-background/40 text-muted-foreground/60 border-border/40 line-through hover:border-border hover:text-foreground'
+                                                                    : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20 shadow-xs'
+                                                            )}
+                                                            title={isExcluded ? `Habilitar ${slot} hs para reserva web` : `Ocultar ${slot} hs de la web`}
+                                                        >
+                                                            {isExcluded ? (
+                                                                <EyeOff className="h-3 w-3 text-muted-foreground/50" />
+                                                            ) : (
+                                                                <Check className="h-3 w-3 text-emerald-500 stroke-[3]" />
+                                                            )}
+                                                            <span>{slot}</span>
+                                                        </button>
+                                                    )
+                                                })}
+                                            </div>
+                                        )}
+
+                                        <div className="text-[10px] text-muted-foreground/90 flex items-center gap-1.5 pt-1">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500" />
+                                            <span>Verde: Visible para pacientes en la web</span>
+                                            <span className="inline-block w-2 h-2 rounded-full bg-muted-foreground/40 ml-2" />
+                                            <span>Tachado: Solo reservable internamente por Administración</span>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
                         </div>
-                    </div>
-                ))}
+                    )
+                })}
             </div>
-            <div className="flex justify-end">
+
+            <div className="flex justify-end pt-2 border-t border-border/40">
                 <GlassButton onClick={guardar} loading={isPending}><Save className="h-4 w-4 mr-2" />Guardar horarios</GlassButton>
             </div>
         </div>
