@@ -4,6 +4,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
 import { getProfesionales, getTiposTratamiento } from '@/lib/supabase/queries'
+import { getEscaneosPacienteAction } from '@/lib/actions/escaneos-3d'
 import { ArrowLeft, Phone, Mail, MapPin, CreditCard, AlertCircle, Stethoscope, Edit2 } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
@@ -14,7 +15,7 @@ const GENERO_LABEL: Record<string, string> = { M: 'Masculino', F: 'Femenino', X:
 async function getPacienteCompleto(id: string) {
     const supabase = await createClient()
 
-    const [pacienteRes, turnosRes, historialRes, odontogramaRes, presupuestosRes, adjuntosRes] = await Promise.all([
+    const [pacienteRes, turnosRes, historialRes, odontogramaRes, presupuestosRes, adjuntosRes, escaneosRes] = await Promise.all([
         supabase.from('pacientes').select('*, obra_social:obras_sociales(*)').eq('id', id).single(),
         supabase.from('turnos').select(`
             *, profesional:profesionales(nombre, apellido),
@@ -29,6 +30,7 @@ async function getPacienteCompleto(id: string) {
             items:presupuesto_items(*, tipo_tratamiento:tipos_tratamiento(nombre))
         `).eq('paciente_id', id).order('created_at', { ascending: false }),
         supabase.from('paciente_adjuntos').select('*').eq('paciente_id', id).order('created_at', { ascending: false }),
+        getEscaneosPacienteAction(id),
     ])
 
     return {
@@ -38,6 +40,7 @@ async function getPacienteCompleto(id: string) {
         odontograma: odontogramaRes.data ?? [],
         presupuestos: presupuestosRes.data ?? [],
         adjuntos: adjuntosRes.data ?? [],
+        escaneos3d: escaneosRes.escaneos ?? [],
     }
 }
 
@@ -47,7 +50,7 @@ export default async function FichaPacientePage({
     params: Promise<{ id: string }>
 }) {
     const { id } = await params
-    const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos } = await getPacienteCompleto(id)
+    const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos, escaneos3d } = await getPacienteCompleto(id)
     if (!p) notFound()
 
     // Cargar catálogos filtrados estrictamente por el tenant_id del consultorio
@@ -165,6 +168,7 @@ export default async function FichaPacientePage({
                     odontograma={odontograma}
                     presupuestos={presupuestos}
                     adjuntos={adjuntos}
+                    escaneos3d={escaneos3d}
                     motivoConsulta={p.motivo_consulta}
                     profesionales={profesionales}
                     tiposTratamiento={tiposTratamiento}

@@ -727,3 +727,85 @@ export async function enviarRecordatorioManual(turnoId: string) {
         return { error: err.message || 'Excepción interna' }
     }
 }
+
+export interface BuscarTurnosParams {
+    query?: string
+    fechaDesde?: string
+    fechaHasta?: string
+    profesionalId?: string
+    estado?: string
+    limit?: number
+}
+
+export async function buscarTurnosAction(params: BuscarTurnosParams): Promise<{ turnos: any[]; error?: string }> {
+    const tenantId = await getTenantId()
+    if (!tenantId) return { turnos: [], error: 'Tenant no autenticado' }
+
+    const admin = createAdminClient()
+    const { query, fechaDesde, fechaHasta, profesionalId, estado, limit = 50 } = params
+
+    const hasQuery = Boolean(query && query.trim().length > 0)
+
+    // Si busca por paciente usamos !inner para filtrar turnos por la relación paciente en una única query
+    const selectStr = `
+        *,
+        paciente:pacientes${hasQuery ? '!inner' : ''}(id, nombre, apellido, dni, telefono),
+        profesional:profesionales(id, nombre, apellido, color_agenda),
+        tipo_tratamiento:tipos_tratamiento(id, nombre, duracion_minutos, prioridad, color)
+    `
+
+    let turnosQuery = admin
+        .from('turnos')
+        .select(selectStr)
+        .eq('tenant_id', tenantId)
+
+    if (hasQuery) {
+        const cleanTerm = query!.trim()
+        const tokens = cleanTerm.split(/\s+/).filter(Boolean)
+
+        if (tokens.length === 1) {
+            const term = tokens[0]
+            turnosQuery = turnosQuery.or(
+                `nombre.ilike.%${term}%,apellido.ilike.%${term}%,dni.ilike.%${term}%,nro_historia_clinica.ilike.%${term}%`,
+                { foreignTable: 'pacientes' }
+            )
+        } else {
+            const term1 = tokens[0]
+            const term2 = tokens[1]
+            turnosQuery = turnosQuery.or(
+                `and(nombre.ilike.%${term1}%,apellido.ilike.%${term2}%),and(nombre.ilike.%${term2}%,apellido.ilike.%${term1}%),and(apellido.ilike.%${term1}%,nombre.ilike.%${term2}%)`,
+                { foreignTable: 'pacientes' }
+            )
+        }
+    }
+
+    if (fechaDesde) {
+        turnosQuery = turnosQuery.gte('fecha_inicio', `${fechaDesde}T00:00:00`)
+    }
+
+    if (fechaHasta) {
+        turnosQuery = turnosQuery.lte('fecha_inicio', `${fechaHasta}T23:59:59`)
+    }
+
+    if (profesionalId && profesionalId !== 'todos') {
+        turnosQuery = turnosQuery.eq('profesional_id', profesionalId)
+    }
+
+    if (estado && estado !== 'todos') {
+        turnosQuery = turnosQuery.eq('estado', estado)
+    }
+
+    // Si busca una fecha desde hoy en adelante, orden ascendente (próximos primero), de lo contrario más recientes primero
+    const isFutureSearch = fechaDesde && new Date(fechaDesde) >= new Date(new Date().setHours(0, 0, 0, 0))
+    turnosQuery = turnosQuery.order('fecha_inicio', { ascending: !!isFutureSearch })
+    turnosQuery = turnosQuery.limit(limit)
+
+    const { data: turnos, error: tError } = await turnosQuery
+
+    if (tError) {
+        console.error('Error buscando turnos:', tError)
+        return { turnos: [], error: tError.message }
+    }
+
+    return { turnos: (turnos as any[]) || [] }
+}

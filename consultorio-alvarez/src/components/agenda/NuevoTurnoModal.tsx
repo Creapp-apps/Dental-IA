@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useEffect, useMemo } from 'react'
+import { useState, useTransition, useEffect, useMemo, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -131,6 +131,10 @@ export function NuevoTurnoModal({
     const [extraMinutes, setExtraMinutes] = useState(0)
     const [numeroPieza, setNumeroPieza] = useState('')
 
+    const searchContainerRef = useRef<HTMLDivElement>(null)
+    const wasOpenRef = useRef(false)
+    const lastTurnoAEditarIdRef = useRef<string | null>(null)
+
     const esTratamientoConducto = useMemo(() => {
         const selected = tiposTratamiento.find((t: any) => String(t.id) === String(tratId))
         return selected?.nombre?.toUpperCase().trim() === 'TRATAMIENTO DE CONDUCTO'
@@ -142,6 +146,17 @@ export function NuevoTurnoModal({
     const [nuevoApellido, setNuevoApellido] = useState('')
     const [nuevoDni, setNuevoDni] = useState('')
     const [nuevoTelefono, setNuevoTelefono] = useState('')
+
+    // Cerrar resultados al hacer click fuera del contenedor de búsqueda (sin usar backdrop fixed inset-0 que rompe clics)
+    useEffect(() => {
+        const handleClickOutside = (e: MouseEvent) => {
+            if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+                setShowResults(false)
+            }
+        }
+        document.addEventListener('mousedown', handleClickOutside)
+        return () => document.removeEventListener('mousedown', handleClickOutside)
+    }, [])
 
     // Búsqueda dinámica de pacientes en tiempo real con debounce
     useEffect(() => {
@@ -199,49 +214,64 @@ export function NuevoTurnoModal({
         }
     }, [pacienteSearch, pacientes])
 
+    // Resetear formulario ÚNICAMENTE cuando el modal pasa de cerrado a abierto o cambia el turno a editar
     useEffect(() => {
-        if (open) {
-            setModoNuevoPaciente(false)
-            setNuevoNombre('')
-            setNuevoApellido('')
-            setNuevoDni('')
-            setNuevoTelefono('')
-            setSearchedPacientes([])
-            setPacienteSeleccionado(null)
-            
-            if (turnoAEditar) {
-                setPacienteId(turnoAEditar.paciente_id)
-                setPacienteSeleccionado(turnoAEditar.paciente || null)
-                setPacienteSearch(`${turnoAEditar.paciente?.apellido || ''}, ${turnoAEditar.paciente?.nombre || ''}`)
-                setProfId(turnoAEditar.profesional_id)
-                setTratId(turnoAEditar.tipo_tratamiento_id)
-                setFecha(format(parseISO(turnoAEditar.fecha_inicio), 'yyyy-MM-dd'))
-                setHora(format(parseISO(turnoAEditar.fecha_inicio), 'HH:mm'))
-                setNotas(turnoAEditar.notas || '')
-                setPrioridad(turnoAEditar.prioridad_override || '')
-                setEsSobreturno(turnoAEditar.es_sobreturno || false)
-                setNumeroPieza(turnoAEditar.numero_pieza || '')
-
-                // Calcular minutos extra originales
-                const duracionOriginal = (new Date(turnoAEditar.fecha_fin).getTime() - new Date(turnoAEditar.fecha_inicio).getTime()) / 60000
-                const tratOriginal = tiposTratamiento.find((t: any) => String(t.id) === String(turnoAEditar.tipo_tratamiento_id))
-                const baseMin = turnoAEditar.es_sobreturno ? 15 : (tratOriginal?.duracion_minutos || 0)
-                setExtraMinutes(Math.max(0, duracionOriginal - baseMin))
-            } else {
-                setProfId(defaultProfesionalId || (profesionales[0]?.id ?? ''))
-                setFecha(defaultFecha || format(new Date(), 'yyyy-MM-dd'))
-                setPacienteId('')
-                setPacienteSearch('')
-                setTratId('')
-                setHora(defaultHora || '09:00')
-                setNotas('')
-                setPrioridad('')
-                setEsSobreturno(false)
-                setExtraMinutes(0)
-                setNumeroPieza('')
-            }
+        if (!open) {
+            wasOpenRef.current = false
+            lastTurnoAEditarIdRef.current = null
+            return
         }
-    }, [open, defaultProfesionalId, defaultFecha, defaultHora, profesionales, turnoAEditar, tiposTratamiento])
+
+        const isSameTurnoEdit = turnoAEditar && turnoAEditar.id === lastTurnoAEditarIdRef.current
+        if (wasOpenRef.current && (!turnoAEditar || isSameTurnoEdit)) {
+            // El modal ya está abierto y el usuario está interactuando: NUNCA resetear los inputs
+            return
+        }
+
+        wasOpenRef.current = true
+        lastTurnoAEditarIdRef.current = turnoAEditar?.id || null
+
+        setModoNuevoPaciente(false)
+        setNuevoNombre('')
+        setNuevoApellido('')
+        setNuevoDni('')
+        setNuevoTelefono('')
+        setSearchedPacientes([])
+        setPacienteSeleccionado(null)
+        setShowResults(false)
+        
+        if (turnoAEditar) {
+            setPacienteId(turnoAEditar.paciente_id)
+            setPacienteSeleccionado(turnoAEditar.paciente || null)
+            setPacienteSearch(`${turnoAEditar.paciente?.apellido || ''}, ${turnoAEditar.paciente?.nombre || ''}`)
+            setProfId(turnoAEditar.profesional_id)
+            setTratId(turnoAEditar.tipo_tratamiento_id)
+            setFecha(format(parseISO(turnoAEditar.fecha_inicio), 'yyyy-MM-dd'))
+            setHora(format(parseISO(turnoAEditar.fecha_inicio), 'HH:mm'))
+            setNotas(turnoAEditar.notas || '')
+            setPrioridad(turnoAEditar.prioridad_override || '')
+            setEsSobreturno(turnoAEditar.es_sobreturno || false)
+            setNumeroPieza(turnoAEditar.numero_pieza || '')
+
+            // Calcular minutos extra originales
+            const duracionOriginal = (new Date(turnoAEditar.fecha_fin).getTime() - new Date(turnoAEditar.fecha_inicio).getTime()) / 60000
+            const tratOriginal = tiposTratamiento.find((t: any) => String(t.id) === String(turnoAEditar.tipo_tratamiento_id))
+            const baseMin = turnoAEditar.es_sobreturno ? 15 : (tratOriginal?.duracion_minutos || 0)
+            setExtraMinutes(Math.max(0, duracionOriginal - baseMin))
+        } else {
+            setProfId(defaultProfesionalId || (profesionales[0]?.id ?? ''))
+            setFecha(defaultFecha || format(new Date(), 'yyyy-MM-dd'))
+            setPacienteId('')
+            setPacienteSearch('')
+            setTratId('')
+            setHora(defaultHora || '09:00')
+            setNotas('')
+            setPrioridad('')
+            setEsSobreturno(false)
+            setExtraMinutes(0)
+            setNumeroPieza('')
+        }
+    }, [open, turnoAEditar, defaultProfesionalId, defaultFecha, defaultHora, profesionales, tiposTratamiento])
 
     useEffect(() => {
         let active = true
@@ -318,13 +348,35 @@ export function NuevoTurnoModal({
             }
         }
 
-        // Fallback if no active schedule configured for this day
-        const arr = []
-        for (let h = 8; h <= 20; h++) {
-            for (let m = 0; m < 60; m += 20) {
-                if (h === 20 && m > 0) continue
-                arr.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`)
+        // Si el profesional tiene un horario configurado para este día pero está inactivo, no inventar slots por defecto
+        if (profSchedule && !profSchedule.activo) {
+            return []
+        }
+
+        // Fallback inteligente: si el profesional tiene horarios configurados en la semana, usar su hora de apertura más temprana
+        const profAnySchedule = (horarios || []).filter((h: any) => h.profesional_id === profId && h.activo)
+        let minStartHour = 9
+        let minStartMinute = 0
+        if (profAnySchedule.length > 0) {
+            for (const h of profAnySchedule) {
+                const apertura = h.apertura_manana || h.apertura
+                if (apertura) {
+                    const [hStr, mStr] = apertura.split(':').map(Number)
+                    if (hStr < minStartHour || (hStr === minStartHour && mStr < minStartMinute)) {
+                        minStartHour = hStr
+                        minStartMinute = mStr
+                    }
+                }
             }
+        }
+
+        const arr: string[] = []
+        const startMin = minStartHour * 60 + minStartMinute
+        const endMin = 20 * 60
+        for (let m = startMin; m <= endMin; m += 20) {
+            const h = Math.floor(m / 60)
+            const min = m % 60
+            arr.push(`${h.toString().padStart(2, '0')}:${min.toString().padStart(2, '0')}`)
         }
         return arr
     }, [fecha, profId, horarios])
@@ -604,74 +656,90 @@ export function NuevoTurnoModal({
                             </div>
                         ) : (
                             <>
-                                <div className="relative">
-                                    <Input
-                                        placeholder="Buscar por nombre o DNI..."
-                                        value={pacienteSearch}
-                                        onChange={(e) => {
-                                            setPacienteSearch(e.target.value)
-                                            setPacienteId('')
-                                            setPacienteSeleccionado(null)
-                                            setShowResults(true)
-                                        }}
-                                        onFocus={() => setShowResults(true)}
-                                        className="pr-9"
-                                    />
-                                    {isSearchingPacientes && (
-                                        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
-                                            <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                        </div>
-                                    )}
-                                </div>
-                                <AnimatePresence>
-                                    {showResults && (pacienteSearch.length >= 2 || filteredPacientes.length > 0) && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: -5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }}
-                                            className="absolute z-[99999] top-full left-0 w-full mt-1.5 rounded-xl bg-background/95 supports-[backdrop-filter]:bg-background/95 backdrop-blur-3xl shadow-glass-xl border border-border overflow-hidden"
-                                        >
-                                            <div className="fixed inset-0 z-40" onClick={() => setShowResults(false)} />
-                                            <div className="relative z-50 max-h-[200px] overflow-y-auto custom-scrollbar">
-                                                {filteredPacientes.map((p: any) => (
-                                                    <button
-                                                        key={p.id}
-                                                        type="button"
-                                                        className="w-full text-left px-3 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer border-b border-border/50 last:border-0"
-                                                        onClick={() => {
-                                                            setPacienteId(p.id)
-                                                            setPacienteSeleccionado(p)
-                                                            setPacienteSearch(`${p.apellido}, ${p.nombre}`)
-                                                            setShowResults(false)
-                                                        }}
-                                                    >
-                                                        <span className="font-medium">{p.apellido}, {p.nombre}</span>
-                                                        {p.dni && <span className="text-muted-foreground ml-2">— DNI {p.dni}</span>}
-                                                    </button>
-                                                ))}
-                                                
-                                                {pacienteSearch.length >= 2 && (
-                                                    <button
-                                                        type="button"
-                                                        className="w-full px-3 py-2.5 text-xs text-primary font-semibold hover:bg-black/5 dark:hover:bg-white/10 transition-colors border-t border-border flex items-center justify-center gap-1.5"
-                                                        onClick={() => {
-                                                            setModoNuevoPaciente(true)
-                                                            const parts = pacienteSearch.trim().split(/\s+/)
-                                                            if (parts.length > 1) {
-                                                                setNuevoNombre(parts[0])
-                                                                setNuevoApellido(parts.slice(1).join(' '))
-                                                            } else {
-                                                                setNuevoNombre(pacienteSearch)
-                                                                setNuevoApellido('')
-                                                            }
-                                                            setShowResults(false)
-                                                        }}
-                                                    >
-                                                        <span>+ Registrar "{pacienteSearch}" como paciente rápido</span>
-                                                    </button>
-                                                )}
+                                <div ref={searchContainerRef} className="relative">
+                                    <div className="relative">
+                                        <Input
+                                            placeholder="Buscar por nombre o DNI..."
+                                            value={pacienteSearch}
+                                            onChange={(e) => {
+                                                setPacienteSearch(e.target.value)
+                                                setPacienteId('')
+                                                setPacienteSeleccionado(null)
+                                                setShowResults(true)
+                                            }}
+                                            onFocus={() => {
+                                                if (pacienteSearch.trim().length >= 2 || filteredPacientes.length > 0) {
+                                                    setShowResults(true)
+                                                }
+                                            }}
+                                            className="pr-9"
+                                        />
+                                        {isSearchingPacientes && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+                                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
                                             </div>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
+                                        )}
+                                    </div>
+                                    <AnimatePresence>
+                                        {showResults && (pacienteSearch.trim().length >= 2 || filteredPacientes.length > 0) && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -5 }} 
+                                                animate={{ opacity: 1, y: 0 }} 
+                                                exit={{ opacity: 0, y: -5 }}
+                                                className="absolute z-[99999] top-full left-0 w-full mt-1.5 rounded-xl bg-background/95 supports-[backdrop-filter]:bg-background/95 backdrop-blur-3xl shadow-glass-xl border border-border overflow-hidden"
+                                            >
+                                                <div className="relative z-50 max-h-[220px] overflow-y-auto custom-scrollbar">
+                                                    {filteredPacientes.map((p: any) => (
+                                                        <button
+                                                            key={p.id}
+                                                            type="button"
+                                                            className="w-full text-left px-3 py-2.5 text-sm hover:bg-black/5 dark:hover:bg-white/10 transition-colors cursor-pointer border-b border-border/50 last:border-0 flex flex-col"
+                                                            onClick={() => {
+                                                                setPacienteId(p.id)
+                                                                setPacienteSeleccionado(p)
+                                                                setPacienteSearch(`${p.apellido}, ${p.nombre}`)
+                                                                setShowResults(false)
+                                                            }}
+                                                        >
+                                                            <div className="flex items-center justify-between">
+                                                                <span className="font-medium text-foreground">{p.apellido}, {p.nombre}</span>
+                                                                {p.dni && <span className="text-xs text-muted-foreground font-mono">DNI {p.dni}</span>}
+                                                            </div>
+                                                            {p.telefono && <span className="text-[11px] text-muted-foreground">{p.telefono}</span>}
+                                                        </button>
+                                                    ))}
+
+                                                    {filteredPacientes.length === 0 && !isSearchingPacientes && pacienteSearch.trim().length >= 2 && (
+                                                        <div className="px-3 py-2 text-xs text-muted-foreground italic text-center">
+                                                            No se encontraron pacientes registrados con "{pacienteSearch.trim()}"
+                                                        </div>
+                                                    )}
+                                                    
+                                                    {pacienteSearch.trim().length >= 2 && (
+                                                        <button
+                                                            type="button"
+                                                            className="w-full px-3 py-2.5 text-xs text-primary font-semibold hover:bg-black/5 dark:hover:bg-white/10 transition-colors border-t border-border flex items-center justify-center gap-1.5"
+                                                            onClick={() => {
+                                                                setModoNuevoPaciente(true)
+                                                                const parts = pacienteSearch.trim().split(/\s+/)
+                                                                if (parts.length > 1) {
+                                                                    setNuevoNombre(parts[0])
+                                                                    setNuevoApellido(parts.slice(1).join(' '))
+                                                                } else {
+                                                                    setNuevoNombre(pacienteSearch)
+                                                                    setNuevoApellido('')
+                                                                }
+                                                                setShowResults(false)
+                                                            }}
+                                                        >
+                                                            <span>+ Registrar "{pacienteSearch.trim()}" como paciente rápido</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
                                 {pacienteId && (
                                     <p className="text-xs text-primary font-medium flex items-center mt-1.5 ml-1">
                                         <span className="mr-1">✓</span> Paciente seleccionado
@@ -832,27 +900,35 @@ export function NuevoTurnoModal({
                                     <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded-full bg-red-500"></span> Ocupado</span>
                                 </span>
                             </div>
-                            <div className={`flex flex-wrap gap-1.5 p-2.5 rounded-xl bg-muted/50 dark:bg-black/20 border border-border dark:border-white/5 max-h-[135px] overflow-y-auto custom-scrollbar transition-opacity duration-200 ${isLoadingOcupacion ? 'opacity-60 pointer-events-none' : ''}`}>
-                                {slots.map(s => {
-                                    const ocupado = isSlotOccupied(s)
-                                    return (
-                                        <button
-                                            key={s}
-                                            type="button"
-                                            disabled={ocupado || isLoadingOcupacion}
-                                            onClick={() => setHora(s)}
-                                            className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-colors border ${
-                                                ocupado 
-                                                    ? "bg-red-50/50 text-red-700/60 border-red-100 dark:bg-red-950/30 dark:text-red-400/40 dark:border-red-900/20 cursor-not-allowed" 
-                                                    : hora === s 
-                                                        ? "bg-primary text-primary-foreground border-primary" 
-                                                        : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50 dark:hover:bg-emerald-950/70"
-                                            }`}
-                                        >
-                                            {s}
-                                        </button>
-                                    )
-                                })}
+                            <div className={`p-2.5 rounded-xl bg-muted/50 dark:bg-black/20 border border-border dark:border-white/5 max-h-[135px] overflow-y-auto custom-scrollbar transition-opacity duration-200 ${isLoadingOcupacion ? 'opacity-60 pointer-events-none' : ''}`}>
+                                {slots.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground italic py-1 text-center">
+                                        El profesional no atiende en el día seleccionado o no tiene horarios disponibles. Podés ingresar un horario manual arriba si es necesario.
+                                    </p>
+                                ) : (
+                                    <div className="flex flex-wrap gap-1.5">
+                                        {slots.map(s => {
+                                            const ocupado = isSlotOccupied(s)
+                                            return (
+                                                <button
+                                                    key={s}
+                                                    type="button"
+                                                    disabled={ocupado || isLoadingOcupacion}
+                                                    onClick={() => setHora(s)}
+                                                    className={`px-2.5 py-1 text-xs rounded-lg font-medium transition-colors border ${
+                                                        ocupado 
+                                                            ? "bg-red-50/50 text-red-700/60 border-red-100 dark:bg-red-950/30 dark:text-red-400/40 dark:border-red-900/20 cursor-not-allowed" 
+                                                            : hora === s 
+                                                                ? "bg-primary text-primary-foreground border-primary" 
+                                                                : "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/50 dark:hover:bg-emerald-950/70"
+                                                    }`}
+                                                >
+                                                    {s}
+                                                </button>
+                                            )
+                                        })}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ) : (

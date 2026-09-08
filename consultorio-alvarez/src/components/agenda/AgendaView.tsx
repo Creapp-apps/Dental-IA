@@ -9,11 +9,12 @@ import {
     startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell, CalendarDays, ChevronUp, ChevronDown } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell, CalendarDays, ChevronUp, ChevronDown, Search } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { NuevoTurnoModal } from '@/components/agenda/NuevoTurnoModal'
+import { BuscadorTurnosModal } from '@/components/agenda/BuscadorTurnosModal'
 import { cambiarEstadoTurno, eliminarTurno, moverTurno, enviarRecordatorioManual } from '@/lib/actions/turnos'
 import { glassAlert } from '@/components/ui/glass-alert'
 import {
@@ -146,6 +147,11 @@ export function AgendaView({
     const [baseDate, setBaseDate] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
     const [diaSeleccionado, setDiaSeleccionado] = useState(() => fechaInicial ? parseISO(fechaInicial) : new Date())
     const [modalOpen, setModalOpen] = useState(false)
+    const [buscadorOpen, setBuscadorOpen] = useState(false)
+    const modalOpenRef = useRef(modalOpen)
+    useEffect(() => {
+        modalOpenRef.current = modalOpen
+    }, [modalOpen])
     const [modalProfId, setModalProfId] = useState<string>(lockedProfId || '')
     const [modalHora, setModalHora] = useState<string>('09:00')
     const [turnoAEditar, setTurnoAEditar] = useState<any>(null)
@@ -319,7 +325,10 @@ export function AgendaView({
                         }
                     }
                     
-                    router.refresh()
+                    // Solo refrescar la página de fondo si el usuario no está interactuando con el modal abierto
+                    if (!modalOpenRef.current) {
+                        router.refresh()
+                    }
                 }
             )
             .subscribe()
@@ -372,23 +381,25 @@ export function AgendaView({
             setModalProfId(turno.profesional_id)
             setModalOpen(true)
             
-            // Clean up the URL query parameter so it doesn't reopen on subsequent renders/state-changes
+            // Clean up the URL query parameter silently without triggering Next.js RSC revalidation
             const url = new URL(window.location.href)
             url.searchParams.delete('edit')
-            router.replace(url.pathname + url.search, { scroll: false })
+            window.history.replaceState(null, '', url.pathname + url.search)
         }
-    }, [editTurnoId, turnos, router])
+    }, [editTurnoId, turnos])
 
     const nuevoTurnoParam = searchParams.get('nuevo')
     useEffect(() => {
         if (nuevoTurnoParam === 'true' || nuevoTurnoParam === '1') {
             setTurnoAEditar(null)
             setModalOpen(true)
+            
+            // Clean up the URL query parameter silently without triggering Next.js RSC revalidation
             const url = new URL(window.location.href)
             url.searchParams.delete('nuevo')
-            router.replace(url.pathname + url.search, { scroll: false })
+            window.history.replaceState(null, '', url.pathname + url.search)
         }
-    }, [nuevoTurnoParam, router])
+    }, [nuevoTurnoParam])
 
     // Escuchar evento global desde el sidebar u otras vistas
     useEffect(() => {
@@ -399,6 +410,44 @@ export function AgendaView({
         window.addEventListener('open-nuevo-turno-modal', handleOpenModal)
         return () => window.removeEventListener('open-nuevo-turno-modal', handleOpenModal)
     }, [])
+
+    // Atajo de teclado global Cmd+K / Ctrl+K para abrir buscador de turnos
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+                e.preventDefault()
+                setBuscadorOpen(prev => !prev)
+            }
+        }
+        window.addEventListener('keydown', handleKeyDown)
+        return () => window.removeEventListener('keydown', handleKeyDown)
+    }, [])
+
+    function handleSelectTurnoBusqueda(turno: any) {
+        if (!turno?.fecha_inicio) return
+
+        const fechaTurno = parseISO(turno.fecha_inicio)
+        
+        // Navegar a la fecha del turno en la agenda
+        setBaseDate(fechaTurno)
+        setDiaSeleccionado(fechaTurno)
+
+        // Si hay un filtro de profesional activo que oculta a este profesional, resetear a 'todos'
+        if (filtroProf !== 'todos' && turno.profesional_id && filtroProf !== turno.profesional_id) {
+            setFiltroProf('todos')
+        }
+
+        // Resaltar visualmente la tarjeta del turno con scroll suave y efecto halo/pulse
+        setTimeout(() => {
+            const el = document.getElementById(`turno-${turno.id}`)
+            if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                const pulseClasses = ['ring-4', 'ring-primary', 'animate-pulse', 'shadow-[0_0_35px_rgba(59,130,246,0.9)]', 'z-50']
+                el.classList.add(...pulseClasses)
+                setTimeout(() => el.classList.remove(...pulseClasses), 8000)
+            }
+        }, 350)
+    }
 
 
     // ── Compute visible days based on view mode ────────────────
@@ -751,9 +800,24 @@ export function AgendaView({
         }
         
         const pad = (num: number) => num.toString().padStart(2, '0')
-        const horaStr = `${pad(dropHour)}:${pad(dropMinute)}`
+        let horaStr = `${pad(dropHour)}:${pad(dropMinute)}`
+
+        // Si el profesional tiene horario configurado para este día, validar apertura
+        const targetProfId = profId ?? profesionales[0]?.id ?? ''
+        const dow = date.getDay()
+        const profSchedule = (horarios || []).find((h: any) => h.profesional_id === targetProfId && h.dia === dow)
+        if (profSchedule && profSchedule.activo) {
+            const apertura = (profSchedule.activo_manana !== false && profSchedule.apertura_manana)
+                ? profSchedule.apertura_manana
+                : (profSchedule.activo_tarde !== false && profSchedule.apertura_tarde)
+                    ? profSchedule.apertura_tarde
+                    : null
+            if (apertura && horaStr < apertura) {
+                horaStr = apertura
+            }
+        }
         
-        abrirModalConProf(profId ?? profesionales[0]?.id ?? '', format(date, 'yyyy-MM-dd'), horaStr)
+        abrirModalConProf(targetProfId, format(date, 'yyyy-MM-dd'), horaStr)
     }
 
     function handleCambiarEstado(turnoId: string, nuevoEstado: EstadoTurno) {
@@ -1189,6 +1253,18 @@ export function AgendaView({
                     <GlassButton onClick={toggleFullscreen} variant="glass" size="icon" title="Pantalla completa">
                         {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
                     </GlassButton>
+                    <GlassButton
+                        onClick={() => setBuscadorOpen(true)}
+                        variant="glass"
+                        className="gap-1.5 font-medium border-primary/20 hover:border-primary/50 text-foreground"
+                        title="Buscar turnos por paciente o rango (⌘K)"
+                    >
+                        <Search className="h-4 w-4 text-primary" />
+                        <span>Buscar turno</span>
+                        <kbd className="hidden lg:inline-flex items-center text-[10px] bg-foreground/10 px-1.5 py-0.5 rounded text-muted-foreground ml-1 font-mono font-bold">
+                            ⌘K
+                        </kbd>
+                    </GlassButton>
                     <GlassButton onClick={() => { 
                         setTurnoAEditar(null)
                         setModalProfId(filtroProf !== 'todos' ? filtroProf : (profesionales[0]?.id ?? ''))
@@ -1526,6 +1602,47 @@ export function AgendaView({
                                             onClick={(e) => handleColumnClick(e, col.date, col.profesionalId)}
                                         >
 
+                                            {/* Inactive Schedule Overlays (e.g. before 08:30 or lunch break or inactive day) */}
+                                            {(() => {
+                                                if (!col.profesionalId) return null
+                                                const dow = col.date.getDay()
+                                                const sched = (horarios || []).find((h: any) => h.profesional_id === col.profesionalId && h.dia === dow)
+                                                if (!sched || !sched.activo) {
+                                                    return (
+                                                        <div className="absolute inset-0 z-0 bg-stripe-pattern pointer-events-none opacity-40 bg-zinc-500/10 flex items-center justify-center">
+                                                            <span className="text-[10px] font-semibold text-muted-foreground/60 uppercase tracking-widest rotate-[-90deg] select-none">
+                                                                No atiende
+                                                            </span>
+                                                        </div>
+                                                    )
+                                                }
+                                                const overlays: React.ReactNode[] = []
+                                                const parseTimeToTop = (tStr: string) => {
+                                                    const [h, m] = tStr.split(':').map(Number)
+                                                    return Math.max(0, ((h - 8) + m / 60) * HOUR_HEIGHT)
+                                                }
+                                                
+                                                // Bloque antes de la apertura matutina (ej: 08:00 a 08:30)
+                                                const apManana = sched.activo_manana !== false ? sched.apertura_manana : null
+                                                if (apManana && apManana > '08:00') {
+                                                    const height = parseTimeToTop(apManana)
+                                                    if (height > 0) {
+                                                        overlays.push(
+                                                            <div 
+                                                                key="before-morning"
+                                                                style={{ top: 0, height: `${height}px` }}
+                                                                className="absolute left-0 right-0 z-0 bg-muted/40 dark:bg-zinc-900/30 border-b border-border/30 pointer-events-none flex items-center justify-center"
+                                                            >
+                                                                <span className="text-[9px] font-mono text-muted-foreground/50 select-none">
+                                                                    Inicia {apManana} hs
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                    }
+                                                }
+                                                return overlays
+                                            })()}
+
                                             {/* Appointments cards */}
                                             {(() => {
                                                 const overlapStyles = calculateOverlappingStyle(col.turnos)
@@ -1612,6 +1729,17 @@ export function AgendaView({
                         <div className="text-center font-extrabold text-xs text-foreground capitalize truncate max-w-[130px]">
                             {getRangeLabel()}
                         </div>
+
+                        {/* Botón Buscar en Mobile */}
+                        <GlassButton 
+                            variant="glass" 
+                            size="icon-sm" 
+                            onClick={() => setBuscadorOpen(true)}
+                            className="h-8 w-8 rounded-xl border-white/10 shrink-0 text-primary"
+                            title="Buscar turnos"
+                        >
+                            <Search className="h-4 w-4" />
+                        </GlassButton>
 
                         {/* View Mode Selector Dropdown */}
                         <div className="relative">
@@ -1918,6 +2046,44 @@ export function AgendaView({
                                                         )}
                                                         onClick={(e) => handleColumnClick(e, col.date, col.profesionalId)}
                                                     >
+                                                        {/* Inactive Schedule Overlays */}
+                                                        {(() => {
+                                                            if (!col.profesionalId) return null
+                                                            const dow = col.date.getDay()
+                                                            const sched = (horarios || []).find((h: any) => h.profesional_id === col.profesionalId && h.dia === dow)
+                                                            if (!sched || !sched.activo) {
+                                                                return (
+                                                                    <div className="absolute inset-0 z-0 bg-stripe-pattern pointer-events-none opacity-40 bg-zinc-500/10 flex items-center justify-center">
+                                                                        <span className="text-[9px] font-semibold text-muted-foreground/60 uppercase tracking-widest rotate-[-90deg] select-none">
+                                                                            No atiende
+                                                                        </span>
+                                                                    </div>
+                                                                )
+                                                            }
+                                                            const parseTimeToTop = (tStr: string) => {
+                                                                const [h, m] = tStr.split(':').map(Number)
+                                                                return Math.max(0, ((h - 8) + m / 60) * HOUR_HEIGHT)
+                                                            }
+                                                            const apManana = sched.activo_manana !== false ? sched.apertura_manana : null
+                                                            if (apManana && apManana > '08:00') {
+                                                                const height = parseTimeToTop(apManana)
+                                                                if (height > 0) {
+                                                                    return (
+                                                                        <div 
+                                                                            key="before-morning-mob"
+                                                                            style={{ top: 0, height: `${height}px` }}
+                                                                            className="absolute left-0 right-0 z-0 bg-muted/40 dark:bg-zinc-900/30 border-b border-border/30 pointer-events-none flex items-center justify-center"
+                                                                        >
+                                                                            <span className="text-[8px] font-mono text-muted-foreground/50 select-none">
+                                                                                {apManana} hs
+                                                                            </span>
+                                                                        </div>
+                                                                    )
+                                                                }
+                                                            }
+                                                            return null
+                                                        })()}
+
                                                         {/* Appointments cards */}
                                                         {col.turnos.map((turno: any) => {
                                                             const { top, height } = getCardPosition(turno.fecha_inicio, turno.fecha_fin)
@@ -2011,6 +2177,30 @@ export function AgendaView({
 
                     if (isEdit) {
                         setTurnos(prev => prev.map(t => t.id === turnoRaw.id ? turnoCompleto : t))
+
+                        if (turnoRaw.fecha_inicio) {
+                            const fechaTurno = parseISO(turnoRaw.fecha_inicio)
+                            const estaEnRangoVisible = vistaActiva === 'hoy'
+                                ? isSameDay(diaSeleccionado, fechaTurno)
+                                : diasVisibles.some(dia => isSameDay(dia, fechaTurno))
+
+                            if (!estaEnRangoVisible) {
+                                const fechaFormateada = format(fechaTurno, "dd/MM/yyyy")
+                                const horaFormateada = format(fechaTurno, 'HH:mm')
+                                glassAlert.info({
+                                    title: 'Turno reprogramado a otra fecha',
+                                    description: `Quedó para el ${fechaFormateada} a las ${horaFormateada} hs.`,
+                                    action: {
+                                        label: 'Ver en agenda →',
+                                        onClick: () => {
+                                            setBaseDate(fechaTurno)
+                                            setDiaSeleccionado(fechaTurno)
+                                        }
+                                    },
+                                    duration: 7000
+                                })
+                            }
+                        }
                     } else {
                         setTurnos(prev => {
                             if (prev.some(t => t.id === turnoRaw.id)) {
@@ -2021,8 +2211,28 @@ export function AgendaView({
 
                         if (turnoRaw.fecha_inicio) {
                             const fechaTurno = parseISO(turnoRaw.fecha_inicio)
-                            setBaseDate(fechaTurno)
-                            setDiaSeleccionado(fechaTurno)
+                            const estaEnRangoVisible = vistaActiva === 'hoy'
+                                ? isSameDay(diaSeleccionado, fechaTurno)
+                                : diasVisibles.some(dia => isSameDay(dia, fechaTurno))
+
+                            if (estaEnRangoVisible) {
+                                setDiaSeleccionado(fechaTurno)
+                            } else {
+                                const fechaFormateada = format(fechaTurno, "dd/MM/yyyy")
+                                const horaFormateada = format(fechaTurno, 'HH:mm')
+                                glassAlert.info({
+                                    title: 'Turno agendado en otra fecha',
+                                    description: `Quedó agendado para el ${fechaFormateada} a las ${horaFormateada} hs.`,
+                                    action: {
+                                        label: 'Ver en agenda →',
+                                        onClick: () => {
+                                            setBaseDate(fechaTurno)
+                                            setDiaSeleccionado(fechaTurno)
+                                        }
+                                    },
+                                    duration: 7000
+                                })
+                            }
                         }
 
                         if (filtroProf !== 'todos' && turnoRaw.profesional_id && filtroProf !== turnoRaw.profesional_id) {
@@ -2063,6 +2273,15 @@ export function AgendaView({
                 onAdd20Minutes={handleExtend20Minutes}
                 landingConfig={landingConfig}
                 onImprimirTicket={handleImprimirTicket}
+            />
+
+            {/* Modal de Búsqueda Rápida de Turnos */}
+            <BuscadorTurnosModal
+                open={buscadorOpen}
+                onOpenChange={setBuscadorOpen}
+                profesionales={profesionales}
+                turnosLocales={turnos}
+                onSelectTurno={handleSelectTurnoBusqueda}
             />
         </div>
     )

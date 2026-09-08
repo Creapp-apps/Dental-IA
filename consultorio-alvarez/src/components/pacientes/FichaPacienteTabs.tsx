@@ -5,10 +5,11 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip } from 'lucide-react'
+import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
 import { TabAdjuntos } from '@/components/pacientes/TabAdjuntos'
+import { TabEscaneos3D } from '@/components/pacientes/TabEscaneos3D'
 import { ModalCrearPresupuesto } from '@/components/pacientes/ModalCrearPresupuesto'
 import { type EstadoTurno } from '@/types'
 import { Plus } from 'lucide-react'
@@ -18,6 +19,7 @@ const TABS = [
     { id: 'turnos', label: 'Turnos', icon: CalendarDays },
     { id: 'evoluciones', label: 'Evoluciones', icon: FileText },
     { id: 'odontograma', label: 'Odontograma', icon: ClipboardList },
+    { id: 'escaneos3d', label: 'Escaneos 3D', icon: Box },
     { id: 'presupuestos', label: 'Presupuestos', icon: DollarSign },
     { id: 'adjuntos', label: 'Adjuntos', icon: Paperclip },
 ] as const
@@ -31,6 +33,7 @@ interface FichaPacienteTabsProps {
     odontograma: any[]
     presupuestos: any[]
     adjuntos: any[]
+    escaneos3d?: any[]
     motivoConsulta: string | null
     profesionales: any[]
     tiposTratamiento: any[]
@@ -43,6 +46,7 @@ export function FichaPacienteTabs({
     odontograma,
     presupuestos,
     adjuntos,
+    escaneos3d = [],
     motivoConsulta,
     profesionales,
     tiposTratamiento,
@@ -52,13 +56,13 @@ export function FichaPacienteTabs({
     return (
         <div className="space-y-4">
             {/* Tab bar */}
-            <div className="flex gap-1 glass rounded-xl p-1 shadow-glass">
+            <div className="flex gap-1 glass rounded-xl p-1 shadow-glass overflow-x-auto custom-scrollbar">
                 {TABS.map(t => (
                     <button
                         key={t.id}
                         onClick={() => setTab(t.id)}
                         className={cn(
-                            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center cursor-pointer',
+                            'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center cursor-pointer shrink-0 whitespace-nowrap',
                             tab === t.id
                                 ? 'bg-primary text-primary-foreground shadow-sm'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
@@ -66,6 +70,14 @@ export function FichaPacienteTabs({
                     >
                         <t.icon className="h-4 w-4" />
                         <span className="hidden sm:inline">{t.label}</span>
+                        {t.id === 'escaneos3d' && escaneos3d.length > 0 && (
+                            <span className={cn(
+                                'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
+                                tab === t.id ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
+                            )}>
+                                {escaneos3d.length}
+                            </span>
+                        )}
                     </button>
                 ))}
             </div>
@@ -84,6 +96,9 @@ export function FichaPacienteTabs({
                     {tab === 'evoluciones' && <TabEvoluciones historial={historial} />}
                     {tab === 'odontograma' && (
                         <OdontogramaInteractivo pacienteId={pacienteId} piezasData={odontograma} />
+                    )}
+                    {tab === 'escaneos3d' && (
+                        <TabEscaneos3D pacienteId={pacienteId} escaneosIniciales={escaneos3d} />
                     )}
                     {tab === 'presupuestos' && (
                         <TabPresupuestos 
