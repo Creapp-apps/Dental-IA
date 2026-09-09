@@ -182,12 +182,18 @@ export async function guardarLandingConfig(
 
     if (!tenantId) return { error: 'Tenant no encontrado' }
 
-    // Sincronizar colores principales en la tabla tenants
-    if (updates.color_primary || updates.color_primary_hover) {
-        await supabase.from('tenants').update({
-            ...(updates.color_primary ? { color_primario: updates.color_primary } : {}),
-            ...(updates.color_primary_hover ? { color_secundario: updates.color_primary_hover } : {}),
-        }).eq('id', tenantId)
+    // Sincronizar colores principales y logo en la tabla tenants
+    const tenantUpdates: Record<string, any> = {}
+    if (updates.color_primary) tenantUpdates.color_primario = updates.color_primary
+    if (updates.color_primary_hover) tenantUpdates.color_secundario = updates.color_primary_hover
+    if (updates.logo_config) {
+        if (updates.logo_config.type === 'image' && updates.logo_config.image_url) {
+            tenantUpdates.logo_url = updates.logo_config.image_url
+        }
+    }
+
+    if (Object.keys(tenantUpdates).length > 0) {
+        await supabase.from('tenants').update(tenantUpdates).eq('id', tenantId)
     }
 
     const { error } = await supabase
@@ -199,5 +205,6 @@ export async function guardarLandingConfig(
     revalidatePath('/')
     revalidatePath('/reservar')
     revalidatePath('/configuracion')
+    revalidatePath('/login')
     return { success: true }
 }

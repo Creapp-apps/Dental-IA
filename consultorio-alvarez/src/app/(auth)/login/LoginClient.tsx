@@ -197,92 +197,109 @@ export default function LoginClient({
                             }}
                             className="space-y-4"
                         >
-                            {/* Email */}
-                            <div className="space-y-1.5">
-                                <label
-                                    htmlFor="email"
-                                    className="block text-xs font-semibold uppercase tracking-widest transition-colors duration-200"
-                                    style={{ color: `hsl(${h}, 35%, 75%, 0.6)` }}
-                                >
-                                    Email
-                                </label>
-                                <input
-                                    id="email"
-                                    name="email"
-                                    type="email"
-                                    disabled={status !== 'idle'}
-                                    placeholder="admin@consultorio.com"
-                                    autoComplete="email"
-                                    required
-                                    className="
-                                        w-full px-4 py-3 rounded-xl text-sm text-white placeholder:text-white/20
-                                        bg-white/[0.06] border border-white/10
-                                        transition-[border-color,background-color,box-shadow] duration-200 outline-none
-                                        hover:border-white/20
-                                        disabled:opacity-60 disabled:cursor-not-allowed
-                                    "
-                                    onFocus={(e) => {
-                                        e.currentTarget.style.borderColor = `${colorPrimary}aa`
-                                        e.currentTarget.style.boxShadow = `0 0 0 2px ${colorPrimary}33`
-                                        e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.09)'
-                                    }}
-                                    onBlur={(e) => {
-                                        e.currentTarget.style.borderColor = ''
-                                        e.currentTarget.style.boxShadow = ''
-                                        e.currentTarget.style.backgroundColor = ''
-                                    }}
-                                />
-                            </div>
+            {/* Anular autofill azul nativo del navegador e inyectar estilos de marca */}
+            <style>{`
+                .login-tenant-input:-webkit-autofill,
+                .login-tenant-input:-webkit-autofill:hover, 
+                .login-tenant-input:-webkit-autofill:focus, 
+                .login-tenant-input:-webkit-autofill:active {
+                    -webkit-box-shadow: 0 0 0 1000px hsl(${h}, 22%, 11%) inset !important;
+                    -webkit-text-fill-color: #ffffff !important;
+                    caret-color: #ffffff !important;
+                    transition: background-color 5000s ease-in-out 0s;
+                }
+            `}</style>
 
-                            {/* Password */}
-                            <div className="space-y-1.5">
-                                <label
-                                    htmlFor="password"
-                                    className="block text-xs font-semibold uppercase tracking-widest transition-colors duration-200"
-                                    style={{ color: `hsl(${h}, 35%, 75%, 0.6)` }}
-                                >
-                                    Contraseña
-                                </label>
-                                <div className="relative">
-                                    <input
-                                        id="password"
-                                        name="password"
-                                        type={showPassword ? 'text' : 'password'}
-                                        disabled={status !== 'idle'}
-                                        autoComplete="current-password"
-                                        placeholder="••••••••"
-                                        required
-                                        className="
-                                            w-full px-4 py-3 pr-11 rounded-xl text-sm text-white placeholder:text-white/20
-                                            bg-white/[0.06] border border-white/10
-                                            transition-[border-color,background-color,box-shadow] duration-200 outline-none
-                                            hover:border-white/20
-                                            disabled:opacity-60 disabled:cursor-not-allowed
-                                        "
-                                        onFocus={(e) => {
-                                            e.currentTarget.style.borderColor = `${colorPrimary}aa`
-                                            e.currentTarget.style.boxShadow = `0 0 0 2px ${colorPrimary}33`
-                                            e.currentTarget.style.backgroundColor = 'rgba(255, 255, 255, 0.09)'
-                                        }}
-                                        onBlur={(e) => {
-                                            e.currentTarget.style.borderColor = ''
-                                            e.currentTarget.style.boxShadow = ''
-                                            e.currentTarget.style.backgroundColor = ''
-                                        }}
-                                    />
-                                    <button
-                                        type="button"
-                                        tabIndex={-1}
-                                        disabled={status !== 'idle'}
-                                        onClick={() => setShowPassword(v => !v)}
-                                        className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors duration-200 disabled:opacity-40"
-                                        style={{ color: `hsl(${h}, 40%, 80%, 0.5)` }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.color = colorPrimary }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.color = `hsl(${h}, 40%, 80%, 0.5)` }}
-                                    >
-                                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                    </button>
-                                </div>
+            {/* Email */}
+            <div className="space-y-1.5">
+                <label
+                    htmlFor="email"
+                    className="block text-xs font-semibold uppercase tracking-widest transition-colors duration-200"
+                    style={{ color: `hsl(${h}, 35%, 75%, 0.6)` }}
+                >
+                    Email
+                </label>
+                <input
+                    id="email"
+                    name="email"
+                    type="email"
+                    disabled={status !== 'idle'}
+                    placeholder="admin@consultorio.com"
+                    autoComplete="email"
+                    required
+                    className="
+                        login-tenant-input w-full px-4 py-3 rounded-xl text-sm text-white placeholder:text-white/25
+                        transition-[border-color,background-color,box-shadow] duration-200 outline-none
+                        disabled:opacity-60 disabled:cursor-not-allowed
+                    "
+                    style={{
+                        backgroundColor: `hsl(${h}, 22%, 11%, 0.75)`,
+                        border: `1px solid hsl(${h}, 25%, 22%, 0.6)`,
+                    }}
+                    onFocus={(e) => {
+                        e.currentTarget.style.borderColor = `${colorPrimary}cc`
+                        e.currentTarget.style.boxShadow = `0 0 0 2px ${colorPrimary}40`
+                        e.currentTarget.style.backgroundColor = `hsl(${h}, 25%, 14%, 0.95)`
+                    }}
+                    onBlur={(e) => {
+                        e.currentTarget.style.borderColor = `hsl(${h}, 25%, 22%, 0.6)`
+                        e.currentTarget.style.boxShadow = 'none'
+                        e.currentTarget.style.backgroundColor = `hsl(${h}, 22%, 11%, 0.75)`
+                    }}
+                />
+            </div>
+
+            {/* Password */}
+            <div className="space-y-1.5">
+                <label
+                    htmlFor="password"
+                    className="block text-xs font-semibold uppercase tracking-widest transition-colors duration-200"
+                    style={{ color: `hsl(${h}, 35%, 75%, 0.6)` }}
+                >
+                    Contraseña
+                </label>
+                <div className="relative">
+                    <input
+                        id="password"
+                        name="password"
+                        type={showPassword ? 'text' : 'password'}
+                        disabled={status !== 'idle'}
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        required
+                        className="
+                            login-tenant-input w-full px-4 py-3 pr-11 rounded-xl text-sm text-white placeholder:text-white/25
+                            transition-[border-color,background-color,box-shadow] duration-200 outline-none
+                            disabled:opacity-60 disabled:cursor-not-allowed
+                        "
+                        style={{
+                            backgroundColor: `hsl(${h}, 22%, 11%, 0.75)`,
+                            border: `1px solid hsl(${h}, 25%, 22%, 0.6)`,
+                        }}
+                        onFocus={(e) => {
+                            e.currentTarget.style.borderColor = `${colorPrimary}cc`
+                            e.currentTarget.style.boxShadow = `0 0 0 2px ${colorPrimary}40`
+                            e.currentTarget.style.backgroundColor = `hsl(${h}, 25%, 14%, 0.95)`
+                        }}
+                        onBlur={(e) => {
+                            e.currentTarget.style.borderColor = `hsl(${h}, 25%, 22%, 0.6)`
+                            e.currentTarget.style.boxShadow = 'none'
+                            e.currentTarget.style.backgroundColor = `hsl(${h}, 22%, 11%, 0.75)`
+                        }}
+                    />
+                    <button
+                        type="button"
+                        tabIndex={-1}
+                        disabled={status !== 'idle'}
+                        onClick={() => setShowPassword(v => !v)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 transition-colors duration-200 disabled:opacity-40"
+                        style={{ color: `hsl(${h}, 40%, 80%, 0.5)` }}
+                        onMouseEnter={(e) => { e.currentTarget.style.color = colorPrimary }}
+                        onMouseLeave={(e) => { e.currentTarget.style.color = `hsl(${h}, 40%, 80%, 0.5)` }}
+                    >
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                </div>
                             </div>
 
                             {/* Submit */}

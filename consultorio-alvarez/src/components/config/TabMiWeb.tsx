@@ -172,12 +172,11 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                     <p className="text-xs text-muted-foreground">Configurá el logo que aparecerá en tu panel y Landing Page.</p>
 
                     {/* Live Preview */}
-                    <div className="glass-subtle p-6 flex justify-center items-center rounded-xl border border-border/40 min-h-24">
+                    <div className="glass-subtle p-8 flex justify-center items-center rounded-xl border border-border/40 min-h-36 bg-black/20 overflow-visible">
                         <TenantLogo
                             config={logoConfig}
                             colorPrimary={colores.color_primary}
                             fallbackName="Consultorio"
-                            className="scale-125"
                         />
                     </div>
 
@@ -276,18 +275,23 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                                             <div className="glass-subtle p-4 rounded-xl border border-white/5 space-y-3">
                                                 <div className="flex justify-between items-center text-xs">
                                                     <span className="text-muted-foreground">Más pequeño</span>
-                                                    <span className="text-foreground font-mono font-medium">{logoConfig.image_scale || 100}%</span>
+                                                    <span className="text-foreground font-mono font-medium">
+                                                        {logoConfig.image_scale || 100}% (~{Math.round(50 * ((logoConfig.image_scale || 100) / 100))}px de alto)
+                                                    </span>
                                                     <span className="text-muted-foreground">Más grande</span>
                                                 </div>
                                                 <input
                                                     type="range"
                                                     min="50"
-                                                    max="250"
+                                                    max="400"
                                                     step="5"
                                                     value={logoConfig.image_scale || 100}
                                                     onChange={e => setLogoConfig(l => ({ ...l, image_scale: Number(e.target.value) }))}
                                                     className="w-full accent-primary h-1.5 bg-white/10 rounded-lg appearance-none cursor-pointer"
                                                 />
+                                                <p className="text-[11px] text-muted-foreground leading-relaxed">
+                                                    💡 <strong>Consejo para Photoshop:</strong> Si tu imagen tiene márgenes transparentes vacíos alrededor del logo, recortá el lienzo transparente (en Photoshop: <em>Imagen &gt; Recortar</em>) antes de subirlo para que el isotipo aproveche todo el tamaño disponible.
+                                                </p>
                                             </div>
                                         </Field>
                                     )}

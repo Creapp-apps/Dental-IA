@@ -25,15 +25,15 @@ export function TenantLogo({
     // Si es imagen
     if (type === 'image' && config?.image_url) {
         const scale = config.image_scale || 100
-        // h-8 equals 32px. We use it as the base (100%).
-        const heightPx = Math.round(32 * (scale / 100))
+        // Base generosa de 50px (100%) para permitir escalas nítidas y bien proporcionadas
+        const heightPx = Math.round(50 * (scale / 100))
 
         return (
             <img
                 src={config.image_url}
                 alt="Logo"
-                style={{ height: `${heightPx}px` }}
-                className={cn("object-contain dark:drop-shadow-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)] transition-all", className)}
+                style={{ height: `${heightPx}px`, maxWidth: '100%', width: 'auto' }}
+                className={cn("object-contain dark:drop-shadow-none drop-shadow-[0_1px_3px_rgba(0,0,0,0.45)] transition-all shrink-0", className)}
             />
         )
     }
