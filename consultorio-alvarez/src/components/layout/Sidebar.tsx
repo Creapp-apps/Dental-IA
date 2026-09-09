@@ -213,21 +213,22 @@ export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBilli
     const SidebarContent = () => (
         <>
             {/* Logo */}
-            <div className="flex items-center justify-center px-6 py-5 border-b border-sidebar-border min-h-[5rem] shrink-0">
+            <div className="flex items-center justify-center px-4 py-2.5 border-b border-sidebar-border min-h-[3.75rem] shrink-0">
                 <TenantLogo
                     config={logoConfig}
                     colorPrimary={themeColor}
                     fallbackName="Consultorio"
+                    className="max-h-12 max-w-[200px]"
                 />
             </div>
 
             {/* Quick Action Button */}
-            <div className="px-3 pt-4 pb-2 shrink-0">
+            <div className="px-3 pt-2.5 pb-1.5 shrink-0">
                 <Link
                     href="/agenda?nuevo=true"
                     prefetch={true}
                     onClick={handleNuevoTurnoClick}
-                    className="flex items-center justify-center gap-2.5 w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99] group cursor-pointer"
+                    className="flex items-center justify-center gap-2 w-full rounded-lg px-3 py-2 text-sm font-semibold text-white shadow-md hover:shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99] group cursor-pointer"
                     style={{ backgroundColor: themeColor || 'var(--sidebar-primary)' }}
                 >
                     <Plus className="h-4 w-4 shrink-0 transition-transform group-hover:rotate-90 duration-300" />
@@ -419,6 +420,7 @@ export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBilli
                             config={logoConfig}
                             colorPrimary={themeColor}
                             fallbackName="Consultorio"
+                            className="max-h-10 max-w-[180px]"
                         />
                     </div>
                 </div>
