@@ -55,12 +55,14 @@ export default async function LoginPage({
 
     const tenantNombre = tenant?.nombre || (slug === 'curadent' ? 'Curadent Odontología' : (slug === 'alvarez' ? 'Consultorio Odontológico Álvarez' : 'Dental-IA'))
     const colorPrimary = config?.color_primary || tenant?.color_primario || '#2563eb'
+    const logoUrl = config?.logo_url || tenant?.logo_url || null
 
     return (
         <LoginClient 
             errorMsg={errorMsg} 
             tenantNombre={tenantNombre}
             colorPrimary={colorPrimary}
+            logoUrl={logoUrl}
             slug={slug}
         />
     )
