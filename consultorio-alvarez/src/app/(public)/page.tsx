@@ -20,14 +20,18 @@ export async function generateMetadata(props: {
             title: 'Dental-IA | Software Clínico e Inteligencia Artificial para Consultorios Odontológicos',
             description: 'Plataforma integral de gestión dental con Asistente Virtual por WhatsApp 24/7, Odontograma 3D, portal del paciente y automatización de agendas.',
             icons: {
-                icon: '/favicon.ico',
-                apple: '/LOGO-NOTIF.png',
+                icon: [
+                    { url: '/favicon.ico', sizes: 'any' },
+                    { url: '/icon.png', type: 'image/png' },
+                ],
+                apple: '/apple-icon.png',
             },
         }
     }
 
     const slug = tenant.slug
     const config = await getLandingConfigPublica(slug)
+    const tenantIcon = config?.logo_url || (config?.logo_config?.type === 'image' ? config.logo_config.image_url : null) || tenant?.logo_url
 
     const title = slug === 'curadent'
         ? 'Curadent - Clinica Odontologica'
@@ -37,8 +41,11 @@ export async function generateMetadata(props: {
         title,
         description: config?.meta_description || `Atención odontológica integral y turnos online en ${tenant?.nombre || 'nuestro consultorio'}.`,
         icons: {
-            icon: '/favicon.ico',
-            apple: '/LOGO-NOTIF.png',
+            icon: tenantIcon ? [{ url: tenantIcon }] : [
+                { url: '/favicon.ico', sizes: 'any' },
+                { url: '/icon.png', type: 'image/png' },
+            ],
+            apple: tenantIcon || '/apple-icon.png',
         },
     }
 }

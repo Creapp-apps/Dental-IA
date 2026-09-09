@@ -24,8 +24,11 @@ export async function generateMetadata(props: {
         title,
         description: 'Acceso a la plataforma de gestión odontológica Dental-IA',
         icons: {
-            icon: '/favicon.ico',
-            apple: '/LOGO-NOTIF.png',
+            icon: [
+                { url: '/favicon.ico', sizes: 'any' },
+                { url: '/icon.png', type: 'image/png' },
+            ],
+            apple: '/apple-icon.png',
         },
     }
 }

@@ -33,8 +33,11 @@ export const metadata: Metadata = {
   title: 'Consultorio Alvarez - Clinica Virtual',
   description: 'Plataforma integral de gestión para consultorios odontológicos',
   icons: {
-    icon: '/favicon.ico',
-    apple: '/LOGO-NOTIF.png',
+    icon: [
+      { url: '/favicon.ico', sizes: 'any' },
+      { url: '/icon.png', type: 'image/png' },
+    ],
+    apple: '/apple-icon.png',
   }
 }
 

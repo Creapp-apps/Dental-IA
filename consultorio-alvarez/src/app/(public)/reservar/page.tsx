@@ -26,8 +26,11 @@ export async function generateMetadata(props: {
         title,
         description: config?.meta_description || `Reservá tu turno odontológico online en ${tenant?.nombre || 'nuestro consultorio'}.`,
         icons: {
-            icon: '/favicon.ico',
-            apple: '/LOGO-NOTIF.png',
+            icon: [
+                { url: '/favicon.ico', sizes: 'any' },
+                { url: '/icon.png', type: 'image/png' },
+            ],
+            apple: '/apple-icon.png',
         },
     }
 }
