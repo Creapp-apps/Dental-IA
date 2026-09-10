@@ -130,7 +130,7 @@ export function DentalIaCorporatePure() {
     const faqs = [
         {
             q: '¿Podemos conservar nuestro número de WhatsApp actual?',
-            a: 'Sí, totalmente. La plataforma se vincula a tu número habitual o a una línea comercial exclusiva mediante la API oficial de WhatsApp (Meta). Tus pacientes no notarán ningún cambio de número y la comunicación será fluida y profesional.'
+            a: 'Sí, totalmente. Podrás seguir atendiendo tu consultorio desde tu numero de Whatsapp original. Pero para realizar la automatizacion del chatbot, Meta requiere un numero 100% nuevo y sin intervencion humana.'
         },
         {
             q: '¿Cómo migramos los datos de pacientes de nuestro sistema anterior o Excel?',
@@ -467,7 +467,7 @@ export function DentalIaCorporatePure() {
                         />
                         <div className="mt-2 min-h-[40px] sm:min-h-[24px]">
                             <TextType
-                                text="Interactuá con el smartphone para comprobar cómo tus pacientes confirman o reprograman turnos las 24 horas."
+                                text="Gestioná las asistencias/reprogramaciones de los turnos de tus pacientes de forma automatica con nuestro chatbot de Whatsapp automatizado 24/7."
                                 as="p"
                                 className="text-sm text-slate-600 inline"
                                 typingSpeed={18}
@@ -506,7 +506,7 @@ export function DentalIaCorporatePure() {
                             />
                         </div>
                         <SplitText
-                            text="Odontograma Digital Interactivo FDI"
+                            text="Odontograma Digital Interactivo"
                             tag="h2"
                             className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight"
                             delay={35}
@@ -560,7 +560,7 @@ export function DentalIaCorporatePure() {
                             />
                         </div>
                         <BlurText
-                            text="Página Web Propia y Cobro de Señas"
+                            text="Página Web Propia y Gestión de Turnos"
                             as="h2"
                             delay={80}
                             animateBy="words"
@@ -609,7 +609,7 @@ export function DentalIaCorporatePure() {
                             />
                         </div>
                         <SplitText
-                            text="Panel de Espera con Alertas al Sillón"
+                            text="Gestión de asistencia, llegada y ausencias"
                             tag="h2"
                             className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight"
                             delay={35}
@@ -710,7 +710,7 @@ export function DentalIaCorporatePure() {
                     textAlign="center"
                 />
                 <p className="mt-2 text-base text-slate-600 max-w-2xl mx-auto">
-                    30 días de prueba sin cargo. Cancelá o modificá tu plan cuando lo desees.
+                    15 días de prueba sin cargo. Cancelá o modificá tu plan cuando lo desees.
                 </p>
 
                 {/* Selector de Ciclo de Facturación Rediseñado */}
@@ -822,7 +822,7 @@ export function DentalIaCorporatePure() {
                                     className="w-full h-12 border border-slate-300/80 shadow-xs cursor-pointer hover:border-blue-400 transition-colors flex items-center justify-center"
                                 >
                                     <span className="font-bold text-xs sm:text-sm text-slate-800">
-                                        Probar 30 Días Gratis
+                                        Probar 15 Días Gratis
                                     </span>
                                 </SpecularButton>
                             </CardFooter>
@@ -998,7 +998,7 @@ export function DentalIaCorporatePure() {
                             className="w-full sm:w-auto h-14 px-8 border border-blue-400/50 shadow-sm cursor-pointer hover:border-white transition-colors flex items-center justify-center"
                         >
                             <span className="font-bold text-sm text-white flex items-center gap-2">
-                                Probar 30 Días Gratis
+                                Probar 15 Días Gratis
                                 <ArrowRight className="size-4 text-blue-200" />
                             </span>
                         </SpecularButton>

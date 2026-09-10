@@ -9,7 +9,7 @@ export function FaqSection() {
     const faqs = [
         {
             question: '¿Tengo que cambiar mi número de WhatsApp actual?',
-            answer: 'No es necesario. Podés conectar tu número de teléfono actual o utilizar una línea comercial exclusiva para el consultorio. La integración utiliza la infraestructura oficial de WhatsApp Cloud API, lo que garantiza máxima velocidad de entrega y evita bloqueos.'
+            answer: 'Podrás seguir atendiendo tu consultorio desde tu número de WhatsApp original. Pero para realizar la automatización del chatbot, Meta requiere un número 100% nuevo y sin intervención humana.'
         },
         {
             question: '¿Puedo migrar mi base de pacientes desde Excel u otro sistema?',
@@ -28,8 +28,8 @@ export function FaqSection() {
             answer: 'Cualquier dispositivo con conexión a internet: computadora de escritorio, notebook, iPad, tablet Android o smartphone. No requiere instalaciones pesadas ni servidores físicos en el consultorio; todo funciona de forma ágil y segura en la nube.'
         },
         {
-            question: '¿Cómo funciona la prueba gratis de 30 días?',
-            answer: 'Accedés a todas las funciones premium del sistema sin necesidad de ingresar tarjeta de crédito. Si durante los 30 días comprobás que el sistema llena tu agenda y te ahorra horas de trabajo, elegís el plan que mejor se adapte a tu consultorio.'
+            question: '¿Cómo funciona la prueba gratis de 15 días?',
+            answer: 'Accedés a todas las funciones premium del sistema sin necesidad de ingresar tarjeta de crédito. Si durante los 15 días comprobás que el sistema llena tu agenda y te ahorra horas de trabajo, elegís el plan que mejor se adapte a tu consultorio.'
         }
     ]
 

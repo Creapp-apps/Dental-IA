@@ -57,7 +57,7 @@ export function InteractiveOdontograma() {
                     </div>
                     <div className="mt-1 min-h-[20px]">
                         <TextType
-                            text="Hacé clic en una pieza y en cualquiera de sus 5 caras anatómicas para registrar el estado clínico en tiempo real."
+                            text="Hacé clic en una pieza y en cualquiera de sus 5 caras para registrar el estado clínico en tiempo real."
                             as="p"
                             className="text-xs text-slate-500 inline"
                             typingSpeed={14}

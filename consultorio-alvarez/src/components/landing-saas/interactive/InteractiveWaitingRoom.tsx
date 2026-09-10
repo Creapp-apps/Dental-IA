@@ -129,7 +129,7 @@ export function InteractiveWaitingRoom() {
                         Beneficio en la Clínica
                     </span>
                     <h4 className="text-sm font-bold text-slate-900">
-                        Cero gritos y discreción médica total
+                        Discreción médica total
                     </h4>
                     <p className="text-xs text-slate-600 leading-relaxed">
                         Cuando el paciente se anuncia en recepción, el sistema notifica en la pantalla o tablet del consultorio. El doctor sabe exactamente quién espera afuera y cuánto tiempo lleva aguardando.
