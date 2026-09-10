@@ -10,10 +10,15 @@ async function getTenantId() {
     return await getAuthenticatedTenantId()
 }
 
-export async function searchPacientesAction(query: string, limit: number = 20) {
+export async function searchPacientesAction(query: string, limit: number = 20, compact: boolean = true) {
     if (!query || query.trim().length < 2) return []
     const { searchPacientes } = await import('@/lib/supabase/queries')
-    return await searchPacientes(query, limit)
+    return await searchPacientes(query, limit, compact)
+}
+
+export async function getPacientesAgendaAction() {
+    const { getPacientesCompactos } = await import('@/lib/supabase/queries')
+    return await getPacientesCompactos(5000)
 }
 
 export async function getPacientesAction(limit: number = 50, offset: number = 0) {

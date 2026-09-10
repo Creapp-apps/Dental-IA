@@ -11,11 +11,18 @@ function getAdmin() {
     return createAdminClient()
 }
 
-// Obtiene el tenant_id del usuario logueado desde public.usuarios (caching por request)
+const tenantCache = new Map<string, { tenantId: string; expiresAt: number }>()
+
+// Obtiene el tenant_id del usuario logueado desde public.usuarios (caching por request + memoria 3min)
 export const getTenantId = cache(async (): Promise<string | null> => {
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return null
+
+    const cached = tenantCache.get(user.id)
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.tenantId
+    }
 
     const admin = getAdmin()
     const { data } = await admin
@@ -24,7 +31,12 @@ export const getTenantId = cache(async (): Promise<string | null> => {
         .eq('id', user.id)
         .single()
 
-    return data?.tenant_id ?? null
+    const tenantId = data?.tenant_id ?? null
+    if (tenantId) {
+        tenantCache.set(user.id, { tenantId, expiresAt: Date.now() + 1000 * 60 * 3 })
+    }
+
+    return tenantId
 })
 
 export const getAuthenticatedTenantId = getTenantId
@@ -114,6 +126,18 @@ const PACIENTE_SELECT_FIELDS = `
     obra_social:obras_sociales(id, nombre)
 `
 
+export const PACIENTE_COMPACT_FIELDS = `
+    id,
+    nro_historia_clinica,
+    nombre,
+    apellido,
+    dni,
+    telefono,
+    email,
+    registro_completo,
+    obra_social_id
+`
+
 function formatDniVariants(raw: string): string[] {
     const clean = raw.replace(/\D/g, '')
     const variants = [clean]
@@ -192,7 +216,43 @@ export async function getPacientes(limit: number = 50, offset: number = 0) {
     return data ?? []
 }
 
-export async function searchPacientes(searchTerm: string, limit: number = 50) {
+export async function getPacientesCompactos(limit: number = 5000) {
+    const supabase = getAdmin()
+    const tenantId = await getTenantId()
+    if (!tenantId) return []
+
+    // Consultar hasta 3.000 registros en paralelo para superar el límite REST de 1.000 de Supabase
+    const [p1, p2, p3] = await Promise.all([
+        supabase
+            .from('pacientes')
+            .select(PACIENTE_COMPACT_FIELDS)
+            .eq('tenant_id', tenantId)
+            .order('apellido', { ascending: true })
+            .range(0, 999),
+        supabase
+            .from('pacientes')
+            .select(PACIENTE_COMPACT_FIELDS)
+            .eq('tenant_id', tenantId)
+            .order('apellido', { ascending: true })
+            .range(1000, 1999),
+        supabase
+            .from('pacientes')
+            .select(PACIENTE_COMPACT_FIELDS)
+            .eq('tenant_id', tenantId)
+            .order('apellido', { ascending: true })
+            .range(2000, 2999)
+    ])
+
+    const all = [
+        ...(p1.data || []),
+        ...(p2.data || []),
+        ...(p3.data || [])
+    ]
+
+    return all
+}
+
+export async function searchPacientes(searchTerm: string, limit: number = 50, compact: boolean = true) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()
     if (!tenantId || !searchTerm.trim()) return []
@@ -203,7 +263,7 @@ export async function searchPacientes(searchTerm: string, limit: number = 50) {
 
     let query = supabase
         .from('pacientes')
-        .select(PACIENTE_SELECT_FIELDS)
+        .select(compact ? PACIENTE_COMPACT_FIELDS : PACIENTE_SELECT_FIELDS)
         .eq('tenant_id', tenantId)
         .order('apellido', { ascending: true })
         .limit(limit)

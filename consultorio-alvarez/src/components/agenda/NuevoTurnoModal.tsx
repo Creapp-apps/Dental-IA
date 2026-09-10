@@ -167,7 +167,9 @@ export function NuevoTurnoModal({
             return
         }
 
-        // Si ya tenemos una lista en memoria (fallback), filtramos primero
+        let hasLocalMatches = false
+
+        // 1. Filtrado local ultra-rápido en 0ms si tenemos la lista en memoria
         if (pacientes && pacientes.length > 0) {
             const normalizeStr = (str: string) => 
                 str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -186,18 +188,29 @@ export function NuevoTurnoModal({
                     return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
                 })
             }).slice(0, 10)
+
             if (localMatches.length > 0) {
+                hasLocalMatches = true
                 setSearchedPacientes(localMatches)
+                setIsSearchingPacientes(false)
             }
         }
 
+        // Si no hubo coincidencia local, activar indicador de búsqueda en base de datos
         let isMounted = true
-        setIsSearchingPacientes(true)
+        if (!hasLocalMatches) {
+            setIsSearchingPacientes(true)
+        }
+
         const timer = setTimeout(async () => {
             try {
-                const results = await searchPacientesAction(query, 12)
+                const results = await searchPacientesAction(query, 12, true)
                 if (isMounted) {
-                    setSearchedPacientes(results)
+                    if (results && results.length > 0) {
+                        setSearchedPacientes(results)
+                    } else if (!hasLocalMatches) {
+                        setSearchedPacientes([])
+                    }
                 }
             } catch (err) {
                 console.error('Error buscando pacientes:', err)
@@ -206,7 +219,7 @@ export function NuevoTurnoModal({
                     setIsSearchingPacientes(false)
                 }
             }
-        }, 180)
+        }, hasLocalMatches ? 600 : 250)
 
         return () => {
             isMounted = false

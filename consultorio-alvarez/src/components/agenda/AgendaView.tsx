@@ -16,6 +16,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { NuevoTurnoModal } from '@/components/agenda/NuevoTurnoModal'
 import { BuscadorTurnosModal } from '@/components/agenda/BuscadorTurnosModal'
 import { cambiarEstadoTurno, eliminarTurno, moverTurno, enviarRecordatorioManual, getTurnosRangoAction } from '@/lib/actions/turnos'
+import { getPacientesAgendaAction } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
 import {
     type EstadoTurno,
@@ -148,7 +149,45 @@ export function AgendaView({
     const lockedProfId = isProfesional ? currentUsuario.profesional_id : null
     
     const [turnos, setTurnos] = useState<any[]>(turnosIniciales || [])
-    
+    const [pacientesAgenda, setPacientesAgenda] = useState<any[]>(pacientes || [])
+
+    // Precarga en segundo plano de pacientes compactos para búsqueda instantánea en 0ms
+    useEffect(() => {
+        const CACHE_KEY = 'agenda_pacientes_compact_cache'
+        const CACHE_TIME_KEY = 'agenda_pacientes_cache_time'
+        try {
+            const cached = sessionStorage.getItem(CACHE_KEY)
+            const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY)
+            if (cached && cachedTime && (Date.now() - Number(cachedTime) < 1000 * 60 * 15)) {
+                const parsed = JSON.parse(cached)
+                if (Array.isArray(parsed) && parsed.length > 0) {
+                    setPacientesAgenda(parsed)
+                }
+            }
+        } catch (e) {
+            // Ignorar errores de sessionStorage
+        }
+
+        let isCancelled = false
+        getPacientesAgendaAction()
+            .then((data) => {
+                if (!isCancelled && data && data.length > 0) {
+                    setPacientesAgenda(data)
+                    try {
+                        sessionStorage.setItem(CACHE_KEY, JSON.stringify(data))
+                        sessionStorage.setItem(CACHE_TIME_KEY, String(Date.now()))
+                    } catch (e) {}
+                }
+            })
+            .catch((err) => {
+                console.error('Error precargando pacientes para la agenda:', err)
+            })
+
+        return () => {
+            isCancelled = true
+        }
+    }, [])
+
     // Synchronize prop updates to local state
     useEffect(() => {
         setTurnos(turnosIniciales || [])
@@ -313,7 +352,7 @@ export function AgendaView({
                         }
                         
                         // Check if we already have this patient in local list
-                        let pacienteObj = pacientes.find(p => p.id === newRow.paciente_id)
+                        let pacienteObj = pacientesAgenda.find(p => p.id === newRow.paciente_id)
                         if (!pacienteObj && newRow.paciente_id) {
                             const { data: pData } = await supabase
                                 .from('pacientes')
@@ -2175,7 +2214,7 @@ export function AgendaView({
                 }}
                 profesionales={profesionales}
                 tiposTratamiento={tiposTratamiento}
-                pacientes={pacientes}
+                pacientes={pacientesAgenda}
                 horarios={horarios}
                 defaultProfesionalId={lockedProfId || modalProfId}
                 defaultFecha={format(diaSeleccionado, 'yyyy-MM-dd')}
@@ -2183,7 +2222,17 @@ export function AgendaView({
                 turnoAEditar={turnoAEditar}
                 readOnlyProfesional={isProfesional}
                 onSuccess={(turnoRaw, isEdit, nuevoPaciente) => {
-                    const pacienteObj = nuevoPaciente || turnoRaw.paciente || (pacientes || []).find((p: any) => p.id === turnoRaw.paciente_id)
+                    if (nuevoPaciente?.id) {
+                        setPacientesAgenda(prev => {
+                            if (prev.some(p => p.id === nuevoPaciente.id)) return prev
+                            const updated = [nuevoPaciente, ...prev]
+                            try {
+                                sessionStorage.setItem('agenda_pacientes_compact_cache', JSON.stringify(updated))
+                            } catch (e) {}
+                            return updated
+                        })
+                    }
+                    const pacienteObj = nuevoPaciente || turnoRaw.paciente || (pacientesAgenda || []).find((p: any) => p.id === turnoRaw.paciente_id)
                     const profesionalObj = turnoRaw.profesional || profesionales.find((p: any) => p.id === turnoRaw.profesional_id)
                     const tipoTratamientoObj = turnoRaw.tipo_tratamiento || tiposTratamiento.find((t: any) => t.id === turnoRaw.tipo_tratamiento_id)
                     
