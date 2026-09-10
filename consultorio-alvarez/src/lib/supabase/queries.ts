@@ -114,51 +114,82 @@ const PACIENTE_SELECT_FIELDS = `
     obra_social:obras_sociales(id, nombre)
 `
 
-export async function getPacientes(limit: number = 0, offset: number = 0) {
+function formatDniVariants(raw: string): string[] {
+    const clean = raw.replace(/\D/g, '')
+    const variants = [clean]
+    if (clean.length === 8) {
+        variants.push(`${clean.slice(0, 2)}.${clean.slice(2, 5)}.${clean.slice(5)}`)
+    } else if (clean.length === 7) {
+        variants.push(`${clean.slice(0, 1)}.${clean.slice(1, 4)}.${clean.slice(4)}`)
+    }
+    return variants
+}
+
+function getSearchTokenVariants(str: string): string[] {
+    const unaccented = str.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const set = new Set<string>([str, unaccented])
+    const commonAccents: Record<string, string> = {
+        'leon': 'león',
+        'ruben': 'rubén',
+        'maria': 'maría',
+        'jose': 'josé',
+        'perez': 'pérez',
+        'gonzalez': 'gonzález',
+        'rodriguez': 'rodríguez',
+        'lopez': 'lópez',
+        'martinez': 'martínez',
+        'sanchez': 'sánchez',
+        'diaz': 'díaz',
+        'gomez': 'gómez',
+        'alvarez': 'álvarez',
+        'fernandez': 'fernández',
+        'hernandez': 'hernández',
+        'ramirez': 'ramírez',
+    }
+    const lower = unaccented.toLowerCase()
+    if (commonAccents[lower]) {
+        set.add(commonAccents[lower])
+    }
+    return Array.from(set)
+}
+
+export async function getTotalPacientesCount(): Promise<number> {
+    const supabase = getAdmin()
+    const tenantId = await getTenantId()
+    if (!tenantId) return 0
+
+    const { count, error } = await supabase
+        .from('pacientes')
+        .select('*', { count: 'exact', head: true })
+        .eq('tenant_id', tenantId)
+
+    if (error) {
+        console.error('getTotalPacientesCount error:', error)
+        return 0
+    }
+
+    return count ?? 0
+}
+
+export async function getPacientes(limit: number = 50, offset: number = 0) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()
     if (!tenantId) return []
 
-    if (limit > 0) {
-        const { data, error } = await supabase
-            .from('pacientes')
-            .select(PACIENTE_SELECT_FIELDS)
-            .eq('tenant_id', tenantId)
-            .order('apellido', { ascending: true })
-            .range(offset, offset + limit - 1)
+    const effectiveLimit = limit > 0 ? limit : 50
 
-        if (error) {
-            console.error('getPacientes error:', error)
-            return []
-        }
-        return data ?? []
+    const { data, error } = await supabase
+        .from('pacientes')
+        .select(PACIENTE_SELECT_FIELDS)
+        .eq('tenant_id', tenantId)
+        .order('apellido', { ascending: true })
+        .range(offset, offset + effectiveLimit - 1)
+
+    if (error) {
+        console.error('getPacientes error:', error)
+        return []
     }
-
-    // Fetch in chunks of 1000 to bypass PostgREST max_rows: 1000 limit
-    const allPacientes: any[] = []
-    let currentOffset = 0
-    const CHUNK_SIZE = 1000
-
-    while (true) {
-        const { data, error } = await supabase
-            .from('pacientes')
-            .select(PACIENTE_SELECT_FIELDS)
-            .eq('tenant_id', tenantId)
-            .order('apellido', { ascending: true })
-            .range(currentOffset, currentOffset + CHUNK_SIZE - 1)
-
-        if (error) {
-            console.error('getPacientes chunk error:', error)
-            break
-        }
-        if (!data || data.length === 0) break
-
-        allPacientes.push(...data)
-        if (data.length < CHUNK_SIZE) break
-        currentOffset += CHUNK_SIZE
-    }
-
-    return allPacientes
+    return data ?? []
 }
 
 export async function searchPacientes(searchTerm: string, limit: number = 50) {
@@ -167,7 +198,8 @@ export async function searchPacientes(searchTerm: string, limit: number = 50) {
     if (!tenantId || !searchTerm.trim()) return []
 
     const cleanTerm = searchTerm.trim()
-    const tokens = cleanTerm.split(/\s+/).filter(Boolean)
+    const isNumeric = /^\d[\d\.]*$/.test(cleanTerm)
+    const digitsOnly = cleanTerm.replace(/\D/g, '')
 
     let query = supabase
         .from('pacientes')
@@ -176,14 +208,41 @@ export async function searchPacientes(searchTerm: string, limit: number = 50) {
         .order('apellido', { ascending: true })
         .limit(limit)
 
-    if (tokens.length === 1) {
-        const term = tokens[0]
-        query = query.or(`nombre.ilike.%${term}%,apellido.ilike.%${term}%,dni.ilike.%${term}%,nro_historia_clinica.ilike.%${term}%`)
+    if (isNumeric && digitsOnly.length >= 2) {
+        const variants = formatDniVariants(digitsOnly)
+        const clauses = variants.flatMap(v => [
+            `dni.ilike.%${v}%`,
+            `nro_historia_clinica.ilike.%${v}%`
+        ]).concat([`nro_historia_clinica.ilike.%${cleanTerm}%`])
+        query = query.or(clauses.join(','))
     } else {
-        // Multi-token: buscar coincidencia en nombre o apellido
-        const term1 = tokens[0]
-        const term2 = tokens[1]
-        query = query.or(`and(nombre.ilike.%${term1}%,apellido.ilike.%${term2}%),and(nombre.ilike.%${term2}%,apellido.ilike.%${term1}%),and(apellido.ilike.%${term1}%,nombre.ilike.%${term2}%)`)
+        const tokens = cleanTerm.split(/\s+/).filter(Boolean)
+        if (tokens.length === 1) {
+            const variants = getSearchTokenVariants(tokens[0])
+            const clauses = variants.flatMap(t => [
+                `nombre.ilike.%${t}%`,
+                `apellido.ilike.%${t}%`,
+                `dni.ilike.%${t}%`,
+                `nro_historia_clinica.ilike.%${t}%`
+            ])
+            query = query.or(clauses.join(','))
+        } else {
+            // Filtrar conectores si hay 3+ tokens, ej: "Ponce de León"
+            const significant = tokens.length > 2
+                ? tokens.filter(t => t.length > 2 || !['de', 'la', 'el', 'los', 'las', 'del', 'da', 'di', 'y'].includes(t.toLowerCase()))
+                : tokens
+            const tokensToUse = significant.length > 0 ? significant : tokens
+
+            for (const token of tokensToUse) {
+                const variants = getSearchTokenVariants(token)
+                const clauses = variants.flatMap(t => [
+                    `nombre.ilike.%${t}%`,
+                    `apellido.ilike.%${t}%`,
+                    `dni.ilike.%${t}%`
+                ])
+                query = query.or(clauses.join(','))
+            }
+        }
     }
 
     const { data, error } = await query

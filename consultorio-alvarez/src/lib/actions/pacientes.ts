@@ -16,6 +16,11 @@ export async function searchPacientesAction(query: string, limit: number = 20) {
     return await searchPacientes(query, limit)
 }
 
+export async function getPacientesAction(limit: number = 50, offset: number = 0) {
+    const { getPacientes } = await import('@/lib/supabase/queries')
+    return await getPacientes(limit, offset)
+}
+
 export async function crearPaciente(formData: {
     nro_historia_clinica?: string
     nombre: string

@@ -809,3 +809,8 @@ export async function buscarTurnosAction(params: BuscarTurnosParams): Promise<{ 
 
     return { turnos: (turnos as any[]) || [] }
 }
+
+export async function getTurnosRangoAction(inicioISO: string, finISO: string, profesionalId?: string) {
+    const { getTurnosSemana } = await import('@/lib/supabase/queries')
+    return await getTurnosSemana(new Date(inicioISO), new Date(finISO), profesionalId)
+}

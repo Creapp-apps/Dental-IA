@@ -8,7 +8,7 @@ import { Search, Plus, Phone, Mail, User, Pencil, Trash, Loader2 } from 'lucide-
 import { Input } from '@/components/ui/input'
 import { GlassButton } from '@/components/ui/glass-button'
 import { cn } from '@/lib/utils'
-import { eliminarPaciente, searchPacientesAction } from '@/lib/actions/pacientes'
+import { eliminarPaciente, searchPacientesAction, getPacientesAction } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 
@@ -31,9 +31,11 @@ const sectionVariants = {
 interface PacientesListViewProps {
     pacientes: any[]
     initialQuery: string
+    totalCount?: number
 }
 
-export function PacientesListView({ pacientes, initialQuery }: PacientesListViewProps) {
+export function PacientesListView({ pacientes, initialQuery, totalCount }: PacientesListViewProps) {
+    const [allLoadedPacientes, setAllLoadedPacientes] = useState<any[]>(pacientes)
     const [inputQuery, setInputQuery] = useState(initialQuery)
     const [activeQuery, setActiveQuery] = useState(initialQuery)
     const router = useRouter()
@@ -45,10 +47,16 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
     const [isCreatingNew, setIsCreatingNew] = useState(false)
     const [serverResults, setServerResults] = useState<any[]>([])
     const [isSearchingServer, setIsSearchingServer] = useState(false)
+    const [isLoadingMore, setIsLoadingMore] = useState(false)
 
-    const filteredPacientes = useMemo(() => {
+    // Sincronizar si cambian los pacientes iniciales
+    useEffect(() => {
+        setAllLoadedPacientes(pacientes)
+    }, [pacientes])
+
+    const filteredLocal = useMemo(() => {
         const q = activeQuery.trim()
-        if (!q) return pacientes
+        if (!q) return allLoadedPacientes
         
         const normalizeStr = (str: string) => 
             str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -56,7 +64,7 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
         const normQuery = normalizeStr(q)
         const tokens = normQuery.split(/\s+/).filter(Boolean)
 
-        return pacientes.filter((p: any) => {
+        return allLoadedPacientes.filter((p: any) => {
             const nombre = normalizeStr(p.nombre || '')
             const apellido = normalizeStr(p.apellido || '')
             const dni = normalizeStr(p.dni || '')
@@ -73,34 +81,70 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                 return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
             })
         })
-    }, [pacientes, activeQuery])
+    }, [allLoadedPacientes, activeQuery])
 
-    // Respaldo server-side si el filtro local no encuentra nada y hay término de búsqueda
+    // Búsqueda server-side con debounce si hay término >= 2 caracteres
     useEffect(() => {
         const term = activeQuery.trim()
-        if (term.length >= 2 && filteredPacientes.length === 0) {
+        if (term.length >= 2) {
             let isCancelled = false
             setIsSearchingServer(true)
-            searchPacientesAction(term, 50)
-                .then((res) => {
-                    if (!isCancelled) {
-                        setServerResults(res || [])
-                        setIsSearchingServer(false)
-                    }
-                })
-                .catch(() => {
-                    if (!isCancelled) setIsSearchingServer(false)
-                })
+            const timeout = setTimeout(() => {
+                searchPacientesAction(term, 50)
+                    .then((res) => {
+                        if (!isCancelled) {
+                            setServerResults(res || [])
+                            setIsSearchingServer(false)
+                        }
+                    })
+                    .catch(() => {
+                        if (!isCancelled) setIsSearchingServer(false)
+                    })
+            }, 250)
+
             return () => {
                 isCancelled = true
+                clearTimeout(timeout)
             }
         } else {
             setServerResults([])
             setIsSearchingServer(false)
         }
-    }, [activeQuery, filteredPacientes.length])
+    }, [activeQuery])
 
-    const displayedPacientes = filteredPacientes.length > 0 ? filteredPacientes : serverResults
+    // Si hay búsqueda activa:
+    // Unimos los resultados del servidor con los locales para máxima rapidez y cobertura sin duplicados
+    const displayedPacientes = useMemo(() => {
+        const term = activeQuery.trim()
+        if (!term) return allLoadedPacientes
+        if (serverResults.length === 0 && !isSearchingServer) return filteredLocal
+        
+        const map = new Map<string, any>()
+        // Primero locales que ya coinciden
+        filteredLocal.forEach(p => map.set(p.id, p))
+        // Luego los del server (que pueden ser muchos más)
+        serverResults.forEach(p => map.set(p.id, p))
+        return Array.from(map.values())
+    }, [activeQuery, allLoadedPacientes, filteredLocal, serverResults, isSearchingServer])
+
+    async function handleCargarMas() {
+        if (isLoadingMore) return
+        setIsLoadingMore(true)
+        try {
+            const nuevos = await getPacientesAction(50, allLoadedPacientes.length)
+            if (nuevos && nuevos.length > 0) {
+                setAllLoadedPacientes(prev => {
+                    const existingIds = new Set(prev.map(p => p.id))
+                    const toAdd = nuevos.filter(p => !existingIds.has(p.id))
+                    return [...prev, ...toAdd]
+                })
+            }
+        } catch (error) {
+            console.error('Error cargando más pacientes:', error)
+        } finally {
+            setIsLoadingMore(false)
+        }
+    }
 
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null)
 
@@ -185,7 +229,15 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                 <div>
                     <h1 className="text-2xl font-bold text-foreground">Pacientes</h1>
                     <p className="text-sm text-muted-foreground mt-0.5 flex items-center gap-2">
-                        <span>{displayedPacientes.length} paciente{displayedPacientes.length !== 1 ? 's' : ''} {activeQuery ? 'encontrados' : 'registrados'}</span>
+                        <span>
+                            {activeQuery.trim() ? (
+                                `${displayedPacientes.length} paciente${displayedPacientes.length !== 1 ? 's' : ''} encontrado${displayedPacientes.length !== 1 ? 's' : ''}`
+                            ) : (
+                                totalCount 
+                                    ? `Mostrando ${allLoadedPacientes.length} de ${totalCount} pacientes registrados`
+                                    : `${allLoadedPacientes.length} pacientes registrados`
+                            )}
+                        </span>
                         {isSearchingServer && (
                             <span className="inline-flex items-center gap-1 text-xs text-primary font-medium">
                                 <Loader2 className="h-3 w-3 animate-spin" /> Buscando...
@@ -357,6 +409,22 @@ export function PacientesListView({ pacientes, initialQuery }: PacientesListView
                         )
                     })}
                 </motion.div>
+            )}
+
+            {/* Paginación progresiva para no sobrecargar el navegador */}
+            {!activeQuery.trim() && totalCount && allLoadedPacientes.length < totalCount && (
+                <div className="pt-4 flex flex-col items-center justify-center gap-2">
+                    <GlassButton
+                        onClick={handleCargarMas}
+                        loading={isLoadingMore}
+                        className="px-6 py-2.5 text-sm font-semibold shadow-glass hover:shadow-glass-lg transition-all"
+                    >
+                        {isLoadingMore ? 'Cargando más pacientes...' : `Cargar más pacientes (${allLoadedPacientes.length} de ${totalCount})`}
+                    </GlassButton>
+                    <p className="text-xs text-muted-foreground">
+                        Mostrando en bloques de 50 para garantizar máxima fluidez y rapidez
+                    </p>
+                </div>
             )}
 
             <ConfirmModal

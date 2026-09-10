@@ -15,7 +15,7 @@ import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { NuevoTurnoModal } from '@/components/agenda/NuevoTurnoModal'
 import { BuscadorTurnosModal } from '@/components/agenda/BuscadorTurnosModal'
-import { cambiarEstadoTurno, eliminarTurno, moverTurno, enviarRecordatorioManual } from '@/lib/actions/turnos'
+import { cambiarEstadoTurno, eliminarTurno, moverTurno, enviarRecordatorioManual, getTurnosRangoAction } from '@/lib/actions/turnos'
 import { glassAlert } from '@/components/ui/glass-alert'
 import {
     type EstadoTurno,
@@ -92,6 +92,32 @@ function getMonthGridDays(date: Date) {
     return days
 }
 
+function getRangoFechasParaVista(vista: ViewMode, fecha: Date) {
+    let inicio = startOfWeek(fecha, { weekStartsOn: 1 })
+    let fin = endOfWeek(fecha, { weekStartsOn: 1 })
+
+    if (vista === 'hoy') {
+        inicio = new Date(fecha)
+        inicio.setHours(0, 0, 0, 0)
+        fin = new Date(fecha)
+        fin.setHours(23, 59, 59, 999)
+    } else if (vista === '3dias') {
+        inicio = new Date(fecha)
+        inicio.setHours(0, 0, 0, 0)
+        fin = addDays(fecha, 2)
+        fin.setHours(23, 59, 59, 999)
+    } else if (vista === '15dias') {
+        inicio = new Date(fecha)
+        inicio.setHours(0, 0, 0, 0)
+        fin = addDays(fecha, 14)
+        fin.setHours(23, 59, 59, 999)
+    } else if (vista === 'mes') {
+        inicio = startOfMonth(fecha)
+        fin = endOfMonth(fecha)
+    }
+    return { inicio, fin }
+}
+
 interface AgendaViewProps {
     profesionales: any[]
     tiposTratamiento: any[]
@@ -123,22 +149,9 @@ export function AgendaView({
     
     const [turnos, setTurnos] = useState<any[]>(turnosIniciales || [])
     
-    // Synchronize prop updates to local state without discarding locally created/realtime turnos
+    // Synchronize prop updates to local state
     useEffect(() => {
-        setTurnos(prev => {
-            const map = new Map<string, any>()
-            // First load turnosIniciales from server
-            for (const t of (turnosIniciales || [])) {
-                if (t?.id) map.set(t.id, t)
-            }
-            // Preserve local state turnos that might not be in turnosIniciales yet
-            for (const t of prev) {
-                if (t?.id && !map.has(t.id)) {
-                    map.set(t.id, t)
-                }
-            }
-            return Array.from(map.values())
-        })
+        setTurnos(turnosIniciales || [])
     }, [turnosIniciales])
 
     // Controlled View & Filter States
@@ -213,7 +226,9 @@ export function AgendaView({
         }
     }, [urlVista, urlProf, isProfesional])
 
-    // Sync local baseDate, vistaActiva and filtroProf back to the URL parameters and Next.js router
+    const isFirstLoadRef = useRef(true)
+
+    // Sync local baseDate, vistaActiva and filtroProf back to the URL parameters and fetch turnos for range
     useEffect(() => {
         const formattedDate = format(baseDate, 'yyyy-MM-dd')
         activeDateRef.current = formattedDate
@@ -241,9 +256,31 @@ export function AgendaView({
         if (changed) {
             const newUrl = `${window.location.pathname}?${currentParams.toString()}`
             window.history.replaceState(null, '', newUrl)
-            router.replace(newUrl, { scroll: false })
         }
-    }, [baseDate, vistaActiva, filtroProf, router])
+
+        if (isFirstLoadRef.current) {
+            isFirstLoadRef.current = false
+            return
+        }
+
+        let isCancelled = false
+        const { inicio, fin } = getRangoFechasParaVista(vistaActiva, baseDate)
+        getTurnosRangoAction(
+            inicio.toISOString(),
+            fin.toISOString(),
+            filtroProf !== 'todos' ? filtroProf : undefined
+        ).then((nuevosTurnos) => {
+            if (!isCancelled && nuevosTurnos) {
+                setTurnos(nuevosTurnos)
+            }
+        }).catch((err) => {
+            console.error('Error cargando turnos del rango:', err)
+        })
+
+        return () => {
+            isCancelled = true
+        }
+    }, [baseDate, vistaActiva, filtroProf])
 
     useEffect(() => {
         const handleFullscreenChange = () => {
