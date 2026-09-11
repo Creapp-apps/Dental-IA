@@ -158,11 +158,11 @@ export function DentalIaCorporatePure() {
     ]
 
     return (
-        <div className="min-h-screen bg-white text-slate-900 font-sans antialiased selection:bg-blue-600 selection:text-white">
+        <div className="w-full max-w-full overflow-x-clip min-h-screen bg-white text-slate-900 font-sans antialiased selection:bg-blue-600 selection:text-white relative">
             <DemoModal isOpen={isDemoOpen} onClose={() => setIsDemoOpen(false)} />
 
             {/* ── BARRA SUPERIOR INSTITUCIONAL ─────────────────────────────────── */}
-            <div className="border-b border-slate-100 bg-slate-50/90 py-2 px-4 text-center text-xs text-slate-600">
+            <div className="border-b border-slate-100 bg-slate-50/90 py-2 px-3 sm:px-4 text-center text-xs text-slate-600">
                 <div className="max-w-7xl mx-auto flex items-center justify-center gap-2 flex-wrap">
                     <span className="font-bold text-slate-800">Dental-IA</span>
                     <span className="text-slate-300">•</span>
@@ -177,7 +177,7 @@ export function DentalIaCorporatePure() {
             </div>
 
             {/* ── NAVBAR FLOTANTE ESTILO PILL ─────────────────────────────────── */}
-            <header className="sticky top-3 sm:top-5 z-50 w-full px-3 sm:px-6 pointer-events-none transition-all duration-300">
+            <header className="sticky top-2.5 sm:top-5 z-50 w-full max-w-full px-2 sm:px-6 pointer-events-none transition-all duration-300">
                 <div
                     className={`pointer-events-auto max-w-6xl mx-auto rounded-full transition-all duration-300 ${
                         scrolled
@@ -185,7 +185,7 @@ export function DentalIaCorporatePure() {
                             : 'bg-white/80 backdrop-blur-lg shadow-[0_8px_30px_rgba(15,23,42,0.06),0_1px_3px_rgba(0,0,0,0.02)] border border-white/90 ring-1 ring-slate-900/[0.04]'
                     }`}
                 >
-                    <div className="h-14 sm:h-16 px-3 sm:px-5 flex items-center justify-between gap-2 sm:gap-4">
+                    <div className="h-14 sm:h-16 px-2.5 sm:px-5 flex items-center justify-between gap-1.5 sm:gap-4">
                         {/* Logo Dental-IA Oficial (Icono oficial plataforma) */}
                         <Link href="/" className="flex items-center gap-2.5 group shrink-0">
                             <div className="flex items-center justify-center size-8 sm:size-9 rounded-full bg-blue-50/70 border border-blue-100/90 shadow-xs group-hover:scale-105 transition-all p-1">
@@ -285,7 +285,7 @@ export function DentalIaCorporatePure() {
                                 followMouse
                                 proximity={200}
                                 onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me gustaría agendar una demo de la plataforma para mi consultorio.')}
-                                className="h-9 sm:h-10 px-4 sm:px-4.5 rounded-full shadow-sm shadow-blue-600/20 cursor-pointer flex items-center justify-center shrink-0"
+                                className="h-9 sm:h-10 px-3 sm:px-4.5 rounded-full shadow-sm shadow-blue-600/20 cursor-pointer flex items-center justify-center shrink-0"
                             >
                                 <span className="font-bold text-xs text-white whitespace-nowrap">
                                     Agendar Demo
@@ -346,7 +346,7 @@ export function DentalIaCorporatePure() {
             </header>
 
             {/* ── HERO SECTION: CORPORATIVO, MODERNO Y LUMINOSO ──────────────── */}
-            <section className="pt-10 sm:pt-16 pb-16 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto text-center">
+            <section className="w-full max-w-7xl mx-auto pt-10 sm:pt-16 pb-16 px-4 sm:px-6 lg:px-8 text-center overflow-hidden">
                 <h1 className="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-slate-900 max-w-5xl mx-auto leading-[1.15]">
                     <SplitText
                         text="La plataforma que profesionaliza tu clínica y "
@@ -444,7 +444,7 @@ export function DentalIaCorporatePure() {
             </section>
 
             {/* ── SECCIÓN 1 INTERACTIVA: SMARTPHONE WHATSAPP ───────────────────── */}
-            <section id="whatsapp" className="py-20 bg-slate-50 border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28">
+            <section id="whatsapp" className="w-full max-w-full py-20 bg-slate-50 border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28 overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-12">
                         <div className="flex justify-center mb-1">
@@ -493,7 +493,7 @@ export function DentalIaCorporatePure() {
             </section>
 
             {/* ── SECCIÓN 2 INTERACTIVA: ODONTOGRAMA DIGITAL 3D ────────────────── */}
-            <section id="odontograma" className="py-20 bg-white border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28">
+            <section id="odontograma" className="w-full max-w-full py-20 bg-white border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28 overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-12">
                         <div className="flex justify-center mb-1">
@@ -528,7 +528,7 @@ export function DentalIaCorporatePure() {
                         />
                         <div className="mt-2 min-h-[40px] sm:min-h-[24px]">
                             <TextType
-                                text="Probá el selector anatómico de 5 caras: marcá caries, resinas, endodoncias o coronas en tiempo real."
+                                text="Seleccioná piezas dentales, aplicá estados patológicos en cualquiera de sus 5 caras y observá el odontograma interactivo."
                                 as="p"
                                 className="text-sm text-slate-600 inline"
                                 typingSpeed={16}
@@ -547,7 +547,7 @@ export function DentalIaCorporatePure() {
             </section>
 
             {/* ── SECCIÓN 3 INTERACTIVA: PORTAL WEB DEL CONSULTORIO & SEÑAS MP ─── */}
-            <section id="portal" className="py-20 bg-slate-50 border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28">
+            <section id="portal" className="w-full max-w-full py-20 bg-slate-50 border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28 overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-12">
                         <div className="flex justify-center mb-1">
@@ -596,7 +596,7 @@ export function DentalIaCorporatePure() {
             </section>
 
             {/* ── SECCIÓN 4 INTERACTIVA: SALA DE ESPERA Y ALERTAS ──────────────── */}
-            <section id="espera" className="py-20 bg-white border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28">
+            <section id="espera" className="w-full max-w-full py-20 bg-white border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28 overflow-hidden">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="text-center max-w-3xl mx-auto mb-12">
                         <div className="flex justify-center mb-1">
@@ -704,7 +704,7 @@ export function DentalIaCorporatePure() {
             <IntegracionesLideresSection onOpenWhatsApp={openWhatsApp} />
 
             {/* ── PLANES Y PRECIOS TRANSPARENTES (SHADCN CARD & TABS) ─────────── */}
-            <section id="planes" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28">
+            <section id="planes" className="w-full max-w-7xl mx-auto py-20 px-4 sm:px-6 lg:px-8 text-center border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28 overflow-hidden">
                 <SplitText
                     text="Inversión clara sin contratos de permanencia"
                     tag="h2"
@@ -909,7 +909,7 @@ export function DentalIaCorporatePure() {
             </section>
 
             {/* ── PREGUNTAS FRECUENTES CON SHADCN ACCORDION ─────────────────── */}
-            <section id="faq" className="py-20 bg-slate-50 border-t border-slate-200">
+            <section id="faq" className="w-full max-w-full py-20 bg-slate-50 border-t border-slate-200 overflow-hidden">
                 <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-left">
                     <div className="text-center mb-12">
                         <BlurText
@@ -943,7 +943,7 @@ export function DentalIaCorporatePure() {
             </section>
 
             {/* ── CTA FINAL Y FOOTER INSTITUCIONAL ───────────────────────────── */}
-            <section className="py-20 px-4 sm:px-6 lg:px-8 max-w-5xl mx-auto text-center">
+            <section className="w-full max-w-5xl mx-auto py-20 px-4 sm:px-6 lg:px-8 text-center overflow-hidden">
                 <div className="p-10 sm:p-14 rounded-3xl bg-blue-600 text-white shadow-xl shadow-blue-600/20 space-y-6">
                     <SplitText
                         text="Llevá la gestión de tu consultorio a un nivel superior"
@@ -1014,7 +1014,7 @@ export function DentalIaCorporatePure() {
                 </div>
             </section>
 
-            <footer className="border-t border-slate-200 py-12 px-4 sm:px-6 lg:px-8 text-xs text-slate-500 bg-white">
+            <footer className="w-full max-w-full border-t border-slate-200 py-12 px-4 sm:px-6 lg:px-8 text-xs text-slate-500 bg-white overflow-hidden">
                 <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
                     <div className="flex items-center gap-2.5">
                         <img src="/icon.png" alt="Dental-IA" className="size-5 object-contain" />

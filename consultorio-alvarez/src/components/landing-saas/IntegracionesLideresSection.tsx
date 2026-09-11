@@ -27,7 +27,7 @@ export function IntegracionesLideresSection({ onOpenWhatsApp }: IntegracionesLid
     }
 
     return (
-        <section id="integraciones" className="py-24 bg-white border-t border-slate-200/80 scroll-mt-24 sm:scroll-mt-28 relative overflow-hidden">
+        <section id="integraciones" className="w-full max-w-full py-20 sm:py-24 bg-white border-t border-slate-200/80 scroll-mt-24 sm:scroll-mt-28 relative overflow-hidden">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                 {/* Cabecera de la Sección limpia sin badges */}
                 <div className="text-center max-w-3xl mx-auto mb-16">
@@ -51,7 +51,7 @@ export function IntegracionesLideresSection({ onOpenWhatsApp }: IntegracionesLid
                 </div>
 
                 {/* ── CARD PRINCIPAL: MEDIT LINK ─────────────────────────────── */}
-                <div className="mb-10 rounded-3xl border border-slate-200 bg-slate-50/50 shadow-sm p-6 sm:p-10 relative">
+                <div className="mb-10 rounded-3xl border border-slate-200 bg-slate-50/50 shadow-sm p-5 sm:p-10 relative max-w-full overflow-hidden">
                     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
                         {/* Información MeditLink */}
                         <div className="lg:col-span-7 space-y-5 text-left">

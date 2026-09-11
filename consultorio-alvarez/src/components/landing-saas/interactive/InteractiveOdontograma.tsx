@@ -44,14 +44,14 @@ export function InteractiveOdontograma() {
     }
 
     return (
-        <div className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8 shadow-xs text-left">
+        <div className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-8 shadow-xs text-left max-w-full overflow-hidden">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
                 <div>
                     <div className="flex items-center gap-2">
-                        <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                        <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                             <Stethoscope className="w-4 h-4" />
                         </span>
-                        <h3 className="text-xl font-bold text-slate-900">
+                        <h3 className="text-lg sm:text-xl font-bold text-slate-900 leading-snug">
                             Odontograma Digital Multicapa FDI (32 Piezas)
                         </h3>
                     </div>
@@ -71,13 +71,13 @@ export function InteractiveOdontograma() {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg">
+                <div className="flex items-center gap-2 text-xs font-semibold text-slate-700 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg shrink-0 self-start sm:self-auto">
                     <span>Paciente:</span>
                     <strong className="text-slate-900">Luciana Ferrari (32 años)</strong>
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 mt-6 items-start">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 sm:gap-8 mt-6 items-start">
                 
                 {/* Selector de Piezas Clave */}
                 <div className="lg:col-span-5 space-y-4">
@@ -85,26 +85,26 @@ export function InteractiveOdontograma() {
                         Seleccionar Pieza Dental (FDI)
                     </span>
 
-                    <div className="grid grid-cols-5 gap-2">
+                    <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
                         {['16', '21', '26', '36', '48'].map((piece) => {
                             const isSelected = selectedPiece === piece
                             return (
                                 <button
                                     key={piece}
                                     onClick={() => setSelectedPiece(piece)}
-                                    className={`p-3 rounded-xl border text-center transition-all cursor-pointer ${
+                                    className={`p-1.5 sm:p-3 rounded-xl border text-center transition-all cursor-pointer min-w-0 ${
                                         isSelected
-                                            ? 'bg-blue-600 text-white font-black border-blue-600 shadow-md scale-105'
+                                            ? 'bg-blue-600 text-white font-black border-blue-600 shadow-md scale-102 sm:scale-105'
                                             : 'bg-white text-slate-700 border-slate-200 hover:border-blue-300'
                                     }`}
                                 >
-                                    <div className="text-lg font-bold font-mono">{piece}</div>
-                                    <div className={`text-[10px] mt-0.5 truncate ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
-                                        {piece === '16' && 'Molar Sup D'}
-                                        {piece === '21' && 'Incisivo Sup'}
-                                        {piece === '26' && 'Molar Sup I'}
-                                        {piece === '36' && 'Molar Inf I'}
-                                        {piece === '48' && 'Muela Juicio'}
+                                    <div className="text-base sm:text-lg font-bold font-mono">{piece}</div>
+                                    <div className={`text-[9px] sm:text-[10px] mt-0.5 truncate ${isSelected ? 'text-blue-100' : 'text-slate-400'}`}>
+                                        {piece === '16' && 'Molar D'}
+                                        {piece === '21' && 'Incisivo'}
+                                        {piece === '26' && 'Molar I'}
+                                        {piece === '36' && 'Molar Inf'}
+                                        {piece === '48' && 'Juicio'}
                                     </div>
                                 </button>
                             )
@@ -139,9 +139,9 @@ export function InteractiveOdontograma() {
                 </div>
 
                 {/* Visualizador Anatómico de 5 Caras */}
-                <div className="lg:col-span-7 bg-slate-50 border border-slate-200 rounded-2xl p-6 flex flex-col justify-between">
+                <div className="lg:col-span-7 bg-slate-50 border border-slate-200 rounded-2xl p-4 sm:p-6 flex flex-col justify-between max-w-full overflow-hidden">
                     <div>
-                        <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4">
+                        <div className="flex items-center justify-between pb-3 border-b border-slate-200 mb-4 gap-2 flex-wrap">
                             <span className="text-xs font-bold text-slate-700">
                                 Pieza #{selectedPiece} • Diagrama de Caras Anatómicas
                             </span>
@@ -152,8 +152,8 @@ export function InteractiveOdontograma() {
 
                         {/* Diagrama SVG interactivo de 5 caras */}
                         <div className="flex justify-center my-4">
-                            <div className="relative w-48 h-48 bg-white rounded-2xl border border-slate-300 p-2 shadow-xs flex items-center justify-center">
-                                <svg viewBox="0 0 100 100" className="w-40 h-40">
+                            <div className="relative w-40 h-40 sm:w-48 sm:h-48 bg-white rounded-2xl border border-slate-300 p-2 shadow-xs flex items-center justify-center">
+                                <svg viewBox="0 0 100 100" className="w-32 h-32 sm:w-40 sm:h-40">
                                     {/* Cara Superior (Vestibular / Top) */}
                                     <polygon
                                         points="0,0 100,0 75,25 25,25"

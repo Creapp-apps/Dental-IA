@@ -19,12 +19,21 @@
   display: none;
 }
 
-@media (max-width: 640px) {
+@media (max-width: 768px) {
+  .tilted-card-figure {
+    perspective: none !important;
+    overflow: hidden !important;
+  }
+  .tilted-card-inner,
+  .tilted-card-content {
+    transform-style: flat !important;
+    transform: none !important;
+  }
   .tilted-card-mobile-alert {
-    display: block;
+    display: none !important;
   }
   .tilted-card-caption {
-    display: none;
+    display: none !important;
   }
 }
 
