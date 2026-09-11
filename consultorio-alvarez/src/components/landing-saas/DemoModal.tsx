@@ -39,7 +39,7 @@ export function DemoModal({ isOpen, onClose }: DemoModalProps) {
         )
 
         // Redirigir a WhatsApp oficial de Dental-IA
-        const whatsappUrl = `https://wa.me/5491123456789?text=${mensaje}`
+        const whatsappUrl = `https://wa.me/5491130288564?text=${mensaje}`
         
         setIsSubmitted(true)
         setTimeout(() => {
@@ -59,7 +59,7 @@ export function DemoModal({ isOpen, onClose }: DemoModalProps) {
                     <div>
                         <DialogHeader className="gap-1 text-left">
                             <span className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">
-                                Demostración Comercial en Vivo
+                                Agendar Demo en Vivo
                             </span>
                             <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight">
                                 Conocé Dental-IA en tiempo real

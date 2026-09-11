@@ -19,6 +19,7 @@ import { InteractiveOdontograma } from './interactive/InteractiveOdontograma'
 import { InteractiveBookingPortal } from './interactive/InteractiveBookingPortal'
 import { InteractiveWaitingRoom } from './interactive/InteractiveWaitingRoom'
 import { InteractiveSettlements } from './interactive/InteractiveSettlements'
+import { IntegracionesLideresSection } from './IntegracionesLideresSection'
 
 import { Button, buttonVariants } from '@/components/ui/button'
 import {
@@ -50,11 +51,17 @@ export function DentalIaCorporatePure() {
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
     const [activeSection, setActiveSection] = useState<string>('')
 
+    const openWhatsApp = (mensaje: string) => {
+        const url = `https://wa.me/5491130288564?text=${encodeURIComponent(mensaje)}`
+        window.open(url, '_blank')
+    }
+
     const navItems = [
         { id: 'whatsapp', label: 'WhatsApp Asistido', shortLabel: 'WhatsApp' },
         { id: 'odontograma', label: 'Odontograma 3D', shortLabel: 'Odontograma' },
         { id: 'portal', label: 'Web & Señas MP', shortLabel: 'Web & Pagos' },
         { id: 'espera', label: 'Sala de Espera', shortLabel: 'Espera' },
+        { id: 'integraciones', label: 'Integraciones', shortLabel: 'Integraciones' },
         { id: 'planes', label: 'Planes', shortLabel: 'Planes' },
     ]
 
@@ -101,7 +108,7 @@ export function DentalIaCorporatePure() {
         window.addEventListener('scroll', handleScroll, { passive: true })
         handleScroll()
 
-        const sectionIds = ['whatsapp', 'odontograma', 'portal', 'espera', 'planes']
+        const sectionIds = ['whatsapp', 'odontograma', 'portal', 'espera', 'integraciones', 'planes']
         const observer = new IntersectionObserver(
             (entries) => {
                 entries.forEach((entry) => {
@@ -161,10 +168,10 @@ export function DentalIaCorporatePure() {
                     <span className="text-slate-300">•</span>
                     <span>Plataforma de gestión clínica y automatización para consultorios odontológicos en Argentina.</span>
                     <button
-                        onClick={() => setIsDemoOpen(true)}
+                        onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me gustaría agendar una demo en vivo de la plataforma para mi consultorio.')}
                         className="text-blue-700 hover:text-blue-900 font-semibold underline underline-offset-2 ml-1 cursor-pointer"
                     >
-                        Solicitar Demostración Comercial
+                        Agendar Demo
                     </button>
                 </div>
             </div>
@@ -277,11 +284,11 @@ export function DentalIaCorporatePure() {
                                 speed={0.4}
                                 followMouse
                                 proximity={200}
-                                onClick={() => setIsDemoOpen(true)}
+                                onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me gustaría agendar una demo de la plataforma para mi consultorio.')}
                                 className="h-9 sm:h-10 px-4 sm:px-4.5 rounded-full shadow-sm shadow-blue-600/20 cursor-pointer flex items-center justify-center shrink-0"
                             >
                                 <span className="font-bold text-xs text-white whitespace-nowrap">
-                                    Solicitar Demo
+                                    Agendar Demo
                                 </span>
                             </SpecularButton>
                             
@@ -401,7 +408,7 @@ export function DentalIaCorporatePure() {
                         speed={0.4}
                         followMouse
                         proximity={280}
-                        onClick={() => setIsDemoOpen(true)}
+                        onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me gustaría agendar una demo en vivo de Dental-IA para ver las funciones de turnos, WhatsApp y odontograma.')}
                         className="w-full sm:w-auto h-14 px-8 shadow-xl shadow-blue-600/25 cursor-pointer"
                     >
                         <span className="font-extrabold text-base flex items-center gap-2.5">
@@ -693,6 +700,9 @@ export function DentalIaCorporatePure() {
             </section>
             */}
 
+            {/* ── SECCIÓN DE INTEGRACIÓN CON SOFTWARES LÍDERES (MEDIT LINK / EXOCAD / DICOM) ── */}
+            <IntegracionesLideresSection onOpenWhatsApp={openWhatsApp} />
+
             {/* ── PLANES Y PRECIOS TRANSPARENTES (SHADCN CARD & TABS) ─────────── */}
             <section id="planes" className="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center border-t border-slate-200 scroll-mt-24 sm:scroll-mt-28">
                 <SplitText
@@ -775,13 +785,13 @@ export function DentalIaCorporatePure() {
                         <Card className="h-full rounded-2xl border-slate-200 bg-white shadow-xs flex flex-col justify-between py-0">
                             <CardHeader className="p-8 pb-4">
                                 <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                                    Para 1 a 2 profesionales
+                                    Para 1 a 3 profesionales
                                 </span>
                                 <CardTitle className="text-2xl font-black text-slate-900">
                                     Consultorio Independiente
                                 </CardTitle>
                                 <CardDescription className="text-xs text-slate-500 mt-1">
-                                    Ideal para consultorios que buscan ordenar su agenda y digitalizar historias clínicas.
+                                    Ideal para consultorios de 1 a 3 profesionales que buscan ordenar su agenda y digitalizar historias clínicas.
                                 </CardDescription>
                                 
                                 <div className="mt-6 flex items-baseline gap-1">
@@ -818,7 +828,7 @@ export function DentalIaCorporatePure() {
                                     speed={0.4}
                                     followMouse
                                     proximity={250}
-                                    onClick={() => setIsDemoOpen(true)}
+                                    onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Quisiera solicitar los 15 días de prueba gratis del Plan Consultorio Independiente (1 a 3 profesionales).')}
                                     className="w-full h-12 border border-slate-300/80 shadow-xs cursor-pointer hover:border-blue-400 transition-colors flex items-center justify-center"
                                 >
                                     <span className="font-bold text-xs sm:text-sm text-slate-800">
@@ -829,7 +839,7 @@ export function DentalIaCorporatePure() {
                         </Card>
                     </TiltedCard>
 
-                    {/* Plan Clínica Pro con Shadcn Card + TiltedCard 3D */}
+                    {/* Plan Centro Odontológico con Shadcn Card + TiltedCard 3D */}
                     <TiltedCard
                         scaleOnHover={1.03}
                         rotateAmplitude={8}
@@ -840,18 +850,18 @@ export function DentalIaCorporatePure() {
                         <Card className="h-full rounded-2xl border-2 border-blue-600 bg-blue-50/20 shadow-md flex flex-col justify-between py-0">
                             <CardHeader className="p-8 pb-4">
                                 <span className="text-xs font-bold text-blue-600 uppercase tracking-wider block mb-1">
-                                    Centros Médicos • Más Elegido
+                                    Para 5 a 10 profesionales • Más Elegido
                                 </span>
                                 <CardTitle className="text-2xl font-black text-slate-900">
-                                    Clínica Odontológica Pro
+                                    Centro Odontológico
                                 </CardTitle>
                                 <CardDescription className="text-xs text-slate-500 mt-1">
-                                    Para centros con múltiples sillones, secretarias y rotación de odontólogos.
+                                    Para centros de 5 a 10 profesionales con múltiples sillones, secretarias y rotación de turnos.
                                 </CardDescription>
                                 
                                 <div className="mt-6 flex items-baseline gap-1">
                                     <span className="text-4xl font-extrabold text-blue-700">
-                                        {billingCycle === 'monthly' ? '$185.000' : '$148.000'}
+                                        {billingCycle === 'monthly' ? '$195.000' : '$156.000'}
                                     </span>
                                     <span className="text-xs text-slate-500">ARS / mes</span>
                                 </div>
@@ -860,7 +870,7 @@ export function DentalIaCorporatePure() {
                             <CardContent className="px-8 py-2">
                                 <ul className="space-y-3 text-xs text-slate-700">
                                     <li className="flex items-center gap-2"><Check className="size-4 text-blue-600 font-bold shrink-0" /> Todo lo del plan Consultorio sin límites</li>
-                                    <li className="flex items-center gap-2"><Check className="size-4 text-blue-600 font-bold shrink-0" /> Profesionales, secretarias y sillones ilimitados</li>
+                                    <li className="flex items-center gap-2"><Check className="size-4 text-blue-600 font-bold shrink-0" /> De 5 a 10 profesionales (secretarias y sillones ilimitados)</li>
                                     <li className="flex items-center gap-2"><Check className="size-4 text-blue-600 font-bold shrink-0" /> Cobro de señas por Mercado Pago (0% comisión)</li>
                                     <li className="flex items-center gap-2"><Check className="size-4 text-blue-600 font-bold shrink-0" /> Soporte para Dominio Propio (ej: dentalva.ar)</li>
                                     <li className="flex items-center gap-2"><Check className="size-4 text-blue-600 font-bold shrink-0" /> Módulo de liquidaciones automáticas a profesionales</li>
@@ -884,11 +894,11 @@ export function DentalIaCorporatePure() {
                                     speed={0.4}
                                     followMouse
                                     proximity={250}
-                                    onClick={() => setIsDemoOpen(true)}
+                                    onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me interesa comenzar con el Plan Centro Odontológico (5 a 10 profesionales). ¿Podrían coordinar conmigo la activación?')}
                                     className="w-full h-12 shadow-lg shadow-blue-600/25 cursor-pointer flex items-center justify-center"
                                 >
                                     <span className="font-extrabold text-xs sm:text-sm text-white flex items-center gap-2">
-                                        Comenzar con Plan Clínica Pro
+                                        Comenzar con Plan Centro Odontológico
                                         <ArrowRight className="size-4" />
                                     </span>
                                 </SpecularButton>
@@ -968,12 +978,12 @@ export function DentalIaCorporatePure() {
                             speed={0.4}
                             followMouse
                             proximity={280}
-                            onClick={() => setIsDemoOpen(true)}
+                            onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me gustaría agendar una demo para conocer cómo implementar la plataforma en mi consultorio/clínica.')}
                             className="w-full sm:w-auto h-14 px-8 shadow-xl shadow-blue-950/25 cursor-pointer flex items-center justify-center"
                         >
                             <span className="font-extrabold text-sm text-blue-700 flex items-center gap-2.5">
                                 <PhoneCall className="size-4 text-blue-600" />
-                                Agendar Demostración Comercial
+                                Agendar Demo
                             </span>
                         </SpecularButton>
 
@@ -992,9 +1002,7 @@ export function DentalIaCorporatePure() {
                             speed={0.4}
                             followMouse
                             proximity={280}
-                            onClick={() => {
-                                window.location.href = '/login'
-                            }}
+                            onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Quisiera activar los 15 días de prueba gratis en mi consultorio.')}
                             className="w-full sm:w-auto h-14 px-8 border border-blue-400/50 shadow-sm cursor-pointer hover:border-white transition-colors flex items-center justify-center"
                         >
                             <span className="font-bold text-sm text-white flex items-center gap-2">

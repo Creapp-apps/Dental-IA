@@ -36,6 +36,11 @@ import { DentalIaCorporatePure } from './DentalIaCorporatePure'
 export function DentalIaLanding() {
     const [isDemoOpen, setIsDemoOpen] = useState(false)
     const [billingCycle, setBillingCycle] = useState<'monthly' | 'annual'>('monthly')
+
+    const openWhatsApp = (mensaje: string) => {
+        const url = `https://wa.me/5491130288564?text=${encodeURIComponent(mensaje)}`
+        window.open(url, '_blank')
+    }
     const [activeConcept, setActiveConcept] = useState<'corporate-pure' | 'current' | 'surgical' | 'atelier'>('corporate-pure')
 
     if (activeConcept === 'corporate-pure') {
@@ -80,7 +85,7 @@ export function DentalIaLanding() {
                     </span>
                     <span>¿Tenés un consultorio odontológico? Probá la plataforma gratis por 30 días y duplicá tu asistencia.</span>
                     <button
-                        onClick={() => setIsDemoOpen(true)}
+                        onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me gustaría agendar una demo de 15 minutos.')}
                         className="text-cyan-400 hover:text-cyan-300 font-bold underline underline-offset-2 ml-1 flex items-center gap-1 cursor-pointer"
                     >
                         Agendar Demo de 15 min
@@ -139,11 +144,11 @@ export function DentalIaLanding() {
                             Acceso Consultorio
                         </Link>
                         <button
-                            onClick={() => setIsDemoOpen(true)}
+                            onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me gustaría solicitar una demo de la plataforma.')}
                             className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-extrabold text-xs sm:text-sm shadow-lg shadow-cyan-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                         >
                             <Sparkles className="w-3.5 h-3.5" />
-                            Solicitar Demo
+                            Agendar Demo
                         </button>
                     </div>
                 </div>
@@ -206,9 +211,9 @@ export function DentalIaLanding() {
                     {/* Plan Profesional */}
                     <div className="rounded-3xl border border-white/10 bg-slate-900/60 p-8 shadow-xl backdrop-blur-md flex flex-col justify-between hover:border-white/20 transition-all">
                         <div>
-                            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Plan Consultorio</span>
-                            <h3 className="text-2xl font-black text-white mt-1">Profesional Independiente</h3>
-                            <p className="text-xs text-slate-400 mt-2">Para consultorios de 1 a 2 profesionales que buscan ordenar su agenda y no perder pacientes.</p>
+                            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Para 1 a 3 profesionales</span>
+                            <h3 className="text-2xl font-black text-white mt-1">Consultorio Independiente</h3>
+                            <p className="text-xs text-slate-400 mt-2">Para consultorios de 1 a 3 profesionales que buscan ordenar su agenda y no perder pacientes.</p>
                             
                             <div className="mt-6 flex items-baseline gap-1">
                                 <span className="text-4xl font-black text-white">
@@ -228,10 +233,13 @@ export function DentalIaLanding() {
                         </div>
 
                         <button
-                            onClick={() => setIsDemoOpen(true)}
+                            onClick={() => {
+                                const url = `https://wa.me/5491130288564?text=${encodeURIComponent('¡Hola Dental-IA! 👋 Quisiera solicitar los 15 días de prueba gratis del Plan Consultorio Independiente (1 a 3 profesionales).')}`
+                                window.open(url, '_blank')
+                            }}
                             className="mt-8 w-full py-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs text-center border border-white/10 transition-colors cursor-pointer"
                         >
-                            Comenzar 30 Días Gratis
+                            Probar 15 Días Gratis
                         </button>
                     </div>
 
@@ -242,20 +250,20 @@ export function DentalIaLanding() {
                         </div>
 
                         <div>
-                            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Plan Red & Centros Médicos</span>
-                            <h3 className="text-2xl font-black text-white mt-1">Clínica Odontológica Pro</h3>
-                            <p className="text-xs text-slate-400 mt-2">Para centros de alta demanda con múltiples odontólogos, secretarias y sillones rotativos.</p>
+                            <span className="text-xs font-bold text-cyan-400 uppercase tracking-wider">Para 5 a 10 profesionales</span>
+                            <h3 className="text-2xl font-black text-white mt-1">Centro Odontológico</h3>
+                            <p className="text-xs text-slate-400 mt-2">Para centros de 5 a 10 profesionales con alta demanda, secretarias y sillones rotativos.</p>
                             
                             <div className="mt-6 flex items-baseline gap-1">
                                 <span className="text-4xl font-black text-white">
-                                    {billingCycle === 'monthly' ? '$185.000' : '$148.000'}
+                                    {billingCycle === 'monthly' ? '$195.000' : '$156.000'}
                                 </span>
                                 <span className="text-xs text-slate-400">ARS / mes</span>
                             </div>
 
                             <ul className="mt-6 space-y-3 text-xs text-slate-300">
                                 <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-cyan-400 font-bold" /> Todo lo del plan Consultorio sin límites</li>
-                                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-cyan-400 font-bold" /> Odontólogos, sillones y secretarias ilimitadas</li>
+                                <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-cyan-400 font-bold" /> De 5 a 10 profesionales (secretarias y sillones ilimitados)</li>
                                 <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-cyan-400 font-bold" /> Cobro de señas por Mercado Pago (0% comisión Dental-IA)</li>
                                 <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-cyan-400 font-bold" /> Soporte para Dominio Propio (ej: dentalva.ar)</li>
                                 <li className="flex items-center gap-2.5"><Check className="w-4 h-4 text-cyan-400 font-bold" /> Módulo de liquidación automática a profesionales</li>
@@ -264,10 +272,13 @@ export function DentalIaLanding() {
                         </div>
 
                         <button
-                            onClick={() => setIsDemoOpen(true)}
+                            onClick={() => {
+                                const url = `https://wa.me/5491130288564?text=${encodeURIComponent('¡Hola Dental-IA! 👋 Me interesa comenzar con el Plan Centro Odontológico (5 a 10 profesionales). ¿Podrían coordinar conmigo la activación?')}`
+                                window.open(url, '_blank')
+                            }}
                             className="mt-8 w-full py-4 rounded-xl bg-gradient-to-r from-cyan-500 via-indigo-600 to-violet-600 hover:from-cyan-400 hover:via-indigo-500 hover:to-violet-500 text-white font-extrabold text-xs text-center shadow-lg shadow-cyan-500/25 transition-all cursor-pointer"
                         >
-                            Comenzar con Plan Clínica Pro
+                            Comenzar con Plan Centro Odontológico
                         </button>
                     </div>
                 </div>
@@ -352,7 +363,7 @@ export function DentalIaLanding() {
                     <div className="space-y-2.5">
                         <h4 className="font-bold text-white uppercase tracking-wider text-[11px]">Soporte y Migración</h4>
                         <ul className="space-y-2 text-xs">
-                            <li><button onClick={() => setIsDemoOpen(true)} className="hover:text-cyan-400 transition-colors cursor-pointer">Agendar Demostración</button></li>
+                            <li><button onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me gustaría agendar una demo de la plataforma.')} className="hover:text-cyan-400 transition-colors cursor-pointer">Agendar Demo</button></li>
                             <li><a href="#faq" className="hover:text-cyan-400 transition-colors">Preguntas Frecuentes</a></li>
                             <li><Link href="/login" className="hover:text-cyan-400 transition-colors">Ingreso a Consultorios</Link></li>
                             <li><span className="text-slate-500">Migración asistida de pacientes</span></li>
@@ -367,7 +378,7 @@ export function DentalIaLanding() {
                         </p>
                         <div className="pt-2">
                             <button
-                                onClick={() => setIsDemoOpen(true)}
+                                onClick={() => openWhatsApp('¡Hola Dental-IA! 👋 Me gustaría hablar con un asesor comercial.')}
                                 className="px-4 py-2 rounded-xl bg-slate-900 border border-white/10 text-cyan-400 hover:text-white hover:bg-slate-800 transition-all font-semibold text-xs cursor-pointer flex items-center gap-1.5"
                             >
                                 <Bot className="w-3.5 h-3.5 text-emerald-400" />
