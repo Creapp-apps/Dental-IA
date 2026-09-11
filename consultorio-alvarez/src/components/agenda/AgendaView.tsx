@@ -9,7 +9,7 @@ import {
     startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell, CalendarDays, ChevronUp, ChevronDown, Search } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell, CalendarDays, ChevronUp, ChevronDown, Search, RefreshCw, AlertCircle } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -188,9 +188,29 @@ export function AgendaView({
         }
     }, [])
 
-    // Synchronize prop updates to local state
+    // Caché en memoria en el cliente (TTL: 5 minutos) para navegación instantánea (0ms)
+    const turnosCacheRef = useRef<Map<string, { turnos: any[]; timestamp: number }>>(new Map())
+    const [isLoadingTurnos, setIsLoadingTurnos] = useState(false)
+    const [fetchError, setFetchError] = useState<string | null>(null)
+    const abortControllerRef = useRef<AbortController | null>(null)
+
+    // Guardar turnos iniciales en caché para la vista inicial
     useEffect(() => {
-        setTurnos(turnosIniciales || [])
+        if (turnosIniciales && turnosIniciales.length > 0) {
+            const { inicio, fin } = getRangoFechasParaVista(urlVista, fechaInicial ? parseISO(fechaInicial) : new Date())
+            const initialKey = `${inicio.toISOString()}_${fin.toISOString()}_${lockedProfId || urlProf}`
+            turnosCacheRef.current.set(initialKey, {
+                turnos: turnosIniciales,
+                timestamp: Date.now()
+            })
+        }
+    }, [])
+
+    // Synchronize prop updates to local state ONLY on initial load or if still matching initial date
+    useEffect(() => {
+        if (isFirstLoadRef.current && turnosIniciales) {
+            setTurnos(turnosIniciales)
+        }
     }, [turnosIniciales])
 
     // Controlled View & Filter States
@@ -267,6 +287,82 @@ export function AgendaView({
 
     const isFirstLoadRef = useRef(true)
 
+    // Función unificada de carga de turnos de rango (con caché, cancelación limpia y reintento)
+    const cargarTurnosRango = (forceBypassCache = false) => {
+        const { inicio, fin } = getRangoFechasParaVista(vistaActiva, baseDate)
+        const cacheKey = `${inicio.toISOString()}_${fin.toISOString()}_${filtroProf}`
+
+        // Si existe en caché y está vigente (< 5 minutos) y no forzamos recarga:
+        if (!forceBypassCache) {
+            const cached = turnosCacheRef.current.get(cacheKey)
+            if (cached && (Date.now() - cached.timestamp < 1000 * 60 * 5)) {
+                setTurnos(cached.turnos)
+                setIsLoadingTurnos(false)
+                setFetchError(null)
+                return
+            }
+        }
+
+        // Cancelar petición anterior si existía (evita que clics rápidos compitan o sobreescriban con datos viejos)
+        if (abortControllerRef.current) {
+            abortControllerRef.current.abort()
+        }
+        const controller = new AbortController()
+        abortControllerRef.current = controller
+
+        setIsLoadingTurnos(true)
+        setFetchError(null)
+
+        const params = new URLSearchParams({
+            inicio: inicio.toISOString(),
+            fin: fin.toISOString(),
+        })
+        if (filtroProf !== 'todos') {
+            params.set('profesionalId', filtroProf)
+        }
+
+        const fetchConReintento = async (intento: number): Promise<void> => {
+            try {
+                const res = await fetch(`/api/turnos?${params.toString()}`, {
+                    signal: controller.signal,
+                    headers: { 'Cache-Control': 'no-cache' }
+                })
+                if (!res.ok) {
+                    throw new Error(`HTTP ${res.status}`)
+                }
+                const data = await res.json()
+                if (data.turnos) {
+                    turnosCacheRef.current.set(cacheKey, {
+                        turnos: data.turnos,
+                        timestamp: Date.now()
+                    })
+                    setTurnos(data.turnos)
+                    setIsLoadingTurnos(false)
+                    setFetchError(null)
+                }
+            } catch (err: any) {
+                if (err.name === 'AbortError') {
+                    // Descartado voluntariamente por cambio de fecha rápido; no reportar error
+                    return
+                }
+                // Si es el primer intento, reintentar automáticamente 1 vez tras 1.2 segundos
+                if (intento === 1) {
+                    setTimeout(() => {
+                        if (!controller.signal.aborted) {
+                            fetchConReintento(2)
+                        }
+                    }, 1200)
+                    return
+                }
+                console.error('Error cargando turnos del rango:', err)
+                setIsLoadingTurnos(false)
+                setFetchError('No se pudieron sincronizar los turnos del período seleccionado')
+            }
+        }
+
+        fetchConReintento(1)
+    }
+
     // Sync local baseDate, vistaActiva and filtroProf back to the URL parameters and fetch turnos for range
     useEffect(() => {
         const formattedDate = format(baseDate, 'yyyy-MM-dd')
@@ -302,22 +398,12 @@ export function AgendaView({
             return
         }
 
-        let isCancelled = false
-        const { inicio, fin } = getRangoFechasParaVista(vistaActiva, baseDate)
-        getTurnosRangoAction(
-            inicio.toISOString(),
-            fin.toISOString(),
-            filtroProf !== 'todos' ? filtroProf : undefined
-        ).then((nuevosTurnos) => {
-            if (!isCancelled && nuevosTurnos) {
-                setTurnos(nuevosTurnos)
-            }
-        }).catch((err) => {
-            console.error('Error cargando turnos del rango:', err)
-        })
+        cargarTurnosRango(false)
 
         return () => {
-            isCancelled = true
+            if (abortControllerRef.current) {
+                abortControllerRef.current.abort()
+            }
         }
     }, [baseDate, vistaActiva, filtroProf])
 
@@ -342,8 +428,10 @@ export function AgendaView({
                     
                     if (eventType === 'DELETE') {
                         const oldId = payload.old.id
+                        turnosCacheRef.current.clear()
                         setTurnos(prev => prev.filter(t => t.id !== oldId))
                     } else if (eventType === 'INSERT' || eventType === 'UPDATE') {
+                        turnosCacheRef.current.clear()
                         const newRow = payload.new as any
 
                         // Si el usuario es profesional, descartar eventos de otros profesionales
@@ -842,6 +930,7 @@ export function AgendaView({
             }
             return t
         }))
+        turnosCacheRef.current.clear()
         
         startTransition(async () => {
             const res = await moverTurno(turnoId, newStart.toISOString(), newEnd.toISOString(), targetProfId)
@@ -899,6 +988,7 @@ export function AgendaView({
     function handleCambiarEstado(turnoId: string, nuevoEstado: EstadoTurno) {
         // Optimistic status update
         setTurnos(prev => prev.map(t => t.id === turnoId ? { ...t, estado: nuevoEstado } : t))
+        turnosCacheRef.current.clear()
         
         startTransition(async () => {
             const result = await cambiarEstadoTurno(turnoId, nuevoEstado)
@@ -932,6 +1022,7 @@ export function AgendaView({
         // Optimistic update: extend card immediately in UI
         setTurnos((prev: any[]) => prev.map(t => t.id === turnoId ? { ...t, fecha_fin: newEnd.toISOString() } : t))
         setSelectedTurnoDetail((prev: any) => prev && prev.id === turnoId ? { ...prev, fecha_fin: newEnd.toISOString() } : prev)
+        turnosCacheRef.current.clear()
 
         startTransition(async () => {
             const { editarTurno } = await import('@/lib/actions/turnos')
@@ -964,6 +1055,7 @@ export function AgendaView({
         
         // Optimistic delete: remove card immediately from local UI
         setTurnos(prev => prev.filter(t => t.id !== targetId))
+        turnosCacheRef.current.clear()
         
         startTransition(async () => {
             const res = await eliminarTurno(targetId)
@@ -1221,6 +1313,41 @@ export function AgendaView({
 
     return (
         <div className="space-y-2 relative">
+            {/* Barra de progreso animada en el borde superior al navegar o sincronizar turnos */}
+            <AnimatePresence>
+                {isLoadingTurnos && (
+                    <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute -top-1 left-0 right-0 h-1 z-[60] overflow-hidden rounded-full bg-primary/10 shadow-[0_0_12px_rgba(59,130,246,0.3)]"
+                    >
+                        <div className="h-full w-full bg-gradient-to-r from-primary/30 via-primary to-primary/30 animate-pulse" />
+                    </motion.div>
+                )}
+            </AnimatePresence>
+
+            {/* Banner de aviso y recuperación si ocurre un error de red o timeout */}
+            {fetchError && (
+                <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center justify-between gap-3 px-4 py-2.5 text-xs bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-xl shadow-lg"
+                >
+                    <div className="flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4 shrink-0 text-amber-400" />
+                        <span>{fetchError}</span>
+                    </div>
+                    <button
+                        onClick={() => cargarTurnosRango(true)}
+                        className="px-3 py-1 text-xs font-bold rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 flex items-center gap-1.5 transition-colors border border-amber-500/30 shrink-0"
+                    >
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        Reintentar
+                    </button>
+                </motion.div>
+            )}
+
             {/* Real-time Mutation Overlay Spinner */}
             <AnimatePresence>
                 {isPending && (
@@ -1284,10 +1411,18 @@ export function AgendaView({
                         </GlassButton>
                     </div>
 
-                    {/* Range label */}
-                    <span className="text-xs font-semibold text-foreground ml-0 sm:ml-1.5 capitalize text-center">
-                        {getRangeLabel()}
-                    </span>
+                    {/* Range label e indicador de carga */}
+                    <div className="flex items-center gap-2 ml-0 sm:ml-1.5">
+                        <span className="text-xs font-semibold text-foreground capitalize text-center">
+                            {getRangeLabel()}
+                        </span>
+                        {isLoadingTurnos && (
+                            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-primary animate-pulse bg-primary/10 px-2 py-0.5 rounded-full border border-primary/20">
+                                <RefreshCw className="h-3 w-3 animate-spin" />
+                                <span>Sincronizando...</span>
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="flex items-center justify-center md:justify-end gap-1.5 w-full md:w-auto flex-wrap">
@@ -1632,7 +1767,8 @@ export function AgendaView({
 
                             {/* Columns grid */}
                             <div className={cn(
-                                "flex-1 relative min-h-0 divide-x divide-border",
+                                "flex-1 relative min-h-0 divide-x divide-border transition-opacity duration-200",
+                                isLoadingTurnos && "opacity-75",
                                 vistaActiva === 'semana' && 'grid grid-cols-7',
                                 usesCustomWidth && 'flex',
                                 vistaActiva === 'hoy' && 'grid'
@@ -1802,8 +1938,16 @@ export function AgendaView({
                         </div>
 
                         {/* Current Date Range Label */}
-                        <div className="text-center font-extrabold text-xs text-foreground capitalize truncate max-w-[130px]">
-                            {getRangeLabel()}
+                        <div className="flex flex-col items-center justify-center text-center">
+                            <span className="font-extrabold text-xs text-foreground capitalize truncate max-w-[130px]">
+                                {getRangeLabel()}
+                            </span>
+                            {isLoadingTurnos && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-primary animate-pulse">
+                                    <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+                                    <span>Cargando...</span>
+                                </span>
+                            )}
                         </div>
 
                         {/* Botón Buscar en Mobile */}
@@ -2076,7 +2220,8 @@ export function AgendaView({
 
                                         {/* Columns grid */}
                                         <div className={cn(
-                                            "flex-1 relative min-h-0 divide-x divide-border/30",
+                                            "flex-1 relative min-h-0 divide-x divide-border/30 transition-opacity duration-200",
+                                            isLoadingTurnos && "opacity-75",
                                             vistaActiva === '3dias' && "grid grid-cols-3 w-full",
                                             vistaActiva === 'hoy' && filtroProf !== 'todos' && "grid grid-cols-1 w-full",
                                             vistaActiva === 'hoy' && filtroProf === 'todos' && "grid w-full",
@@ -2260,6 +2405,7 @@ export function AgendaView({
                             color: tipoTratamientoObj.color
                         } : null
                     }
+                    turnosCacheRef.current.clear()
 
                     if (isEdit) {
                         setTurnos(prev => prev.map(t => t.id === turnoRaw.id ? turnoCompleto : t))
