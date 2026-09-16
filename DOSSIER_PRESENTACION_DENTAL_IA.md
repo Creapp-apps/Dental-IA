@@ -48,7 +48,7 @@
 ---
 
 ### 🌐 C. Página Web Propia & Gestión de Turnos
-* **Presencia digital corporativa:** Cada consultorio obtiene su sitio web institucional profesional (ej: `tuclinica.dental-ia.com` o dominio propio `tuclinica.com.ar`).
+* **Presencia digital corporativa:** Cada consultorio obtiene su sitio web institucional profesional (ej: `tuclinica.dentalia.com.ar` o dominio propio `tuclinica.com.ar`).
 * **Turnero público de autoservicio:** El paciente puede seleccionar la especialidad, el profesional, la fecha y el horario disponible desde su teléfono.
 * **Cobro de señas con Mercado Pago (0% comisión de Dental-IA):** Configuración de seña obligatoria para asegurar la cita. El dinero ingresa directo a la cuenta de Mercado Pago del consultorio.
 * **Reducción del ausentismo a menos del 5%:** El paciente que abona una seña tiene un compromiso de asistencia prácticamente del 100%.
@@ -84,24 +84,24 @@
 ```
                                  COMPARATIVA DE PLANES
 ┌───────────────────────────────────────────────┬───────────────────────────────────────────────┐
-│          CONSULTORIO INDEPENDIENTE            │            CLÍNICA ODONTOLÓGICA PRO           │
-│           (Para 1 a 2 profesionales)          │            (Centros Médicos • Más Elegido)    │
+│          CONSULTORIO INDEPENDIENTE            │              CENTRO ODONTOLÓGICO              │
+│           (Para 1 a 3 profesionales)          │        (5 a 10 profesionales • Más Elegido)   │
 ├───────────────────────────────────────────────┼───────────────────────────────────────────────┤
-│ • Mensual: $125.000 ARS / mes                 │ • Mensual: $185.000 ARS / mes                 │
-│ • Anual:   $99.000 ARS / mes (20% OFF)        │ • Anual:   $148.000 ARS / mes (20% OFF)       │
+| • Mensual: $125.000 ARS / mes                 │ • Mensual: $195.000 ARS / mes                 │
+│ • Anual:   $112.500 ARS / mes (10% OFF)       │ • Anual:   $175.500 ARS / mes (10% OFF)       │
 ├───────────────────────────────────────────────┼───────────────────────────────────────────────┤
-│ ✓ Hasta 2 profesionales activos               │ ✓ Profesionales, secretarias y sillones ILIMITADOS│
+│ ✓ De 1 a 3 profesionales activos              │ ✓ De 5 a 10 profesionales (sillones ilimitados)│
 │ ✓ Agenda médica con sobreturnos inteligentes  │ ✓ Asistente IA WhatsApp 24/7 sin límite       │
 │ ✓ Asistente de WhatsApp con confirmación      │ ✓ Odontograma digital 3D e historias ilimitadas│
 │ ✓ Odontograma digital e historias clínicas    │ ✓ Cobro de señas por Mercado Pago (0% com.)   │
 │ ✓ Web pública propia con turnero online       │ ✓ Soporte para Dominio Propio (ej: tuclinica.ar)│
-│ ✓ Subdominio exclusivo (tuclinica.dental-ia)  │ ✓ Módulo de Liquidaciones Automáticas a doctores│
+│ ✓ Subdominio exclusivo (tuclinica.dentalia.com.ar) │ ✓ Módulo de Liquidaciones Automáticas a doctores│
 │ ✓ Soporte técnico prioritario por WhatsApp    │ ✓ Migración de historias clínicas previa INCLUIDA│
 │                                               │ ✓ Onboarding y capacitación guiada para el equipo│
 └───────────────────────────────────────────────┴───────────────────────────────────────────────┘
 ```
 
-> **Bonificación por Pago Anual**: Contratando el abono anual obtenés un **20% de descuento directo** (equivalente a **2 meses bonificados al 100%**).
+> **Ahorro por Pago Anual**: Contratando el abono anual obtenés un **10% de ahorro directo** en tu suscripción.
 
 ---
 
@@ -131,4 +131,4 @@
 
 ---
 **DENTAL-IA** | *Tecnología e Inteligencia Artificial al servicio de la odontología.*  
-Sitio Web: [dental-ia.com](https://dental-ia.com) • Contacto Comercial: comercial@dental-ia.com
+Sitio Web: [dentalia.com.ar](https://www.dentalia.com.ar/) • Contacto Comercial: comercial@dentalia.com.ar

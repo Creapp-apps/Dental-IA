@@ -19,7 +19,7 @@ export function InteractiveSettlements() {
         },
         gomez: {
             name: 'Dra. Mariana Gómez',
-            spec: 'Ortodoncia e Invisalign',
+            spec: 'Ortodoncia General',
             rate: '45% sobre honorarios netos',
             patients: 34,
             gross: '$2.160.000',

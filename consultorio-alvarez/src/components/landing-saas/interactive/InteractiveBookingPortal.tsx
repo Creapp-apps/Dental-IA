@@ -85,7 +85,7 @@ export function InteractiveBookingPortal() {
                                         <span className="font-bold text-sm text-slate-900">Dra. Mariana Gómez</span>
                                         {selectedDoc === 'gomez' && <Check className="w-4 h-4 text-blue-600" />}
                                     </div>
-                                    <span className="text-xs text-slate-500 block mt-0.5">Ortodoncia e Invisalign</span>
+                                    <span className="text-xs text-slate-500 block mt-0.5">Ortodoncia General</span>
                                 </button>
                             </div>
                         </div>

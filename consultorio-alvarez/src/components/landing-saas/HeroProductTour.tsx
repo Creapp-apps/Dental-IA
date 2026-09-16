@@ -387,7 +387,7 @@ export function HeroProductTour({ onOpenDemo }: { onOpenDemo: () => void }) {
                                     <div className="p-3.5 flex items-center justify-between">
                                         <div>
                                             <div className="font-bold text-white">Dra. Mariana Gómez</div>
-                                            <div className="text-[11px] text-slate-400">Ortodoncia e Invisalign (45% Honorario) • 34 pacientes</div>
+                                            <div className="text-[11px] text-slate-400">Ortodoncia General (45% Honorario) • 34 pacientes</div>
                                         </div>
                                         <div className="text-right">
                                             <div className="font-mono font-bold text-emerald-400">$975.000</div>
