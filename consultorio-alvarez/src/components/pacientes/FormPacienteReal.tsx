@@ -11,6 +11,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { GlassButton } from '@/components/ui/glass-button'
 import { GlassSelect } from '@/components/ui/glass-select'
+import { ComboboxAutocomplete } from '@/components/ui/combobox-autocomplete'
 import { GlassPhotoCapture } from '@/components/ui/glass-photo-capture'
 import { crearPaciente, actualizarPaciente } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
@@ -478,32 +479,33 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                 <h3 className="text-sm font-semibold text-foreground">Obra Social</h3>
                 <div className="grid grid-cols-3 gap-3">
                     <Field label="Obra Social">
-                        <Input
-                            {...register('obra_social_id', {
-                                onChange: () => {
-                                    setValue('plan_obra_social', '')
-                                }
-                            })}
+                        <ComboboxAutocomplete
+                            value={watch('obra_social_id') || ''}
+                            onChange={(val) => {
+                                setValue('obra_social_id', val, { shouldValidate: true, shouldDirty: true })
+                                setValue('plan_obra_social', '')
+                            }}
+                            options={obrasSociales.map((os: any) => ({
+                                id: os.id,
+                                label: os.nombre
+                            }))}
                             placeholder="Particular, OSDE, Swiss Medical..."
-                            list="obras-sociales-list"
+                            maxVisibleItems={15}
                         />
-                        <datalist id="obras-sociales-list">
-                            {obrasSociales.map((os: any) => (
-                                <option key={os.id} value={os.nombre} />
-                            ))}
-                        </datalist>
                     </Field>
                     <Field label="Plan">
-                        <Input
-                            {...register('plan_obra_social')}
+                        <ComboboxAutocomplete
+                            value={watch('plan_obra_social') || ''}
+                            onChange={(val) => {
+                                setValue('plan_obra_social', val, { shouldValidate: true, shouldDirty: true })
+                            }}
+                            options={planesDisponibles.map((plan: string) => ({
+                                id: plan,
+                                label: plan
+                            }))}
                             placeholder="Ej: 210, 310..."
-                            list="planes-list"
+                            maxVisibleItems={15}
                         />
-                        <datalist id="planes-list">
-                            {planesDisponibles.map((plan: string) => (
-                                <option key={plan} value={plan} />
-                            ))}
-                        </datalist>
                     </Field>
                     <Field label="N° Afiliado">
                         <Input {...register('n_afiliado')} placeholder="Número de afiliado" />

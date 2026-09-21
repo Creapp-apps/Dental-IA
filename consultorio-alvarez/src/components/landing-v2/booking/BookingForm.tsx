@@ -414,7 +414,7 @@ function PremiumSelect({
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: -8, scale: 0.96 }}
                         transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-                        className="absolute z-50 mt-1.5 w-full rounded-xl border border-gray-100 bg-white shadow-xl shadow-black/8 overflow-y-auto max-h-[220px]"
+                        className="absolute z-50 mt-1.5 w-full rounded-xl border border-gray-100 bg-white shadow-xl shadow-black/8 overflow-y-auto max-h-[min(540px,65vh)] custom-scrollbar"
                         data-lenis-prevent
                     >
                         {options.map((option) => {
