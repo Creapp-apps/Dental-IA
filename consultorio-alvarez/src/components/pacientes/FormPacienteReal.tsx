@@ -17,6 +17,7 @@ import { crearPaciente, actualizarPaciente } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { Sparkles, Loader2, Check, X, FileText, FileImage, AlertTriangle } from 'lucide-react'
 import { processPatientCardOcr } from '@/lib/actions/ocr'
+import { cn } from '@/lib/utils'
 
 const schema = z.object({
     nro_historia_clinica: z.string().optional(),
@@ -54,12 +55,11 @@ type FormData = z.infer<typeof schema>
 
 // ── Apple-style staggered spring animation ─────────────────────
 const sectionVariants = {
-    hidden: { opacity: 0, x: -40, filter: 'blur(6px)', zIndex: 0 },
+    hidden: { opacity: 0, x: -40, filter: 'blur(6px)' },
     visible: (i: number) => ({
         opacity: 1,
         x: 0,
         filter: 'blur(0px)',
-        zIndex: 50 - i,
         transition: {
             delay: i * 0.08,
             type: 'spring' as const,
@@ -121,6 +121,9 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     const [geminiErrorModal, setGeminiErrorModal] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' })
     const [scannedImage, setScannedImage] = useState<string | null>(null)
     const [scannedImageError, setScannedImageError] = useState(false)
+    const [isObraDropdownOpen, setIsObraDropdownOpen] = useState(false)
+    const [isPlanDropdownOpen, setIsPlanDropdownOpen] = useState(false)
+    const isObraSectionOpen = isObraDropdownOpen || isPlanDropdownOpen
     const [ocrStep, setOcrStep] = useState(0)
     const ocrSteps = [
         "Iniciando digitalización inteligente...",
@@ -474,7 +477,11 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                 variants={sectionVariants}
                 initial="hidden"
                 animate="visible"
-                className="glass rounded-2xl shadow-glass p-5 space-y-4 relative z-20"
+                style={{ zIndex: isObraSectionOpen ? 60 : undefined }}
+                className={cn(
+                    "glass rounded-2xl shadow-glass p-5 space-y-4 relative transition-[z-index]",
+                    isObraSectionOpen ? "z-50" : "z-20"
+                )}
             >
                 <h3 className="text-sm font-semibold text-foreground">Obra Social</h3>
                 <div className="grid grid-cols-3 gap-3">
@@ -491,6 +498,8 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                             }))}
                             placeholder="Particular, OSDE, Swiss Medical..."
                             maxVisibleItems={15}
+                            direction="up"
+                            onOpenChange={setIsObraDropdownOpen}
                         />
                     </Field>
                     <Field label="Plan">
@@ -505,6 +514,8 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                             }))}
                             placeholder="Ej: 210, 310..."
                             maxVisibleItems={15}
+                            direction="up"
+                            onOpenChange={setIsPlanDropdownOpen}
                         />
                     </Field>
                     <Field label="N° Afiliado">

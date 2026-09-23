@@ -24,6 +24,8 @@ interface ComboboxAutocompleteProps {
     name?: string
     id?: string
     onSelectOption?: (option: AutocompleteOption) => void
+    direction?: 'up' | 'down'
+    onOpenChange?: (isOpen: boolean) => void
 }
 
 export function ComboboxAutocomplete({
@@ -38,11 +40,14 @@ export function ComboboxAutocomplete({
     allowCustom = true,
     name,
     id,
-    onSelectOption
+    onSelectOption,
+    direction = 'down',
+    onOpenChange
 }: ComboboxAutocompleteProps) {
     const [isOpen, setIsOpen] = useState(false)
     const [highlightedIndex, setHighlightedIndex] = useState<number>(-1)
     const [isTyping, setIsTyping] = useState(false)
+    const [dynamicMaxHeight, setDynamicMaxHeight] = useState<string>('440px')
     const containerRef = useRef<HTMLDivElement>(null)
     const inputRef = useRef<HTMLInputElement>(null)
     const listRef = useRef<HTMLDivElement>(null)
@@ -93,16 +98,66 @@ export function ComboboxAutocomplete({
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
-    // Ajustar scroll cuando cambia el índice resaltado con el teclado
+    // Altura calculada para mostrar ítems
+    const maxCalculatedHeight = `${maxVisibleItems * 36 + 12}px`
+
+    // Notificar cambios en el estado de apertura
     useEffect(() => {
-        if (highlightedIndex >= 0 && listRef.current) {
-            const listElement = listRef.current
-            const itemElement = listElement.children[highlightedIndex] as HTMLElement
-            if (itemElement) {
-                itemElement.scrollIntoView({ block: 'nearest' })
+        onOpenChange?.(isOpen)
+    }, [isOpen, onOpenChange])
+
+    // Calcular altura máxima disponible para no tocar el borde superior de la página y permitir más opciones
+    useEffect(() => {
+        if (!isOpen || !containerRef.current) return
+
+        if (direction === 'up') {
+            const updateDynamicHeight = () => {
+                if (!containerRef.current) return
+                const rect = containerRef.current.getBoundingClientRect()
+                // Margen de seguridad con respecto al límite superior del viewport (32px)
+                const safetyMargin = 32
+                const spaceAbove = rect.top - safetyMargin
+                // Espacio para mostrar más opciones (hasta 13-14 ítems ~480px)
+                const targetHeight = Math.min(maxVisibleItems * 38 + 16, 480)
+
+                // Si la ventana tiene scroll y el espacio superior es reducido, ajustar suavemente el scroll de la página
+                if (spaceAbove < targetHeight && window.scrollY > 0) {
+                    const scrollAmount = Math.min(targetHeight - spaceAbove, window.scrollY)
+                    window.scrollBy({ top: -scrollAmount, behavior: 'smooth' })
+                }
+
+                // Altura disponible real para garantizar que NUNCA sobrepase el límite de la página
+                const availableSpace = Math.max(160, Math.floor(rect.top - safetyMargin))
+                const finalMaxHeight = Math.min(targetHeight, availableSpace)
+                setDynamicMaxHeight(`${finalMaxHeight}px`)
             }
+
+            updateDynamicHeight()
+            window.addEventListener('resize', updateDynamicHeight)
+            window.addEventListener('scroll', updateDynamicHeight, { passive: true })
+            return () => {
+                window.removeEventListener('resize', updateDynamicHeight)
+                window.removeEventListener('scroll', updateDynamicHeight)
+            }
+        } else {
+            setDynamicMaxHeight(`min(${maxCalculatedHeight}, 68vh)`)
         }
-    }, [highlightedIndex])
+    }, [isOpen, direction, maxVisibleItems, maxCalculatedHeight])
+
+    // Ajustar scroll automático suave cuando cambia el índice resaltado o al abrir con opción preseleccionada
+    useEffect(() => {
+        if (isOpen && highlightedIndex >= 0 && listRef.current) {
+            const timer = setTimeout(() => {
+                const listElement = listRef.current
+                if (!listElement) return
+                const itemElement = listElement.children[highlightedIndex] as HTMLElement
+                if (itemElement) {
+                    itemElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+                }
+            }, 60)
+            return () => clearTimeout(timer)
+        }
+    }, [isOpen, highlightedIndex])
 
     const handleSelect = (option: AutocompleteOption) => {
         onChange(option.label)
@@ -173,10 +228,6 @@ export function ComboboxAutocomplete({
         setIsOpen(true)
     }
 
-    // Altura calculada para mostrar hasta 15 ítems (~36px por ítem + padding)
-    // 15 ítems * 36px = 540px
-    const maxCalculatedHeight = `${maxVisibleItems * 36 + 12}px`
-
     return (
         <div ref={containerRef} className={cn('relative w-full', className)}>
             <div className="relative flex items-center">
@@ -238,12 +289,20 @@ export function ComboboxAutocomplete({
             <AnimatePresence>
                 {isOpen && (
                     <motion.div
-                        initial={{ opacity: 0, y: -4, scale: 0.98 }}
+                        initial={{ opacity: 0, y: direction === 'up' ? 4 : -4, scale: 0.98 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: -4, scale: 0.98 }}
+                        exit={{ opacity: 0, y: direction === 'up' ? 4 : -4, scale: 0.98 }}
                         transition={{ duration: 0.15, ease: 'easeOut' }}
-                        style={{ maxHeight: `min(${maxCalculatedHeight}, 68vh)` }}
-                        className="absolute top-full left-0 w-full mt-1.5 z-[100] bg-popover text-popover-foreground shadow-[0_20px_45px_rgba(0,0,0,0.45)] dark:shadow-[0_20px_45px_rgba(0,0,0,0.85)] rounded-xl p-1.5 border border-border backdrop-blur-xl overflow-y-auto custom-scrollbar"
+                        style={{
+                            maxHeight: dynamicMaxHeight,
+                            transformOrigin: direction === 'up' ? 'bottom' : 'top'
+                        }}
+                        className={cn(
+                            "absolute left-0 w-full z-[100] bg-popover text-popover-foreground rounded-xl p-1.5 border border-border backdrop-blur-xl overflow-y-auto scroll-smooth custom-scrollbar",
+                            direction === 'up'
+                                ? "bottom-full mb-1.5 shadow-[0_-15px_35px_rgba(0,0,0,0.35)] dark:shadow-[0_-20px_45px_rgba(0,0,0,0.75)]"
+                                : "top-full mt-1.5 shadow-[0_20px_45px_rgba(0,0,0,0.45)] dark:shadow-[0_20px_45px_rgba(0,0,0,0.85)]"
+                        )}
                     >
                         <div ref={listRef} className="space-y-0.5">
                             {filteredOptions.length > 0 ? (
