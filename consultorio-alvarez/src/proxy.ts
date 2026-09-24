@@ -29,7 +29,8 @@ export async function proxy(request: NextRequest) {
     const SYSTEM_RESERVED_ROUTES = [
         'admin', 'agenda', 'pacientes', 'cobros', 'configuracion', 'mis-pagos',
         'superadmin', 'login', 'portal', 'reservar', 'api', 'test-turnos',
-        'favicon.ico', 'sounds', 'images', 'manifest.json'
+        'terminos', 'privacidad', 'cookies', 'reembolsos',
+        'favicon.ico', 'icon.png', 'apple-icon.png', 'sounds', 'images', 'manifest.json', 'manifest.webmanifest'
     ]
 
     const pathSegments = pathname.split('/').filter(Boolean)

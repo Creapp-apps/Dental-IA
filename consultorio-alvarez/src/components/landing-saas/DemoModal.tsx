@@ -142,13 +142,22 @@ export function DemoModal({ isOpen, onClose }: DemoModalProps) {
                                 <ArrowRight className="w-4 h-4" />
                             </Button>
 
-                            <div className="flex items-center justify-center gap-3 text-[11px] text-slate-500 pt-2">
-                                <span className="flex items-center gap-1">
-                                    <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
-                                    Datos protegidos
-                                </span>
-                                <span>•</span>
-                                <span>Respuesta rápida en horario comercial</span>
+                            <div className="text-center text-[11px] text-slate-500 pt-2 space-y-1">
+                                <div className="flex items-center justify-center gap-3">
+                                    <span className="flex items-center gap-1 text-slate-600 font-medium">
+                                        <ShieldCheck className="w-3.5 h-3.5 text-blue-600" />
+                                        Datos médicos y comerciales protegidos
+                                    </span>
+                                    <span>•</span>
+                                    <span>Respuesta inmediata</span>
+                                </div>
+                                <p className="text-[10px] text-slate-400">
+                                    Al enviar este formulario aceptás nuestra{' '}
+                                    <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline underline-offset-2">
+                                        Política de Privacidad
+                                    </a>
+                                    . No compartimos tus datos con terceros.
+                                </p>
                             </div>
                         </form>
                     </div>

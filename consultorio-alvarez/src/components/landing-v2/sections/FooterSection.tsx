@@ -1,5 +1,6 @@
+import Link from 'next/link'
 import { CLINIC } from '@/lib/landing-constants'
-import { MapPin, Phone, Mail, Clock } from 'lucide-react'
+import { MapPin, Phone, Mail, Clock, ShieldCheck } from 'lucide-react'
 import type { LandingConfig } from '@/lib/types/landing'
 import { TenantLogo } from '@/components/ui/tenant-logo'
 
@@ -87,10 +88,28 @@ export function FooterSection({
                     </div>
                 </div>
 
-                <div className="mt-12 pt-6 border-t border-gray-100 text-center">
-                    <p className="text-xs text-gray-400">
+                <div className="mt-12 pt-6 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-gray-400">
+                    <p>
                         © {new Date().getFullYear()} {((config as any)?.logo_config?.type === 'text' && (config as any)?.logo_config?.text) ? (config as any).logo_config.text : effectiveClinicName}. Todos los derechos reservados.
                     </p>
+                    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-gray-500">
+                        <Link href="/privacidad" className="hover:text-gray-800 transition-colors">
+                            Privacidad de Datos
+                        </Link>
+                        <span>•</span>
+                        <Link href="/terminos" className="hover:text-gray-800 transition-colors">
+                            Términos
+                        </Link>
+                        <span>•</span>
+                        <Link href="/cookies" className="hover:text-gray-800 transition-colors">
+                            Cookies
+                        </Link>
+                        <span>•</span>
+                        <span className="inline-flex items-center gap-1 text-[11px] text-emerald-700 font-medium">
+                            <ShieldCheck className="size-3 text-emerald-600" />
+                            Turnos Seguros con Dental-IA
+                        </span>
+                    </div>
                 </div>
             </div>
         </footer>

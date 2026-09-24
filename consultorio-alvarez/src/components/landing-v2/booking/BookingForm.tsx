@@ -1250,6 +1250,15 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
                     </StaggerButton>
                 </div>
             </div>
+
+            {step === 2 && (
+                <div className="px-6 md:px-8 py-2.5 bg-black/20 border-t border-white/5 text-center text-[11px] text-slate-400">
+                    Tus datos de salud y contacto se procesan de forma cifrada y confidencial conforme a nuestra{' '}
+                    <a href="/privacidad" target="_blank" rel="noopener noreferrer" className="text-teal-400 hover:underline">
+                        Política de Privacidad
+                    </a>.
+                </div>
+            )}
         </div>
     )
 }

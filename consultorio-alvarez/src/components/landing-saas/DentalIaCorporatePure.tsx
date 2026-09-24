@@ -10,7 +10,8 @@ import {
     ShieldCheck,
     CheckCircle2,
     Menu,
-    X
+    X,
+    Lock
 } from 'lucide-react'
 
 import { DemoModal } from './DemoModal'
@@ -1014,14 +1015,131 @@ export function DentalIaCorporatePure() {
                 </div>
             </section>
 
-            <footer className="w-full max-w-full border-t border-slate-200 py-12 px-4 sm:px-6 lg:px-8 text-xs text-slate-500 bg-white overflow-hidden">
-                <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-                    <div className="flex items-center gap-2.5">
-                        <img src="/icon.png" alt="Dental-IA" className="size-5 object-contain" />
-                        <span className="font-extrabold text-sm text-slate-900">Dental<span className="text-blue-600">-IA</span></span>
-                        <span>• Desarrollado por CreAPP Argentina</span>
+            <footer className="w-full max-w-full border-t border-slate-200 bg-white text-slate-600 overflow-hidden pt-16 pb-12 px-4 sm:px-6 lg:px-8">
+                <div className="max-w-7xl mx-auto">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-10 pb-12 border-b border-slate-100">
+                        {/* Columna 1: Brand & Misión (ocupa 2 columnas en lg) */}
+                        <div className="lg:col-span-2 space-y-4">
+                            <div className="flex items-center gap-2.5">
+                                <div className="size-8 rounded-lg bg-blue-50 border border-blue-100 p-1 flex items-center justify-center">
+                                    <img src="/icon.png" alt="Dental-IA Logo" className="size-full object-contain" />
+                                </div>
+                                <span className="font-extrabold text-lg text-slate-900 tracking-tight">
+                                    Dental<span className="text-blue-600">-IA</span>
+                                </span>
+                            </div>
+                            <p className="text-xs sm:text-sm text-slate-500 max-w-sm leading-relaxed">
+                                Plataforma de gestión clínica inteligente para consultorios odontológicos. Automatizá turnos por WhatsApp, reducí el ausentismo y gestioná odontogramas digitales con máxima seguridad médica.
+                            </p>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200/60">
+                                    <ShieldCheck className="size-3.5 text-emerald-600" />
+                                    Datos de Salud Cifrados
+                                </span>
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200/60">
+                                    <Lock className="size-3 text-blue-600" />
+                                    Zero AI Training
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* Columna 2: Producto */}
+                        <div className="space-y-3">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                                Producto
+                            </h4>
+                            <ul className="space-y-2 text-xs text-slate-500">
+                                <li>
+                                    <button onClick={() => scrollToSection('whatsapp')} className="hover:text-blue-600 transition-colors cursor-pointer text-left">
+                                        Asistente WhatsApp IA
+                                    </button>
+                                </li>
+                                <li>
+                                    <button onClick={() => scrollToSection('odontograma')} className="hover:text-blue-600 transition-colors cursor-pointer text-left">
+                                        Odontograma 3D
+                                    </button>
+                                </li>
+                                <li>
+                                    <button onClick={() => scrollToSection('turnos')} className="hover:text-blue-600 transition-colors cursor-pointer text-left">
+                                        Gestión de Turnos
+                                    </button>
+                                </li>
+                                <li>
+                                    <button onClick={() => scrollToSection('planes')} className="hover:text-blue-600 transition-colors cursor-pointer text-left">
+                                        Planes y Precios
+                                    </button>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* Columna 3: Legal y Compliance */}
+                        <div className="space-y-3">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                                Legal y Cumplimiento
+                            </h4>
+                            <ul className="space-y-2 text-xs text-slate-500">
+                                <li>
+                                    <Link href="/terminos" className="hover:text-blue-600 transition-colors">
+                                        Términos y Condiciones
+                                    </Link>
+                                </li>
+                                <li>
+                                    <Link href="/privacidad" className="hover:text-blue-600 transition-colors">
+                                        Política de Privacidad
+                                    </Link>
+                                </li>
+                                <li>
+                                    <Link href="/cookies" className="hover:text-blue-600 transition-colors">
+                                        Política de Cookies
+                                    </Link>
+                                </li>
+                                <li>
+                                    <Link href="/reembolsos" className="hover:text-blue-600 transition-colors">
+                                        Cancelación y Reembolsos
+                                    </Link>
+                                </li>
+                            </ul>
+                        </div>
+
+                        {/* Columna 4: Contacto */}
+                        <div className="space-y-3">
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                                Contacto y Soporte
+                            </h4>
+                            <ul className="space-y-2 text-xs text-slate-500">
+                                <li>
+                                    <a
+                                        href="https://wa.me/5491130288564"
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="hover:text-blue-600 transition-colors flex items-center gap-1.5"
+                                    >
+                                        WhatsApp: +54 9 11 3028-8564
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="mailto:soporte@dental-ia.com" className="hover:text-blue-600 transition-colors">
+                                        soporte@dental-ia.com
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="mailto:legales@dental-ia.com" className="hover:text-blue-600 transition-colors">
+                                        legales@dental-ia.com
+                                    </a>
+                                </li>
+                                <li className="text-[11px] text-slate-400 pt-1">
+                                    Buenos Aires, Argentina
+                                </li>
+                            </ul>
+                        </div>
                     </div>
-                    <p>© 2026 Dental-IA. Todos los derechos reservados. Software médico seguro.</p>
+
+                    <div className="pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+                        <p>© {new Date().getFullYear()} Dental-IA. Desarrollado por CreAPP Argentina. Todos los derechos reservados.</p>
+                        <p className="text-center sm:text-right">
+                            Software médico de asistencia administrativa. No constituye asesoramiento diagnóstico independiente.
+                        </p>
+                    </div>
                 </div>
             </footer>
         </div>
