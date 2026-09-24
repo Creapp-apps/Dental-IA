@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 
-const ADMIN_PREFIXES = ['/admin', '/agenda', '/pacientes', '/cobros', '/configuracion', '/mis-pagos', '/superadmin']
+const ADMIN_PREFIXES = ['/admin', '/agenda', '/pacientes', '/cobros', '/configuracion', '/mis-pagos', '/mensajes', '/superadmin']
 
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
@@ -27,7 +27,7 @@ export async function proxy(request: NextRequest) {
 
     // ── Soporte para slugs limpios de tenants en entornos sin subdominios (ej: /curadent, /alvarez) ──
     const SYSTEM_RESERVED_ROUTES = [
-        'admin', 'agenda', 'pacientes', 'cobros', 'configuracion', 'mis-pagos',
+        'admin', 'agenda', 'pacientes', 'cobros', 'configuracion', 'mis-pagos', 'mensajes',
         'superadmin', 'login', 'portal', 'reservar', 'api', 'test-turnos',
         'terminos', 'privacidad', 'cookies', 'reembolsos',
         'favicon.ico', 'icon.png', 'apple-icon.png', 'sounds', 'images', 'manifest.json', 'manifest.webmanifest'
