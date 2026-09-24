@@ -206,14 +206,14 @@ export async function enviarMenuPrincipalWhatsApp(
                                 type: 'reply',
                                 reply: {
                                     id: 'ACTIVAR_GUARDIA_URGENCIA',
-                                    title: '🚨 Urgencia / Guardia'
+                                    title: '🚨 Guardia 24hs'
                                 }
                             },
                             {
                                 type: 'reply',
                                 reply: {
                                     id: 'HABLAR_RECEPCIONISTA',
-                                    title: '💬 Hablar con Recepción'
+                                    title: '💬 Recepción'
                                 }
                             }
                         ]

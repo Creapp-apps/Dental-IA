@@ -687,15 +687,7 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            // 9. Fallback defensivo habitual (manteniendo el comportamiento histórico intacto)
-            console.log(`[WA WEBHOOK] Enviando auto-respuesta habitual a ${from}...`)
-            await enviarAutoRespuestaMeta(from)
-            await logDebug('webhook_auto_reply_sent', {
-                type,
-                buttonPayload,
-                textBody,
-                from
-            })
+            console.log(`[WA WEBHOOK] Mensaje procesado para ${from}.`)
         }
 
         return NextResponse.json({ success: true })
