@@ -4,7 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from 'react
 import { createClient } from '@/lib/supabase/client'
 import { Notificacion } from '@/types'
 import { motion, AnimatePresence } from 'framer-motion'
-import { BellRing, CalendarClock, X } from 'lucide-react'
+import { BellRing, CalendarClock, X, MessageSquareText } from 'lucide-react'
 import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 
@@ -208,7 +208,30 @@ export function NotificationProvider({ children, tenantId }: { children: ReactNo
 
     const unreadCount = notifications.filter(n => !n.leida).length
 
-    const getToastVisuals = (tipo: Notificacion['tipo']) => {
+    const getToastVisuals = (tipo: Notificacion['tipo'], titulo?: string, mensaje?: string) => {
+        const isGuardia = titulo?.toLowerCase().includes('guardia') || mensaje?.toLowerCase().includes('guardia')
+        const isRecepcion = titulo?.toLowerCase().includes('recepción') || mensaje?.toLowerCase().includes('recepción') || mensaje?.toLowerCase().includes('whatsapp')
+
+        if (isGuardia) {
+            return {
+                border: 'border-red-500/60 bg-slate-900/95 shadow-red-500/20',
+                badge: 'bg-red-500/20 text-red-300 border-red-500/30',
+                dot: 'bg-red-500',
+                label: '🚨 Guardia Odontológica',
+                icon: '🚨'
+            }
+        }
+
+        if (isRecepcion) {
+            return {
+                border: 'border-sky-500/60 bg-slate-900/95 shadow-sky-500/20',
+                badge: 'bg-sky-500/20 text-sky-300 border-sky-500/30',
+                dot: 'bg-sky-500',
+                label: '💬 Recepción WhatsApp',
+                icon: '💬'
+            }
+        }
+
         switch (tipo) {
             case 'turno_reprogramado':
                 return {
@@ -262,7 +285,11 @@ export function NotificationProvider({ children, tenantId }: { children: ReactNo
                 <div className="fixed top-5 right-5 z-[99999] flex flex-col gap-3 max-w-sm w-[calc(100vw-2.5rem)] pointer-events-none">
                     <AnimatePresence>
                         {toasts.map((toast) => {
-                            const visual = getToastVisuals(toast.tipo)
+                            const visual = getToastVisuals(toast.tipo, toast.titulo, toast.mensaje)
+                            const isGuardia = toast.titulo?.toLowerCase().includes('guardia') || toast.mensaje?.toLowerCase().includes('guardia')
+                            const isRecepcion = toast.titulo?.toLowerCase().includes('recepción') || toast.mensaje?.toLowerCase().includes('recepción') || toast.mensaje?.toLowerCase().includes('whatsapp')
+                            const isChat = isGuardia || isRecepcion
+
                             return (
                                 <motion.div
                                     key={toast.toastId}
@@ -315,16 +342,28 @@ export function NotificationProvider({ children, tenantId }: { children: ReactNo
                                                     onClick={() => {
                                                         markAsRead(toast.id)
                                                         dismissToast(toast.toastId)
-                                                        if (toast.referencia_id) {
+                                                        if (isChat) {
+                                                            router.push(toast.referencia_id ? `/mensajes?c=${toast.referencia_id}` : '/mensajes')
+                                                        } else if (toast.referencia_id) {
                                                             router.push(`/agenda?turno=${toast.referencia_id}`)
                                                         } else {
                                                             router.push('/agenda')
                                                         }
                                                     }}
-                                                    className="px-3 py-1.5 rounded-lg text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 shadow-md shadow-primary/30 transition-all flex items-center gap-1.5"
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold text-white shadow-md transition-all flex items-center gap-1.5 ${
+                                                        isGuardia 
+                                                            ? 'bg-red-600 hover:bg-red-700 shadow-red-600/30' 
+                                                            : isRecepcion 
+                                                                ? 'bg-sky-600 hover:bg-sky-700 shadow-sky-600/30' 
+                                                                : 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-primary/30'
+                                                    }`}
                                                 >
-                                                    <CalendarClock className="h-3.5 w-3.5" />
-                                                    <span>Ver Turno</span>
+                                                    {isChat ? (
+                                                        <MessageSquareText className="h-3.5 w-3.5" />
+                                                    ) : (
+                                                        <CalendarClock className="h-3.5 w-3.5" />
+                                                    )}
+                                                    <span>{isChat ? 'Atender Chat' : 'Ver Turno'}</span>
                                                 </button>
                                                 <button
                                                     onClick={() => {

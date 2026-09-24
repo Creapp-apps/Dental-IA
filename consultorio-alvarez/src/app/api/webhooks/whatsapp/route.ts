@@ -3,7 +3,17 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { normalizarTelefonoArgentino } from '@/lib/utils'
 import { notificarTurnoPorWhatsApp } from '@/lib/actions/turnos'
-import { resolveTenantByPhoneNumberId } from '@/lib/whatsapp'
+import { resolveTenantByPhoneNumberId, getWhatsAppCredentialsForTenant, descargarYGuardarMediaWhatsApp } from '@/lib/whatsapp'
+import { 
+    esMensajeDeUrgencia, 
+    esHorarioFueraDeAtencion, 
+    getTriageCategorias, 
+    getTriagePorCategoria, 
+    buscarPrimerTurnoLibre, 
+    enviarMenuPrincipalWhatsApp,
+    enviarMenuTriageWhatsApp, 
+    enviarTipsYPropuestaTurno 
+} from '@/lib/whatsapp-guardia'
 
 
 // GET: Webhook Verification (Meta Verification Challenge)
@@ -151,12 +161,99 @@ export async function POST(request: NextRequest) {
             buttonTextFallback = message.interactive?.button_reply?.title || ''
         } else if (type === 'text') {
             textBody = message.text?.body?.trim() || ''
+        } else if (type === 'image') {
+            textBody = message.image?.caption?.trim() || '📷 [Foto adjunta]'
+        } else if (type === 'audio') {
+            textBody = '🎙️ [Nota de voz]'
+        } else if (type === 'video') {
+            textBody = message.video?.caption?.trim() || '🎥 [Video adjunto]'
+        } else if (type === 'document') {
+            textBody = message.document?.filename || '📄 [Documento adjunto]'
         }
 
         console.log(`📱 Mensaje recibido de ${from}. Tipo: ${type}. Payload: "${buttonPayload}". Texto: "${textBody}". Fallback de botón: "${buttonTextFallback}"`)
 
         // Instanciar cliente administrador para eludir RLS y operar en base de datos
         const admin = createAdminClient()
+
+        // ── PERSISTENCIA DEFENSIVA DE CONVERSACIÓN Y MENSAJE (Fase 1 Handoff Humano) ──
+        let conversacionId: string | null = null
+        let estadoConversacion = 'BOT'
+
+        try {
+            const { data: conv } = await admin
+                .from('whatsapp_conversaciones')
+                .select('id, estado, no_leidos_operador')
+                .eq('tenant_id', tenantId)
+                .eq('telefono', cleanPhone)
+                .maybeSingle()
+
+            if (conv) {
+                conversacionId = conv.id
+                estadoConversacion = conv.estado
+            } else {
+                const { data: paciente } = await admin
+                    .from('pacientes')
+                    .select('id, nombre, apellido')
+                    .eq('tenant_id', tenantId)
+                    .eq('telefono', cleanPhone)
+                    .maybeSingle()
+
+                const { data: newConv } = await admin
+                    .from('whatsapp_conversaciones')
+                    .insert({
+                        tenant_id: tenantId,
+                        paciente_id: paciente?.id || null,
+                        telefono: cleanPhone,
+                        nombre_contacto: paciente ? `${paciente.nombre} ${paciente.apellido}` : null,
+                        estado: 'BOT',
+                        ultimo_mensaje_at: new Date().toISOString(),
+                        ultimo_mensaje_texto: textBody || buttonTextFallback || buttonPayload || 'Mensaje interactivo',
+                        no_leidos_operador: 1
+                    })
+                    .select('id, estado')
+                    .maybeSingle()
+
+                if (newConv) {
+                    conversacionId = newConv.id
+                    estadoConversacion = newConv.estado
+                }
+            }
+
+            if (conversacionId) {
+                // Descargar archivo si es imagen o audio
+                let mediaUrl: string | null = null
+                const waCredsForMedia = await getWhatsAppCredentialsForTenant(tenantId)
+
+                if (waCredsForMedia) {
+                    if (type === 'image' && message.image?.id) {
+                        mediaUrl = await descargarYGuardarMediaWhatsApp(message.image.id, waCredsForMedia.accessToken, tenantId, 'jpg')
+                    } else if (type === 'audio' && message.audio?.id) {
+                        mediaUrl = await descargarYGuardarMediaWhatsApp(message.audio.id, waCredsForMedia.accessToken, tenantId, 'ogg')
+                    }
+                }
+
+                const tipoFinal = type === 'image' ? 'imagen' : (type === 'audio' ? 'audio' : (type === 'button' || type === 'interactive' ? 'interactivo' : 'texto'))
+
+                await admin.from('whatsapp_mensajes').insert({
+                    tenant_id: tenantId,
+                    conversacion_id: conversacionId,
+                    tipo: tipoFinal,
+                    remitente: 'paciente',
+                    contenido: textBody || buttonTextFallback || buttonPayload || 'Mensaje recibido',
+                    wa_message_id: messageId,
+                    metadata: { raw: message, media_url: mediaUrl }
+                })
+
+                await admin.from('whatsapp_conversaciones').update({
+                    ultimo_mensaje_at: new Date().toISOString(),
+                    ultimo_mensaje_texto: textBody || buttonTextFallback || buttonPayload || 'Mensaje recibido',
+                    no_leidos_operador: (conv?.no_leidos_operador || 0) + 1
+                }).eq('id', conversacionId)
+            }
+        } catch (persistErr) {
+            console.warn('[WA WEBHOOK] Advertencia de persistencia (tablas pendientes o error no bloqueante):', persistErr)
+        }
 
         let turnoIdToUpdate = ''
         let respuestaPaciente: 'CONFIRMAR' | 'CANCELAR' | 'REPROGRAMAR' | null = null
@@ -397,7 +494,201 @@ export async function POST(request: NextRequest) {
                 fecha_inicio: turno?.fecha_inicio
             }, turno?.tenant_id)
         } else {
-            console.log(`[WA WEBHOOK] Mensaje de texto libre o no reconocido de ${from}. Enviando auto-respuesta defensiva...`)
+            console.log(`[WA WEBHOOK] Mensaje libre o interactivo de ${from}. Procesando máquina de estados...`)
+
+            // 1. Si la conversación está tomada por un operador humano, el bot guarda silencio absoluto
+            if (estadoConversacion === 'HUMANO_ATENDIENDO') {
+                console.log(`[WA WEBHOOK] Conversación ${conversacionId} atendida activamente por operador humano. Bot en silencio.`)
+                return NextResponse.json({ success: true })
+            }
+
+            const waCreds = await getWhatsAppCredentialsForTenant(tenantId)
+
+            // 2. Si el paciente presiona el botón "🚨 Urgencia / Guardia"
+            if (buttonPayload === 'ACTIVAR_GUARDIA_URGENCIA' && waCreds) {
+                console.log(`[WA WEBHOOK] Paciente ${from} activó protocolo de Guardia por botón Quick Reply.`)
+
+                await admin.from('notificaciones').insert({
+                    tenant_id: tenantId,
+                    titulo: '🚨 Protocolo de Guardia Activado',
+                    mensaje: `El paciente (+${cleanPhone}) activó la Guardia Odontológica por WhatsApp.`,
+                    tipo: 'turno_reprogramado',
+                    referencia_id: conversacionId || '',
+                    leida: false
+                })
+
+                // Despachar Push Notification a administradores, secretarias y profesionales
+                try {
+                    const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                    await sendPushToRole('admin', tenantId, '🚨 Guardia Odontológica Activada', `Paciente (+${cleanPhone}) activó la guardia por WhatsApp.`, '/mensajes')
+                    await sendPushToRole('secretaria', tenantId, '🚨 Guardia Odontológica Activada', `Paciente (+${cleanPhone}) activó la guardia por WhatsApp.`, '/mensajes')
+                    await sendPushToRole('profesional', tenantId, '🚨 Guardia Odontológica Activada', `Paciente (+${cleanPhone}) activó la guardia por WhatsApp.`, '/mensajes')
+                } catch (pushErr) {
+                    console.error('Error al despachar push de guardia:', pushErr)
+                }
+
+                const categoriasTriage = await getTriageCategorias(tenantId)
+                if (categoriasTriage.length > 0) {
+                    await enviarMenuTriageWhatsApp(
+                        waCreds.phoneNumberId,
+                        waCreds.accessToken,
+                        cleanPhone,
+                        categoriasTriage
+                    )
+                    return NextResponse.json({ success: true })
+                }
+            }
+
+            // 3. Si el paciente solicita hablar con una recepcionista
+            if (buttonPayload === 'HABLAR_RECEPCIONISTA') {
+                if (conversacionId) {
+                    await admin.from('whatsapp_conversaciones')
+                        .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                        .eq('id', conversacionId)
+                }
+
+                await admin.from('notificaciones').insert({
+                    tenant_id: tenantId,
+                    titulo: '💬 Paciente solicita Recepción',
+                    mensaje: `El paciente (+${cleanPhone}) solicitó atención personalizada por WhatsApp.`,
+                    tipo: 'turno_reprogramado',
+                    referencia_id: conversacionId || '',
+                    leida: false
+                })
+
+                // Despachar Push Notification a administradores y secretarias
+                try {
+                    const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                    await sendPushToRole('admin', tenantId, '💬 Solicitud de Recepción', `Paciente (+${cleanPhone}) solicitó hablar con recepción por WhatsApp.`, '/mensajes')
+                    await sendPushToRole('secretaria', tenantId, '💬 Solicitud de Recepción', `Paciente (+${cleanPhone}) solicitó hablar con recepción por WhatsApp.`, '/mensajes')
+                } catch (pushErr) {
+                    console.error('Error al despachar push de recepción:', pushErr)
+                }
+
+                if (waCreds) {
+                    try {
+                        await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${waCreds.accessToken}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                messaging_product: 'whatsapp',
+                                recipient_type: 'individual',
+                                to: cleanPhone,
+                                type: 'text',
+                                text: {
+                                    preview_url: false,
+                                    body: '¡Recibido! 💬 Un asesor de nuestro equipo de recepción te responderá a la brevedad por este medio.'
+                                }
+                            })
+                        })
+                    } catch (replyErr) {
+                        console.error('Error al responder confirmación de recepcionista:', replyErr)
+                    }
+                }
+                return NextResponse.json({ success: true })
+            }
+
+            // 4. Si el paciente seleccionó una categoría de triage de guardia 24hs
+            if (buttonPayload.startsWith('TRIAGE_CAT_') && waCreds) {
+                const categoria = buttonPayload.replace('TRIAGE_CAT_', '')
+                const triageConfig = await getTriagePorCategoria(tenantId, categoria)
+                const primerTurno = await buscarPrimerTurnoLibre(tenantId)
+
+                if (triageConfig) {
+                    await enviarTipsYPropuestaTurno(
+                        waCreds.phoneNumberId,
+                        waCreds.accessToken,
+                        cleanPhone,
+                        triageConfig,
+                        primerTurno
+                    )
+                    return NextResponse.json({ success: true })
+                }
+            }
+
+            // 5. Si el paciente confirma el turno propuesto de guardia
+            if (buttonPayload.startsWith('CONFIRMAR_GUARDIA_') && waCreds) {
+                const parts = buttonPayload.replace('CONFIRMAR_GUARDIA_', '').split('_')
+                const fecha = parts[0] || ''
+                const hora = parts[1] || ''
+
+                await admin.from('notificaciones').insert({
+                    tenant_id: tenantId,
+                    titulo: '✅ Turno de Urgencia Confirmado',
+                    mensaje: `El paciente (+${cleanPhone}) confirmó turno de guardia para el ${fecha} a las ${hora} hs.`,
+                    tipo: 'turno_confirmado',
+                    referencia_id: conversacionId || '',
+                    leida: false
+                })
+
+                try {
+                    await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${waCreds.accessToken}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            messaging_product: 'whatsapp',
+                            recipient_type: 'individual',
+                            to: cleanPhone,
+                            type: 'text',
+                            text: {
+                                preview_url: false,
+                                body: `✅ *¡Turno de Urgencia Confirmado!*\n\nTe esperamos el día *${fecha} a las ${hora} hs* en Consultorio Álvarez.\n📍 Av. Rivadavia 1234.\n\nPor favor concurrí 5 minutos antes con tu DNI.\nCualquier consulta podés escribirnos directamente por este chat.`
+                            }
+                        })
+                    })
+                } catch (confErr) {
+                    console.error('Error al responder confirmación de turno de guardia:', confErr)
+                }
+                return NextResponse.json({ success: true })
+            }
+
+            // 6. Si la conversación ya está en espera de un operador
+            if (estadoConversacion === 'HUMANO_PENDIENTE') {
+                console.log(`[WA WEBHOOK] Conversación ${conversacionId} en espera de operador. Bot en silencio.`)
+                return NextResponse.json({ success: true })
+            }
+
+            // 7. Si es mensaje con palabras clave de urgencia / dolor, ofrecer menú de triage de guardia directamente
+            const textToAnalyze = textBody || buttonTextFallback
+            const esUrgencia = esMensajeDeUrgencia(textToAnalyze)
+
+            if (esUrgencia && waCreds) {
+                const categoriasTriage = await getTriageCategorias(tenantId)
+                if (categoriasTriage.length > 0) {
+                    console.log(`[WA WEBHOOK] Urgencia detectada de ${from} por palabras clave. Enviando menú de triage...`)
+                    const enviado = await enviarMenuTriageWhatsApp(
+                        waCreds.phoneNumberId,
+                        waCreds.accessToken,
+                        cleanPhone,
+                        categoriasTriage
+                    )
+                    if (enviado) {
+                        return NextResponse.json({ success: true })
+                    }
+                }
+            }
+
+            // 8. Para mensajes generales, saludos o consultas libres: Enviar Menú Principal con botones Quick Reply
+            if (waCreds) {
+                console.log(`[WA WEBHOOK] Enviando Menú Principal interactivo con botones a ${from}...`)
+                const enviadoMenu = await enviarMenuPrincipalWhatsApp(
+                    waCreds.phoneNumberId,
+                    waCreds.accessToken,
+                    cleanPhone
+                )
+                if (enviadoMenu) {
+                    return NextResponse.json({ success: true })
+                }
+            }
+
+            // 9. Fallback defensivo habitual (manteniendo el comportamiento histórico intacto)
+            console.log(`[WA WEBHOOK] Enviando auto-respuesta habitual a ${from}...`)
             await enviarAutoRespuestaMeta(from)
             await logDebug('webhook_auto_reply_sent', {
                 type,

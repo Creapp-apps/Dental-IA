@@ -105,3 +105,89 @@ export async function resolveTenantByPhoneNumberId(incomingPhoneNumberId: string
         return null
     }
 }
+
+/**
+ * Descarga un archivo multimedia (imagen, audio, video) desde Meta Graph API
+ * y lo persiste en el bucket 'paciente_adjuntos' de Supabase Storage para acceso permanente.
+ */
+export async function descargarYGuardarMediaWhatsApp(
+    mediaId: string,
+    accessToken: string,
+    tenantId: string,
+    extensionFallback: string = 'jpg'
+): Promise<string | null> {
+    if (!mediaId || !accessToken || !tenantId) return null
+
+    const admin = createAdminClient()
+
+    try {
+        // 1. Obtener la URL temporal del archivo desde Meta Graph API
+        const metaRes = await fetch(`https://graph.facebook.com/v20.0/${mediaId}`, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        })
+
+        if (!metaRes.ok) {
+            console.error(`[WA MEDIA] Error al consultar media ID ${mediaId} en Meta:`, await metaRes.text())
+            return null
+        }
+
+        const metaData = await metaRes.json()
+        const downloadUrl = metaData?.url
+        const mimeType = metaData?.mime_type || 'image/jpeg'
+
+        if (!downloadUrl) {
+            console.error('[WA MEDIA] No se obtuvo URL de descarga para mediaId:', mediaId)
+            return null
+        }
+
+        // Determinar extensión adecuada
+        let ext = extensionFallback
+        if (mimeType.includes('ogg') || mimeType.includes('audio')) ext = 'ogg'
+        else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg'
+        else if (mimeType.includes('png')) ext = 'png'
+        else if (mimeType.includes('mp4')) ext = 'mp4'
+        else if (mimeType.includes('pdf')) ext = 'pdf'
+
+        // 2. Descargar el binario con el Bearer token (Meta requiere auth para el downloadUrl)
+        const fileRes = await fetch(downloadUrl, {
+            headers: {
+                'Authorization': `Bearer ${accessToken}`
+            }
+        })
+
+        if (!fileRes.ok) {
+            console.error('[WA MEDIA] Error al descargar binario desde Meta:', fileRes.statusText)
+            return null
+        }
+
+        const arrayBuffer = await fileRes.arrayBuffer()
+        const buffer = Buffer.from(arrayBuffer)
+
+        // 3. Subir a Supabase Storage en paciente_adjuntos
+        const filePath = `wa-media/${tenantId}/${Date.now()}_${mediaId}.${ext}`
+        const { error: uploadError } = await admin.storage
+            .from('paciente_adjuntos')
+            .upload(filePath, buffer, {
+                contentType: mimeType,
+                upsert: true
+            })
+
+        if (uploadError) {
+            console.error('[WA MEDIA] Error al subir archivo a Supabase Storage:', uploadError)
+            return null
+        }
+
+        // 4. Retornar URL pública
+        const { data: publicData } = admin.storage
+            .from('paciente_adjuntos')
+            .getPublicUrl(filePath)
+
+        return publicData?.publicUrl || null
+    } catch (err) {
+        console.error('[WA MEDIA] Excepción al procesar media de WhatsApp:', err)
+        return null
+    }
+}
+

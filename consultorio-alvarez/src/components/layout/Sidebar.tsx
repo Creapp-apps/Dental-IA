@@ -18,6 +18,7 @@ import {
     CalendarCheck,
     ArrowUpRight,
     ShieldCheck,
+    MessageSquareText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { logoutAction } from '@/lib/actions/auth'
@@ -25,11 +26,13 @@ import { TenantLogo } from '@/components/ui/tenant-logo'
 import { NotificationBell } from '@/components/layout/NotificationBell'
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet'
 import { useTheme } from 'next-themes'
+import { createClient } from '@/lib/supabase/client'
 
 const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
     { label: 'Agenda', href: '/agenda', icon: Calendar },
     { label: 'Pacientes', href: '/pacientes', icon: Users },
+    { label: 'Mensajes', href: '/mensajes', icon: MessageSquareText },
     { label: 'Mis Pagos', href: '/mis-pagos', icon: CreditCard },
     { label: 'Configuración', href: '/configuracion', icon: Settings },
 ]
@@ -45,6 +48,7 @@ export interface TodaySummary {
 }
 
 interface SidebarProps {
+    tenantId?: string
     userEmail?: string
     userRole?: string
     themeColor?: string
@@ -173,7 +177,7 @@ function TodaySummaryWidget({ summary }: { summary?: TodaySummary }) {
     )
 }
 
-export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBillingAlert, todaySummary }: SidebarProps) {
+export function Sidebar({ tenantId, userEmail, userRole, themeColor, logoConfig, showBillingAlert, todaySummary }: SidebarProps) {
     const pathname = usePathname()
     const router = useRouter()
     const { theme, setTheme } = useTheme()
@@ -181,6 +185,7 @@ export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBilli
     const [pendingPath, setPendingPath] = useState<string | null>(null)
     const [isPending, startTransition] = useTransition()
     const [isOpen, setIsOpen] = useState(false)
+    const [pendingChatsCount, setPendingChatsCount] = useState(0)
 
     const isProfesional = userRole === 'profesional'
     const isSuperadmin = 
@@ -189,6 +194,45 @@ export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBilli
         userEmail === 'mazasebastian@hotmail.com' || 
         userEmail?.endsWith('@creapp.com') || 
         userEmail?.endsWith('@dental-ia.com')
+
+    useEffect(() => {
+        if (!tenantId) return
+        const supabase = createClient()
+
+        const fetchPendingChats = async () => {
+            const { count, error } = await supabase
+                .from('whatsapp_conversaciones')
+                .select('id', { count: 'exact', head: true })
+                .eq('tenant_id', tenantId)
+                .eq('estado', 'HUMANO_PENDIENTE')
+
+            if (!error && typeof count === 'number') {
+                setPendingChatsCount(count)
+            }
+        }
+
+        fetchPendingChats()
+
+        const channel = supabase
+            .channel(`sidebar-wa-${tenantId}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: '*',
+                    schema: 'public',
+                    table: 'whatsapp_conversaciones',
+                    filter: `tenant_id=eq.${tenantId}`
+                },
+                () => {
+                    fetchPendingChats()
+                }
+            )
+            .subscribe()
+
+        return () => {
+            supabase.removeChannel(channel)
+        }
+    }, [tenantId])
 
     useEffect(() => {
         setMounted(true)
@@ -243,7 +287,7 @@ export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBilli
                     <p className="text-[10px] font-bold tracking-wider text-sidebar-foreground/50 px-3 py-1 uppercase">
                         Principal
                     </p>
-                    {navItems.slice(0, 3).map((item) => {
+                    {navItems.slice(0, 4).map((item) => {
                         const isActuallyActive = pathname === item.href || pathname.startsWith(item.href + '/')
                         const isOptimisticActive = pendingPath === item.href
                         const isActive = isActuallyActive || isOptimisticActive
@@ -268,6 +312,11 @@ export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBilli
                             >
                                 <item.icon className="h-4 w-4 shrink-0" />
                                 <span className="flex-1">{item.label}</span>
+                                {item.href === '/mensajes' && pendingChatsCount > 0 && (
+                                    <span className="ml-auto inline-flex items-center justify-center px-1.5 py-0.5 text-[10px] font-extrabold rounded-full bg-red-500 text-white shadow-xs animate-pulse">
+                                        {pendingChatsCount > 9 ? '9+' : pendingChatsCount}
+                                    </span>
+                                )}
                             </Link>
                         )
                     })}
@@ -279,7 +328,7 @@ export function Sidebar({ userEmail, userRole, themeColor, logoConfig, showBilli
                         <p className="text-[10px] font-bold tracking-wider text-sidebar-foreground/50 px-3 py-1 uppercase">
                             Gestión
                         </p>
-                        {navItems.slice(3).map((item) => {
+                        {navItems.slice(4).map((item) => {
                             const isActuallyActive = pathname === item.href || pathname.startsWith(item.href + '/')
                             const isOptimisticActive = pendingPath === item.href
                             const isActive = isActuallyActive || isOptimisticActive

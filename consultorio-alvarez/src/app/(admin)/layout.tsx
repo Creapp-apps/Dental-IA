@@ -96,6 +96,7 @@ export default async function AdminLayout({
                 <div className="relative z-10 flex w-full h-full flex-col lg:flex-row">
                     <NotificationProvider tenantId={usuario.tenant_id}>
                         <Sidebar 
+                            tenantId={usuario.tenant_id}
                             userEmail={user.email} 
                             userRole={usuario.rol}
                             themeColor={primaryStr} 

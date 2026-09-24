@@ -1,6 +1,6 @@
 'use client'
 
-import { Bell, Check, Trash2, CalendarClock, AlertCircle, Info } from 'lucide-react'
+import { Bell, Check, Trash2, CalendarClock, AlertCircle, Info, MessageSquareText } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { useNotifications } from '@/components/providers/NotificationProvider'
 import { cn } from '@/lib/utils'
@@ -50,14 +50,29 @@ export function NotificationBell({ themeColor }: { themeColor?: string }) {
                     ) : (
                         notifications.map(n => {
                             const isUnread = !n.leida
-                            const Icon = n.tipo === 'turno_nuevo' ? CalendarClock : n.tipo === 'alerta' ? AlertCircle : Info
+                            const isChat = n.titulo?.toLowerCase().includes('guardia') || 
+                                           n.titulo?.toLowerCase().includes('recepción') || 
+                                           n.titulo?.toLowerCase().includes('whatsapp') ||
+                                           n.mensaje?.toLowerCase().includes('guardia') ||
+                                           n.mensaje?.toLowerCase().includes('recepción') ||
+                                           n.mensaje?.toLowerCase().includes('whatsapp')
+
+                            const Icon = isChat 
+                                ? MessageSquareText 
+                                : n.tipo === 'turno_nuevo' 
+                                    ? CalendarClock 
+                                    : n.tipo === 'alerta' 
+                                        ? AlertCircle 
+                                        : Info
 
                             return (
                                 <button
                                     key={n.id}
                                     onClick={() => {
                                         if (isUnread) markAsRead(n.id)
-                                        if (n.referencia_id && n.tipo === 'turno_nuevo') {
+                                        if (isChat) {
+                                            router.push(n.referencia_id ? `/mensajes?c=${n.referencia_id}` : '/mensajes')
+                                        } else if (n.referencia_id && n.tipo === 'turno_nuevo') {
                                             router.push(`/agenda?turno=${n.referencia_id}`)
                                         }
                                     }}
