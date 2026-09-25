@@ -16,7 +16,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { NuevoTurnoModal } from '@/components/agenda/NuevoTurnoModal'
 import { BuscadorTurnosModal } from '@/components/agenda/BuscadorTurnosModal'
 import { cambiarEstadoTurno, eliminarTurno, moverTurno, enviarRecordatorioManual, getTurnosRangoAction } from '@/lib/actions/turnos'
-import { getPacientesAgendaAction } from '@/lib/actions/pacientes'
+
 import { glassAlert } from '@/components/ui/glass-alert'
 import {
     type EstadoTurno,
@@ -151,42 +151,6 @@ export function AgendaView({
     const [turnos, setTurnos] = useState<any[]>(turnosIniciales || [])
     const [pacientesAgenda, setPacientesAgenda] = useState<any[]>(pacientes || [])
 
-    // Precarga en segundo plano de pacientes compactos para búsqueda instantánea en 0ms
-    useEffect(() => {
-        const CACHE_KEY = 'agenda_pacientes_compact_cache'
-        const CACHE_TIME_KEY = 'agenda_pacientes_cache_time'
-        try {
-            const cached = sessionStorage.getItem(CACHE_KEY)
-            const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY)
-            if (cached && cachedTime && (Date.now() - Number(cachedTime) < 1000 * 60 * 15)) {
-                const parsed = JSON.parse(cached)
-                if (Array.isArray(parsed) && parsed.length > 0) {
-                    setPacientesAgenda(parsed)
-                }
-            }
-        } catch (e) {
-            // Ignorar errores de sessionStorage
-        }
-
-        let isCancelled = false
-        getPacientesAgendaAction()
-            .then((data) => {
-                if (!isCancelled && data && data.length > 0) {
-                    setPacientesAgenda(data)
-                    try {
-                        sessionStorage.setItem(CACHE_KEY, JSON.stringify(data))
-                        sessionStorage.setItem(CACHE_TIME_KEY, String(Date.now()))
-                    } catch (e) {}
-                }
-            })
-            .catch((err) => {
-                console.error('Error precargando pacientes para la agenda:', err)
-            })
-
-        return () => {
-            isCancelled = true
-        }
-    }, [])
 
     // Caché en memoria en el cliente (TTL: 5 minutos) para navegación instantánea (0ms)
     const turnosCacheRef = useRef<Map<string, { turnos: any[]; timestamp: number }>>(new Map())
@@ -398,9 +362,12 @@ export function AgendaView({
             return
         }
 
-        cargarTurnosRango(false)
+        const navTimer = setTimeout(() => {
+            cargarTurnosRango(false)
+        }, 120)
 
         return () => {
+            clearTimeout(navTimer)
             if (abortControllerRef.current) {
                 abortControllerRef.current.abort()
             }
@@ -415,14 +382,22 @@ export function AgendaView({
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange)
     }, [])
 
-    // Real-time synchronization of turnos
+    // Sincronización en tiempo real de turnos con aislamiento estricto por tenant
     useEffect(() => {
+        const tenantId = currentUsuario?.tenant_id
+        if (!tenantId) return
+
         const supabase = createClient()
         const channel = supabase
-            .channel('turnos-changes')
+            .channel(`turnos-rt-${tenantId}`)
             .on(
                 'postgres_changes',
-                { event: '*', schema: 'public', table: 'turnos' },
+                { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'turnos',
+                    filter: `tenant_id=eq.${tenantId}`
+                },
                 async (payload) => {
                     const eventType = payload.eventType
                     
@@ -439,8 +414,7 @@ export function AgendaView({
                             return
                         }
                         
-                        // Check if we already have this patient in local list
-                        let pacienteObj = pacientesAgenda.find(p => p.id === newRow.paciente_id)
+                        let pacienteObj = (pacientesAgenda || []).find(p => p.id === newRow.paciente_id)
                         if (!pacienteObj && newRow.paciente_id) {
                             const { data: pData } = await supabase
                                 .from('pacientes')
@@ -488,11 +462,6 @@ export function AgendaView({
                             setTurnos(prev => prev.map(t => t.id === newRow.id ? turnoCompleto : t))
                         }
                     }
-                    
-                    // Solo refrescar la página de fondo si el usuario no está interactuando con el modal abierto
-                    if (!modalOpenRef.current) {
-                        router.refresh()
-                    }
                 }
             )
             .subscribe()
@@ -500,7 +469,7 @@ export function AgendaView({
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [router, pacientes, profesionales, tiposTratamiento])
+    }, [currentUsuario?.tenant_id, isProfesional, lockedProfId, profesionales, tiposTratamiento])
 
     function toggleFullscreen() {
         const el = document.getElementById('admin-layout-root')

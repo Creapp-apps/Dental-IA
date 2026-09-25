@@ -12,6 +12,40 @@ function getAdmin() {
 }
 
 const tenantCache = new Map<string, { tenantId: string; expiresAt: number }>()
+const metadataCache = new Map<string, { data: any; expiresAt: number }>()
+
+async function getCachedProfesionalesMap(tenantId: string) {
+    const key = `profesionales_${tenantId}`
+    const cached = metadataCache.get(key)
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.data as Map<string, any>
+    }
+    const supabase = getAdmin()
+    const { data } = await supabase
+        .from('profesionales')
+        .select('id, nombre, apellido, color_agenda')
+        .eq('tenant_id', tenantId)
+    const map = new Map((data || []).map((p: any) => [p.id, p]))
+    metadataCache.set(key, { data: map, expiresAt: Date.now() + 1000 * 60 * 3 })
+    return map
+}
+
+async function getCachedTiposTratamientoMap(tenantId: string) {
+    const key = `tipos_${tenantId}`
+    const cached = metadataCache.get(key)
+    if (cached && cached.expiresAt > Date.now()) {
+        return cached.data as Map<string, any>
+    }
+    const supabase = getAdmin()
+    const { data } = await supabase
+        .from('tipos_tratamiento')
+        .select('id, nombre, duracion_minutos, prioridad, color')
+        .eq('tenant_id', tenantId)
+    const map = new Map((data || []).map((t: any) => [t.id, t]))
+    metadataCache.set(key, { data: map, expiresAt: Date.now() + 1000 * 60 * 3 })
+    return map
+}
+
 
 // Obtiene el tenant_id del usuario logueado desde public.usuarios (caching por request + memoria 3min)
 export const getTenantId = cache(async (): Promise<string | null> => {
@@ -252,7 +286,7 @@ export async function getPacientesCompactos(limit: number = 5000) {
     return all
 }
 
-export async function searchPacientes(searchTerm: string, limit: number = 50, compact: boolean = true) {
+export async function searchPacientes(searchTerm: string, limit: number = 20, compact: boolean = true) {
     const supabase = getAdmin()
     const tenantId = await getTenantId()
     if (!tenantId || !searchTerm.trim()) return []
@@ -260,13 +294,14 @@ export async function searchPacientes(searchTerm: string, limit: number = 50, co
     const cleanTerm = searchTerm.trim()
     const isNumeric = /^\d[\d\.]*$/.test(cleanTerm)
     const digitsOnly = cleanTerm.replace(/\D/g, '')
+    const effectiveLimit = Math.min(Math.max(1, limit), 25)
 
     let query = supabase
         .from('pacientes')
         .select(compact ? PACIENTE_COMPACT_FIELDS : PACIENTE_SELECT_FIELDS)
         .eq('tenant_id', tenantId)
         .order('apellido', { ascending: true })
-        .limit(limit)
+        .limit(effectiveLimit)
 
     if (isNumeric && digitsOnly.length >= 2) {
         const variants = formatDniVariants(digitsOnly)
@@ -287,21 +322,15 @@ export async function searchPacientes(searchTerm: string, limit: number = 50, co
             ])
             query = query.or(clauses.join(','))
         } else {
-            // Filtrar conectores si hay 3+ tokens, ej: "Ponce de León"
-            const significant = tokens.length > 2
-                ? tokens.filter(t => t.length > 2 || !['de', 'la', 'el', 'los', 'las', 'del', 'da', 'di', 'y'].includes(t.toLowerCase()))
-                : tokens
-            const tokensToUse = significant.length > 0 ? significant : tokens
-
-            for (const token of tokensToUse) {
-                const variants = getSearchTokenVariants(token)
-                const clauses = variants.flatMap(t => [
-                    `nombre.ilike.%${t}%`,
-                    `apellido.ilike.%${t}%`,
-                    `dni.ilike.%${t}%`
-                ])
-                query = query.or(clauses.join(','))
-            }
+            const t0 = tokens[0]
+            const t1 = tokens[1]
+            const clauses = [
+                `and(apellido.ilike.%${t0}%,nombre.ilike.%${t1}%)`,
+                `and(nombre.ilike.%${t0}%,apellido.ilike.%${t1}%)`,
+                `nombre.ilike.%${cleanTerm}%`,
+                `apellido.ilike.%${cleanTerm}%`
+            ]
+            query = query.or(clauses.join(','))
         }
     }
 
@@ -337,21 +366,34 @@ export async function getTurnosDelDia(fecha: Date) {
     if (!tenantId) return []
 
     const diaStr = fecha.toISOString().split('T')[0]
-    const { data, error } = await supabase
+    const { data: turnos, error } = await supabase
         .from('turnos')
-        .select(`
-            *,
-            paciente:pacientes(id, nombre, apellido, telefono, obra_social_id),
-            profesional:profesionales(id, nombre, apellido, color_agenda),
-            tipo_tratamiento:tipos_tratamiento(id, nombre, duracion_minutos, prioridad, color)
-        `)
+        .select('*')
         .eq('tenant_id', tenantId)
         .gte('fecha_inicio', `${diaStr}T00:00:00`)
         .lt('fecha_inicio', `${diaStr}T23:59:59`)
         .order('fecha_inicio')
 
     if (error) { console.error('getTurnosDelDia:', error); return [] }
-    return data ?? []
+    if (!turnos || turnos.length === 0) return []
+
+    const pacIds = Array.from(new Set(turnos.map((t: any) => t.paciente_id).filter(Boolean)))
+    const [pacientesRes, profMap, tipoMap] = await Promise.all([
+        pacIds.length > 0
+            ? supabase.from('pacientes').select('id, nombre, apellido, telefono, obra_social_id').in('id', pacIds)
+            : Promise.resolve({ data: [] }),
+        getCachedProfesionalesMap(tenantId),
+        getCachedTiposTratamientoMap(tenantId)
+    ])
+
+    const pacMap = new Map((pacientesRes.data || []).map((p: any) => [p.id, p]))
+
+    return turnos.map((t: any) => ({
+        ...t,
+        paciente: pacMap.get(t.paciente_id) || null,
+        profesional: profMap.get(t.profesional_id) || null,
+        tipo_tratamiento: tipoMap.get(t.tipo_tratamiento_id) || null
+    }))
 }
 
 export async function getTurnosSemana(inicio: Date, fin: Date, profesionalId?: string) {
@@ -361,12 +403,7 @@ export async function getTurnosSemana(inicio: Date, fin: Date, profesionalId?: s
 
     let query = supabase
         .from('turnos')
-        .select(`
-            *,
-            paciente:pacientes(id, nombre, apellido, telefono),
-            profesional:profesionales(id, nombre, apellido, color_agenda),
-            tipo_tratamiento:tipos_tratamiento(id, nombre, duracion_minutos, prioridad, color)
-        `)
+        .select('*')
         .eq('tenant_id', tenantId)
         .gte('fecha_inicio', inicio.toISOString())
         .lte('fecha_inicio', fin.toISOString())
@@ -375,10 +412,28 @@ export async function getTurnosSemana(inicio: Date, fin: Date, profesionalId?: s
         query = query.eq('profesional_id', profesionalId)
     }
 
-    const { data, error } = await query.order('fecha_inicio')
+    const { data: turnos, error } = await query.order('fecha_inicio')
 
     if (error) { console.error('getTurnosSemana:', error); return [] }
-    return data ?? []
+    if (!turnos || turnos.length === 0) return []
+
+    const pacIds = Array.from(new Set(turnos.map((t: any) => t.paciente_id).filter(Boolean)))
+    const [pacientesRes, profMap, tipoMap] = await Promise.all([
+        pacIds.length > 0
+            ? supabase.from('pacientes').select('id, nombre, apellido, telefono, obra_social_id').in('id', pacIds)
+            : Promise.resolve({ data: [] }),
+        getCachedProfesionalesMap(tenantId),
+        getCachedTiposTratamientoMap(tenantId)
+    ])
+
+    const pacMap = new Map((pacientesRes.data || []).map((p: any) => [p.id, p]))
+
+    return turnos.map((t: any) => ({
+        ...t,
+        paciente: pacMap.get(t.paciente_id) || null,
+        profesional: profMap.get(t.profesional_id) || null,
+        tipo_tratamiento: tipoMap.get(t.tipo_tratamiento_id) || null
+    }))
 }
 
 // ---- COBROS ----

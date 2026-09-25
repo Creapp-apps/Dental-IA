@@ -158,7 +158,9 @@ export function NuevoTurnoModal({
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [])
 
-    // Búsqueda dinámica de pacientes en tiempo real con debounce
+    const queryCacheRef = useRef<Map<string, any[]>>(new Map())
+
+    // Búsqueda dinámica de pacientes ultra-optimizada con caché en memoria y debounce
     useEffect(() => {
         const query = pacienteSearch.trim()
         if (query.length < 2) {
@@ -167,50 +169,40 @@ export function NuevoTurnoModal({
             return
         }
 
-        let hasLocalMatches = false
+        const normalizedQuery = query.toLowerCase()
 
-        // 1. Filtrado local ultra-rápido en 0ms si tenemos la lista en memoria
-        if (pacientes && pacientes.length > 0) {
-            const normalizeStr = (str: string) => 
-                str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-            const normQuery = normalizeStr(query)
-            const tokens = normQuery.split(/\s+/).filter(Boolean)
-            const localMatches = pacientes.filter((p: any) => {
-                const nombre = normalizeStr(p.nombre || '')
-                const apellido = normalizeStr(p.apellido || '')
-                const dni = normalizeStr(p.dni || '')
-                const dniWithoutDots = dni.replace(/\./g, '')
-                const nroHistoria = normalizeStr(p.nro_historia_clinica || '')
-                const nroHistoriaWithoutDots = nroHistoria.replace(/\./g, '')
-                const fullText = `${apellido} ${nombre} ${apellido}, ${nombre} ${nombre} ${apellido} ${dni} ${dniWithoutDots} ${nroHistoria} ${nroHistoriaWithoutDots}`
-                return tokens.every(token => {
-                    const tokenWithoutDots = token.replace(/\./g, '')
-                    return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
-                })
+        // 1. Si ya se buscó este término antes, responder instantáneamente en 0ms
+        if (queryCacheRef.current.has(normalizedQuery)) {
+            setSearchedPacientes(queryCacheRef.current.get(normalizedQuery) || [])
+            setIsSearchingPacientes(false)
+            return
+        }
+
+        // 2. Si hay pacientes disponibles en memoria (pocos o recientes), verificar si hay match rápido
+        if (pacientes && pacientes.length > 0 && pacientes.length < 200) {
+            const matches = pacientes.filter((p: any) => {
+                const fullName = `${p.apellido || ''} ${p.nombre || ''} ${p.dni || ''}`.toLowerCase()
+                return fullName.includes(normalizedQuery)
             }).slice(0, 10)
 
-            if (localMatches.length > 0) {
-                hasLocalMatches = true
-                setSearchedPacientes(localMatches)
+            if (matches.length > 0) {
+                queryCacheRef.current.set(normalizedQuery, matches)
+                setSearchedPacientes(matches)
                 setIsSearchingPacientes(false)
+                return
             }
         }
 
-        // Si no hubo coincidencia local, activar indicador de búsqueda en base de datos
         let isMounted = true
-        if (!hasLocalMatches) {
-            setIsSearchingPacientes(true)
-        }
+        setIsSearchingPacientes(true)
 
         const timer = setTimeout(async () => {
             try {
-                const results = await searchPacientesAction(query, 12, true)
+                const results = await searchPacientesAction(query, 15, true)
                 if (isMounted) {
-                    if (results && results.length > 0) {
-                        setSearchedPacientes(results)
-                    } else if (!hasLocalMatches) {
-                        setSearchedPacientes([])
-                    }
+                    const finalResults = results || []
+                    queryCacheRef.current.set(normalizedQuery, finalResults)
+                    setSearchedPacientes(finalResults)
                 }
             } catch (err) {
                 console.error('Error buscando pacientes:', err)
@@ -219,7 +211,7 @@ export function NuevoTurnoModal({
                     setIsSearchingPacientes(false)
                 }
             }
-        }, hasLocalMatches ? 600 : 250)
+        }, 200)
 
         return () => {
             isMounted = false
