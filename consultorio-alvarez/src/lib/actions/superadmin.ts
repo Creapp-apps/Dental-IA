@@ -322,7 +322,7 @@ export async function extendTenantDueDate(tenantId: string, dias: number = 30) {
         updated_at: new Date().toISOString()
     }
 
-    await supabase
+    const { error: upsertErr } = await supabase
         .from('tenant_integrations')
         .upsert({
             tenant_id: tenantId,
@@ -330,6 +330,11 @@ export async function extendTenantDueDate(tenantId: string, dias: number = 30) {
             is_active: true,
             credentials: updatedCreds
         }, { onConflict: 'tenant_id,provider' })
+
+    if (upsertErr) {
+        console.error('Error al actualizar billing_settings:', upsertErr)
+        throw new Error(`Error en base de datos al extender fecha: ${upsertErr.message}`)
+    }
 
     await supabase
         .from('tenants')
@@ -435,7 +440,7 @@ export async function registrarCobroSaaS(
 
     const updatedPayments = [nuevoPagoItem, ...currentPayments]
 
-    await supabase
+    const { error: upsertErr } = await supabase
         .from('tenant_integrations')
         .upsert({
             tenant_id: tenantId,
@@ -443,6 +448,11 @@ export async function registrarCobroSaaS(
             is_active: true,
             credentials: { payments: updatedPayments }
         }, { onConflict: 'tenant_id,provider' })
+
+    if (upsertErr) {
+        console.error('Error al registrar cobro en tenant_integrations:', upsertErr)
+        throw new Error(`Error en base de datos al registrar pago: ${upsertErr.message}`)
+    }
 
     // 2. Si se solicitó renovar vencimiento, extender +30 días
     if (pago.renovarVencimiento) {
