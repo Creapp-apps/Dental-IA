@@ -15,8 +15,29 @@ export async function proxy(request: NextRequest) {
 
     // Extract and forward host for multi-tenant domain resolution
     const rawHost = request.headers.get('x-forwarded-host') || request.headers.get('host') || ''
+    const cleanHost = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '').trim()
     const requestHeaders = new Headers(request.headers)
     
+    // ── Enforce SaaS Domain for /superadmin ─────────────────────
+    // El ingreso y administración de superadmin vive EXCLUSIVAMENTE en el dominio raíz SaaS Dental-IA (dentalia.com.ar).
+    // Si se accede a /superadmin desde el dominio de una clínica (ej: dentalva.ar), redirigir de inmediato al dominio central.
+    if (pathname.startsWith('/superadmin')) {
+        const isSaaSDomain = 
+            cleanHost === 'dentalia.com.ar' || 
+            cleanHost === 'dental-ia.com' || 
+            cleanHost === 'localhost' || 
+            cleanHost === '127.0.0.1' || 
+            cleanHost.endsWith('.vercel.app')
+
+        if (!isSaaSDomain) {
+            const redirectUrl = new URL(request.url)
+            redirectUrl.host = 'dentalia.com.ar'
+            redirectUrl.protocol = 'https:'
+            redirectUrl.port = ''
+            return NextResponse.redirect(redirectUrl, 307)
+        }
+    }
+
     // Soporte para pruebas y entornos de desarrollo/staging sin dominio final:
     const explicitTenant = request.nextUrl.searchParams.get('slug') || request.nextUrl.searchParams.get('tenant')
     if (explicitTenant) {

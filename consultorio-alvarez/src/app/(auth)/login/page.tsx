@@ -50,9 +50,18 @@ export default async function LoginPage({
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user && tenant) {
-        const { data: usuario } = await supabase.from('usuarios').select('tenant_id').eq('id', user.id).single()
-        if (usuario && usuario.tenant_id !== tenant.id) {
-            await supabase.auth.signOut()
+        const userEmail = user.email || ''
+        const isSuperadmin = 
+            userEmail === 'creapp.ar@gmail.com' ||
+            userEmail === 'mazasebastian@hotmail.com' || 
+            userEmail.endsWith('@creapp.com') || 
+            userEmail.endsWith('@dental-ia.com')
+
+        if (!isSuperadmin) {
+            const { data: usuario } = await supabase.from('usuarios').select('tenant_id, rol').eq('id', user.id).single()
+            if (usuario && usuario.rol !== 'superadmin' && usuario.tenant_id !== tenant.id) {
+                await supabase.auth.signOut()
+            }
         }
     }
 

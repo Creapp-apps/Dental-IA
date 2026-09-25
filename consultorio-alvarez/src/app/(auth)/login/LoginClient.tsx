@@ -351,6 +351,18 @@ export default function LoginClient({
                 >
                     🔒 Acceso restringido — solo personal autorizado
                 </p>
+
+                {slug && (
+                    <div className="mt-4 text-center">
+                        <a 
+                            href="https://dentalia.com.ar/login"
+                            className="inline-flex items-center gap-1.5 text-xs text-white/50 hover:text-white transition-colors"
+                        >
+                            <span>¿Administrador global de la plataforma?</span>
+                            <span className="text-cyan-400 font-semibold underline underline-offset-2">Acceso Dental-IA →</span>
+                        </a>
+                    </div>
+                )}
             </div>
 
             {/* Decorative orbs in brand color */}
