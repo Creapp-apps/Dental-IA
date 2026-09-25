@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import Image from 'next/image'
 import { 
     Sun, 
     Coffee, 
@@ -32,6 +31,7 @@ export function LoginCinematicLoader({
     const { h, r, g, b } = hexToHsl(colorPrimary)
     const [stepIndex, setStepIndex] = useState(0)
     const [progress, setProgress] = useState(15)
+    const [imgError, setImgError] = useState(false)
 
     // Contexto de hora del día
     const currentHour = new Date().getHours()
@@ -169,11 +169,11 @@ export function LoginCinematicLoader({
 
                     {/* Logo con animación de respiración / pulso */}
                     <div className="flex justify-center mb-6">
-                        <div className="relative">
+                        <div className="relative flex items-center justify-center min-h-[72px]">
                             <motion.div
                                 animate={{
-                                    scale: [1, 1.06, 1],
-                                    opacity: [0.4, 0.7, 0.4]
+                                    scale: [1, 1.08, 1],
+                                    opacity: [0.35, 0.65, 0.35]
                                 }}
                                 transition={{
                                     duration: 3,
@@ -185,23 +185,21 @@ export function LoginCinematicLoader({
                                     background: `radial-gradient(circle, ${colorPrimary}99 0%, transparent 70%)`
                                 }}
                             />
-                            {logoUrl ? (
-                                <Image
+                            {logoUrl && !imgError ? (
+                                <img
                                     src={logoUrl}
-                                    alt="Logo"
-                                    width={72}
-                                    height={72}
-                                    className="relative object-contain drop-shadow-lg"
-                                    priority
+                                    alt={tenantNombre || "Logo"}
+                                    onError={() => setImgError(true)}
+                                    className="relative max-h-16 max-w-[220px] w-auto object-contain drop-shadow-xl"
                                 />
                             ) : isAlvarez ? (
-                                <Image
-                                    src="/logo.png"
+                                <img
+                                    src="/LOGO-ALVAREZ.png"
                                     alt="Consultorio Álvarez"
-                                    width={72}
-                                    height={72}
-                                    className="relative object-contain drop-shadow-lg"
-                                    priority
+                                    onError={(e) => {
+                                        e.currentTarget.src = "/LOGO-DENTAL.png"
+                                    }}
+                                    className="relative max-h-16 max-w-[220px] w-auto object-contain drop-shadow-xl"
                                 />
                             ) : (
                                 <div 
