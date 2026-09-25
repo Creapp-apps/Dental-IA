@@ -1,10 +1,24 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { esMensajeDeUrgencia, getTriageCategorias, enviarMenuTriageWhatsApp } from '@/lib/whatsapp-guardia'
+import { getTurnosDisponibles, crearReservaPublica } from '@/lib/actions/reservas'
 
 export interface WhatsAppCreds {
     phoneNumberId: string
     accessToken: string
 }
+
+interface EstadoReservaConversacional {
+    paso: 'PIDIENDO_NOMBRE' | 'PIDIENDO_DNI'
+    fecha: string
+    hora: string
+    fechaLegible: string
+    nombre?: string
+    apellido?: string
+    expiresAt: number
+}
+
+// Memoria de corto plazo para estados conversacionales (30 min TTL)
+const conversacionReservaMemory = new Map<string, EstadoReservaConversacional>()
 
 /**
  * Normaliza texto para análisis de intenciones (minúsculas, sin acentos ni signos raros).
@@ -23,12 +37,33 @@ export function normalizarTexto(txt: string): string {
  */
 export function extraerDni(texto: string): string | null {
     if (!texto) return null
-    // Quita puntos, espacios y guiones
     const soloNumeros = texto.replace(/\D/g, '')
     if (soloNumeros.length >= 7 && soloNumeros.length <= 8) {
         return soloNumeros
     }
     return null
+}
+
+/**
+ * Limpia y formatea un nombre ingresado por el usuario.
+ */
+function limpiarNombreYApellido(input: string): { nombre: string; apellido: string } {
+    let limpio = input.trim()
+    // Remover frases comunes introductorias
+    limpio = limpio.replace(/^(soy|me llamo|mi nombre es|hola soy|hola me llamo)\s+/i, '').trim()
+
+    const partes = limpio.split(/\s+/).filter(Boolean)
+    if (partes.length === 0) {
+        return { nombre: 'Paciente', apellido: 'Consulta' }
+    }
+    if (partes.length === 1) {
+        const n = partes[0].charAt(0).toUpperCase() + partes[0].slice(1).toLowerCase()
+        return { nombre: n, apellido: 'Paciente' }
+    }
+
+    const nombre = partes[0].charAt(0).toUpperCase() + partes[0].slice(1).toLowerCase()
+    const apellido = partes.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(' ')
+    return { nombre, apellido }
 }
 
 /**
@@ -95,7 +130,7 @@ export async function enviarBotonesWhatsApp(
                             type: 'reply',
                             reply: {
                                 id: b.id,
-                                title: b.title.slice(0, 20) // WhatsApp limita a 20 chars
+                                title: b.title.slice(0, 20)
                             }
                         }))
                     }
@@ -112,6 +147,91 @@ export async function enviarBotonesWhatsApp(
         console.error('[WA AUTO-FLOW] Excepción enviando botones interactivos:', err)
         return false
     }
+}
+
+/**
+ * Busca los próximos 3 slots disponibles en la agenda y genera botones interactivos optimizados.
+ */
+export async function obtenerProximosTresSlots(tenantSlug: string): Promise<Array<{
+    fecha: string
+    hora: string
+    fechaLegible: string
+    btnTitulo: string
+    payload: string
+}>> {
+    const disponibilidad = await getTurnosDisponibles(tenantSlug)
+    if (!disponibilidad || disponibilidad.length === 0) return []
+
+    const diasAbrev = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
+    const mesesAbrev = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+
+    const nowStr = new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
+    const todayDate = nowStr.split(' ')[0]
+
+    const tomorrow = new Date()
+    tomorrow.setDate(tomorrow.getDate() + 1)
+    const tomorrowStr = tomorrow.toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).split(' ')[0]
+
+    const slotsResult: Array<{
+        fecha: string
+        hora: string
+        fechaLegible: string
+        btnTitulo: string
+        payload: string
+    }> = []
+
+    for (const d of disponibilidad) {
+        if (!d.slots || d.slots.length === 0) continue
+
+        const [y, m, diaNum] = d.date.split('-').map(Number)
+        const dateObj = new Date(y, m - 1, diaNum)
+        const diaSemana = diasAbrev[dateObj.getDay()]
+        const mesNombre = mesesAbrev[m - 1]
+
+        let prefijoDia = `${diaSemana} ${diaNum}/${m}`
+        if (d.date === todayDate) prefijoDia = 'Hoy'
+        else if (d.date === tomorrowStr) prefijoDia = 'Mañ.'
+
+        for (const slot of d.slots) {
+            if (slotsResult.length >= 3) break
+
+            const horaCorta = slot.slice(0, 5)
+            // Botón de WhatsApp máx 20 caracteres: ej "Mañ. 15:40 hs" o "Vie 26/09 11:00 hs"
+            const btnTitulo = `${prefijoDia} ${horaCorta} hs`.slice(0, 20)
+            const fechaLegible = `${diaSemana} ${diaNum} de ${mesNombre} a las ${horaCorta} hs`
+
+            slotsResult.push({
+                fecha: d.date,
+                hora: horaCorta,
+                fechaLegible,
+                btnTitulo,
+                payload: `SLOT_RES_${d.date}_${horaCorta}`
+            })
+        }
+
+        if (slotsResult.length >= 3) break
+    }
+
+    return slotsResult
+}
+
+/**
+ * Busca si ya existe un paciente registrado con este teléfono para facilitarle la reserva en 1 solo clic.
+ */
+export async function buscarPacientePorTelefono(tenantId: string, phone: string) {
+    const admin = createAdminClient()
+    const cleanPhone = phone.replace(/\D/g, '')
+
+    const { data: pacientes } = await admin
+        .from('pacientes')
+        .select('id, nombre, apellido, dni, telefono')
+        .eq('tenant_id', tenantId)
+
+    const match = (pacientes || []).find(p => 
+        p.telefono && cleanPhone.includes(p.telefono.replace(/\D/g, '').slice(-8))
+    )
+
+    return match || null
 }
 
 /**
@@ -139,7 +259,6 @@ export async function buscarProximoTurnoPaciente(tenantId: string, phone: string
         .limit(1)
 
     if (dni) {
-        // Buscar primero el id del paciente con ese DNI
         const { data: pct } = await admin
             .from('pacientes')
             .select('id')
@@ -151,7 +270,6 @@ export async function buscarProximoTurnoPaciente(tenantId: string, phone: string
         const { data: turno } = await query.eq('paciente_id', pct.id).maybeSingle()
         return turno
     } else {
-        // Buscar por teléfono en pacientes
         const cleanPhone = phone.replace(/\D/g, '')
         const { data: pacientes } = await admin
             .from('pacientes')
@@ -182,14 +300,14 @@ export async function enviarMenuPrincipalAutonomo(
         `Elegí una opción rápida o escribinos tu consulta:`
 
     return enviarBotonesWhatsApp(creds, toPhone, cuerpo, [
-        { id: 'MENU_TURNOS', title: '📅 Turnos / Consultas' },
+        { id: 'MENU_TURNOS', title: '📅 Sacar / Ver Turno' },
         { id: 'ACTIVAR_GUARDIA_URGENCIA', title: '🚨 Urgencia / Dolor' },
         { id: 'MENU_INFO_GENERAL', title: 'ℹ️ Dirección y Precios' }
     ])
 }
 
 /**
- * Cerebro conversacional autónomo: resuelve consultas sin derivar a recepcionista a menos que sea crítico.
+ * Cerebro conversacional autónomo: resuelve consultas y reservas de turnos 100% por chat sin derivar.
  */
 export async function procesarMensajeAutonomo({
     tenantId,
@@ -211,7 +329,7 @@ export async function procesarMensajeAutonomo({
     const normText = normalizarTexto(textBody)
     const dniDetectado = extraerDni(textBody)
 
-    // Traer datos del consultorio para las respuestas de FAQ
+    // Traer datos del consultorio para las respuestas de FAQ y reservas
     const { data: tenant } = await admin
         .from('tenants')
         .select('id, slug, nombre, direccion, ciudad, telefono, custom_domain')
@@ -229,7 +347,219 @@ export async function procesarMensajeAutonomo({
     const reservaUrl = `${baseUrl}/reservar?slug=${tenant?.slug || 'alvarez'}`
 
     // ─────────────────────────────────────────────────────────────
-    // 1. GESTIÓN DE DNI DETECTADO (Búsqueda autónoma de turno)
+    // ESTADO CONVERSACIONAL EN CURSO (Máquina de estados de reserva)
+    // ─────────────────────────────────────────────────────────────
+    const estadoEnMemoria = conversacionReservaMemory.get(cleanPhone)
+    const estadoActivo = (estadoEnMemoria && estadoEnMemoria.expiresAt > Date.now()) 
+        ? estadoEnMemoria 
+        : null
+
+    // ── PASO 2: Paciente respondió su DNI (Confirmación final del turno) ──
+    if (estadoActivo && estadoActivo.paso === 'PIDIENDO_DNI') {
+        if (!dniDetectado) {
+            await enviarTextoWhatsApp(
+                creds,
+                cleanPhone,
+                `✍️ Por favor escribí solo los números de tu DNI (por ejemplo: *14234567*) para poder registrar tu turno en la agenda médica:`
+            )
+            return { handled: true, action: 'reintentar_dni' }
+        }
+
+        console.log(`[WA AUTO-FLOW] Confirmando reserva para ${estadoActivo.nombre} ${estadoActivo.apellido}, DNI: ${dniDetectado}`)
+        
+        // Llamar a crearReservaPublica
+        const resultado = await crearReservaPublica({
+            tenantSlug: tenant?.slug || 'alvarez',
+            fecha: estadoActivo.fecha,
+            hora: estadoActivo.hora,
+            profesionalId: null, // Asignación automática inteligente
+            nombre: estadoActivo.nombre || 'Paciente',
+            apellido: estadoActivo.apellido || 'Reserva',
+            dni: dniDetectado,
+            telefono: cleanPhone,
+            es_nuevo: 'si'
+        })
+
+        conversacionReservaMemory.delete(cleanPhone)
+
+        if ((resultado as any)?.error) {
+            console.warn('[WA AUTO-FLOW] Conflicto o error al confirmar turno:', (resultado as any).error)
+            const msgError = `⚠️ El horario de las ${estadoActivo.hora} hs acaba de ser ocupado. No te preocupes, ¿te gustaría consultar los siguientes lugares disponibles?`
+            await enviarBotonesWhatsApp(creds, cleanPhone, msgError, [
+                { id: 'MENU_TURNOS', title: '📅 Ver otros turnos' },
+                { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
+            ])
+            return { handled: true, action: 'conflicto_reserva' }
+        }
+
+        const msgExito = `✅ *¡Tu Turno quedó CONFIRMADO con éxito!* 🦷✨\n\n` +
+            `👤 Paciente: *${estadoActivo.nombre} ${estadoActivo.apellido}* (DNI ${dniDetectado})\n` +
+            `📅 Fecha: *${estadoActivo.fechaLegible}*\n` +
+            `📍 Lugar: *${direccionClinica}*\n\n` +
+            `🔔 Te enviaremos un recordatorio por este mismo chat el día anterior.\n` +
+            `¡Te esperamos con gusto!`
+
+        await enviarBotonesWhatsApp(creds, cleanPhone, msgExito, [
+            { id: 'MENU_INFO_GENERAL', title: '📍 Cómo llegar' },
+            { id: 'MENU_PRINCIPAL', title: '👍 ¡Muchas gracias!' }
+        ])
+        return { handled: true, action: 'turno_creado_con_exito' }
+    }
+
+    // ── PASO 1: Paciente respondió su Nombre y Apellido ──
+    if (estadoActivo && estadoActivo.paso === 'PIDIENDO_NOMBRE') {
+        const { nombre, apellido } = limpiarNombreYApellido(textBody)
+        console.log(`[WA AUTO-FLOW] Nombre recibido: ${nombre} ${apellido}`)
+
+        // Actualizar estado a PIDIENDO_DNI
+        conversacionReservaMemory.set(cleanPhone, {
+            ...estadoActivo,
+            paso: 'PIDIENDO_DNI',
+            nombre,
+            apellido,
+            expiresAt: Date.now() + 30 * 60 * 1000
+        })
+
+        const msgPideDni = `🪪 ¡Muchas gracias, *${nombre}*!\n\n` +
+            `Por último, por favor escribí tu número de **DNI** (sin puntos ni letras) para generar tu ficha médica:`
+
+        await enviarTextoWhatsApp(creds, cleanPhone, msgPideDni)
+        return { handled: true, action: 'nombre_recibido_pidiendo_dni' }
+    }
+
+    // ── CLIC EN BOTÓN DE SLOT DE RESERVA: SLOT_RES_YYYY-MM-DD_HH:MM ──
+    if (buttonPayload?.startsWith('SLOT_RES_')) {
+        const parts = buttonPayload.replace('SLOT_RES_', '').split('_')
+        const fecha = parts[0]
+        const hora = parts[1]
+
+        const [y, m, diaNum] = fecha.split('-').map(Number)
+        const dateObj = new Date(y, m - 1, diaNum)
+        const diasAbrev = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+        const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+        const fechaLegible = `${diasAbrev[dateObj.getDay()]} ${diaNum} de ${meses[m - 1]} a las ${hora} hs`
+
+        // Verificar si el teléfono ya pertenece a un paciente registrado
+        const pacienteExistente = await buscarPacientePorTelefono(tenantId, cleanPhone)
+
+        if (pacienteExistente && pacienteExistente.dni) {
+            // Ofrecer confirmación directa en 1 clic
+            conversacionReservaMemory.set(cleanPhone, {
+                paso: 'PIDIENDO_NOMBRE', // Por si decide ingresar otro
+                fecha,
+                hora,
+                fechaLegible,
+                nombre: pacienteExistente.nombre,
+                apellido: pacienteExistente.apellido,
+                expiresAt: Date.now() + 30 * 60 * 1000
+            })
+
+            const msgAutoPct = `📋 *Reserva de Turno*\n\n` +
+                `Elegiste el turno para el:\n📅 *${fechaLegible}*\n\n` +
+                `Detectamos que ya sos paciente de la clínica:\n` +
+                `👤 *${pacienteExistente.nombre} ${pacienteExistente.apellido}* (DNI ${pacienteExistente.dni})\n\n` +
+                `¿Deseás confirmar el turno a tu nombre o es para otra persona?`
+
+            await enviarBotonesWhatsApp(creds, cleanPhone, msgAutoPct, [
+                { id: `CONFIRMAR_AUTO_${fecha}_${hora}_${pacienteExistente.dni}`, title: '✅ A mi nombre' },
+                { id: `RESERVA_OTRA_PERSONA_${fecha}_${hora}`, title: '👤 Para otra persona' },
+                { id: 'MENU_PRINCIPAL', title: '⬅️ Volver' }
+            ])
+            return { handled: true, action: 'ofrecida_confirmacion_auto_pct' }
+        }
+
+        // Si es un paciente nuevo o no registrado: Pedir Nombre
+        conversacionReservaMemory.set(cleanPhone, {
+            paso: 'PIDIENDO_NOMBRE',
+            fecha,
+            hora,
+            fechaLegible,
+            expiresAt: Date.now() + 30 * 60 * 1000
+        })
+
+        const msgPideNombre = `✍️ *¡Excelente elección!*\n\n` +
+            `Reservamos para el:\n📅 *${fechaLegible}*\n\n` +
+            `Para anotarte en la agenda del consultorio, por favor **escribí tu Nombre y Apellido**:`
+
+        await enviarTextoWhatsApp(creds, cleanPhone, msgPideNombre)
+        return { handled: true, action: 'slot_elegido_pidiendo_nombre' }
+    }
+
+    // ── CONFIRMACIÓN AUTOMÁTICA EN 1 CLIC PARA PACIENTE EXISTENTE ──
+    if (buttonPayload?.startsWith('CONFIRMAR_AUTO_')) {
+        const parts = buttonPayload.replace('CONFIRMAR_AUTO_', '').split('_')
+        const fecha = parts[0]
+        const hora = parts[1]
+        const dni = parts[2]
+
+        const pacienteExistente = await buscarPacientePorTelefono(tenantId, cleanPhone)
+        const nombre = pacienteExistente?.nombre || 'Paciente'
+        const apellido = pacienteExistente?.apellido || ''
+
+        const [y, m, diaNum] = fecha.split('-').map(Number)
+        const dateObj = new Date(y, m - 1, diaNum)
+        const diasAbrev = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+        const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+        const fechaLegible = `${diasAbrev[dateObj.getDay()]} ${diaNum} de ${meses[m - 1]} a las ${hora} hs`
+
+        const resultado = await crearReservaPublica({
+            tenantSlug: tenant?.slug || 'alvarez',
+            fecha,
+            hora,
+            profesionalId: null,
+            nombre,
+            apellido,
+            dni,
+            telefono: cleanPhone,
+            es_nuevo: 'no'
+        })
+
+        conversacionReservaMemory.delete(cleanPhone)
+
+        const msgExito = `✅ *¡Tu Turno quedó CONFIRMADO con éxito!* 🦷✨\n\n` +
+            `👤 Paciente: *${nombre} ${apellido}* (DNI ${dni})\n` +
+            `📅 Fecha: *${fechaLegible}*\n` +
+            `📍 Lugar: *${direccionClinica}*\n\n` +
+            `🔔 Te enviaremos un recordatorio por este mismo chat el día anterior.\n` +
+            `¡Te esperamos!`
+
+        await enviarBotonesWhatsApp(creds, cleanPhone, msgExito, [
+            { id: 'MENU_INFO_GENERAL', title: '📍 Cómo llegar' },
+            { id: 'MENU_PRINCIPAL', title: '👍 ¡Muchas gracias!' }
+        ])
+        return { handled: true, action: 'reserva_auto_confirmada_1click' }
+    }
+
+    // ── RESERVA PARA OTRA PERSONA (FAMILIAR) ──
+    if (buttonPayload?.startsWith('RESERVA_OTRA_PERSONA_')) {
+        const parts = buttonPayload.replace('RESERVA_OTRA_PERSONA_', '').split('_')
+        const fecha = parts[0]
+        const hora = parts[1]
+
+        const [y, m, diaNum] = fecha.split('-').map(Number)
+        const dateObj = new Date(y, m - 1, diaNum)
+        const diasAbrev = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+        const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
+        const fechaLegible = `${diasAbrev[dateObj.getDay()]} ${diaNum} de ${meses[m - 1]} a las ${hora} hs`
+
+        conversacionReservaMemory.set(cleanPhone, {
+            paso: 'PIDIENDO_NOMBRE',
+            fecha,
+            hora,
+            fechaLegible,
+            expiresAt: Date.now() + 30 * 60 * 1000
+        })
+
+        await enviarTextoWhatsApp(
+            creds,
+            cleanPhone,
+            `✍️ Perfecto. Por favor escribí el **Nombre y Apellido del paciente** que va a asistir a la consulta:`
+        )
+        return { handled: true, action: 'pidiendo_nombre_familiar' }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 1. DNI DETECTADO (Localizador de Turnos existente)
     // ─────────────────────────────────────────────────────────────
     if (dniDetectado) {
         console.log(`[WA AUTO-FLOW] DNI detectado: ${dniDetectado}. Buscando turno...`)
@@ -260,24 +590,22 @@ export async function procesarMensajeAutonomo({
                 `👨‍⚕️ Profesional: *Dr/a. ${prof?.apellido || 'Asignado'}*\n` +
                 `🦷 Motivo: *${trat?.nombre || 'Consulta odontológica'}*\n` +
                 `📍 Dirección: *${direccionClinica}*\n\n` +
-                `Estado actual: *${turno.estado}*\n` +
                 `¿Deseás confirmar tu asistencia o reprogramar?`
 
             await enviarBotonesWhatsApp(creds, cleanPhone, mensajeTurno, [
-                { id: `CONFIRMAR_TURNO_${turno.id}`, title: '✅ Confirmar Turno' },
+                { id: `CONFIRMAR_TURNO_${turno.id}`, title: '✅ Confirmar' },
                 { id: `REPROGRAMAR_TURNO_${turno.id}`, title: '🔄 Reprogramar' },
                 { id: `CANCELAR_TURNO_${turno.id}`, title: '❌ Cancelar' }
             ])
             return { handled: true, action: 'turno_dni_encontrado' }
         } else {
-            // El DNI es válido pero no tiene turno activo futuro
+            // El DNI es válido pero no tiene turno activo futuro: ofrecer sacar turno inmediatamente
             const msgNoTurno = `🔎 *Información de Turnos*\n\n` +
-                `No encontramos turnos futuros activos asociados al DNI *${dniDetectado}*.\n\n` +
-                `¿Querés reservar un nuevo turno ahora? Podés hacerlo de forma inmediata desde nuestro portal online:\n` +
-                `👉 ${reservaUrl}`
+                `No encontramos turnos pendientes para el DNI *${dniDetectado}*.\n\n` +
+                `¿Deseás agendar una consulta ahora directamente por acá?`
 
             await enviarBotonesWhatsApp(creds, cleanPhone, msgNoTurno, [
-                { id: 'SACAR_TURNO_NUEVO', title: '📅 Reservar Turno' },
+                { id: 'MENU_TURNOS', title: '📅 Sacar Turno Aquí' },
                 { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
             ])
             return { handled: true, action: 'dni_sin_turno' }
@@ -285,7 +613,61 @@ export async function procesarMensajeAutonomo({
     }
 
     // ─────────────────────────────────────────────────────────────
-    // 2. INTENCIÓN: CONSULTAR "¿CUÁNDO ES MI TURNO?" O "¿A QUÉ HORA?"
+    // 2. RADAR AMPLIO: SACAR TURNO / DISPONIBILIDAD CONVERSACIONAL
+    // ─────────────────────────────────────────────────────────────
+    const pideTurno = 
+        normText.includes('sacar turno') ||
+        normText.includes('pedir turno') ||
+        normText.includes('quiero turno') ||
+        normText.includes('nuevo turno') ||
+        normText.includes('agendar') ||
+        normText.includes('consulta') ||
+        normText.includes('turno') ||
+        normText.includes('lugar') ||
+        normText.includes('atenderme') ||
+        normText.includes('hacerme ver') ||
+        normText.includes('horario disponible') ||
+        buttonPayload === 'SACAR_TURNO_NUEVO' ||
+        buttonPayload === 'MENU_TURNOS'
+
+    if (pideTurno) {
+        console.log(`[WA AUTO-FLOW] Petición de turno conversacional por ${cleanPhone}...`)
+        
+        // Obtener los 3 primeros slots reales sin superposición
+        const slotsCandidatos = await obtenerProximosTresSlots(tenant?.slug || 'alvarez')
+
+        if (slotsCandidatos.length > 0) {
+            const listaTxt = slotsCandidatos.map((s, idx) => `${idx + 1}️⃣ *${s.fechaLegible}*`).join('\n')
+            
+            const textoPropuesta = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+                `Para que elijas el que más cómodo te quede, estos son los primeros horarios disponibles más cercanos:\n\n` +
+                `${listaTxt}\n\n` +
+                `👇 *Tocá el botón del horario que prefieras:*`
+
+            const botonesSlots = slotsCandidatos.map(s => ({
+                id: s.payload,
+                title: s.btnTitulo
+            }))
+
+            await enviarBotonesWhatsApp(creds, cleanPhone, textoPropuesta, botonesSlots)
+            return { handled: true, action: 'ofrecidos_slots_conversacionales' }
+        } else {
+            // Fallback si no hay slots en los próximos días
+            const msgSinSlots = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+                `En este momento los primeros días están completos. Podés ver las semanas siguientes en nuestro portal digital:\n` +
+                `👉 ${reservaUrl}\n\n` +
+                `O si tenés dolor, podés activar la guardia de urgencia:`
+
+            await enviarBotonesWhatsApp(creds, cleanPhone, msgSinSlots, [
+                { id: 'ACTIVAR_GUARDIA_URGENCIA', title: '🚨 Tengo Urgencia' },
+                { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
+            ])
+            return { handled: true, action: 'sin_slots_link_portal' }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 3. INTENCIÓN: CONSULTAR "¿CUÁNDO ES MI TURNO?" O "¿A QUÉ HORA?"
     // ─────────────────────────────────────────────────────────────
     const pideConsultarTurno = 
         normText.includes('a que hora') ||
@@ -297,7 +679,6 @@ export async function procesarMensajeAutonomo({
 
     if (pideConsultarTurno) {
         console.log(`[WA AUTO-FLOW] Consulta de horario de turno por ${cleanPhone}...`)
-        // Primero intentamos buscarlo automáticamente por su número de WhatsApp
         const turnoPorTelefono = await buscarProximoTurnoPaciente(tenantId, cleanPhone, null)
 
         if (turnoPorTelefono) {
@@ -322,9 +703,8 @@ export async function procesarMensajeAutonomo({
                 `Hola *${pct?.nombre}*! Tu turno está registrado para el:\n` +
                 `🗓️ *${fechaStr} a las ${horaStr} hs*\n` +
                 `👨‍⚕️ Con: *Dr/a. ${prof?.apellido || 'Asignado'}*\n` +
-                `🦷 Especialidad: *${trat?.nombre || 'Consulta'}*\n` +
-                `📍 Lugar: *${direccionClinica}*\n\n` +
-                `Por favor concurrí 5 minutos antes con tu DNI.`
+                `🦷 Motivo: *${trat?.nombre || 'Consulta'}*\n` +
+                `📍 Lugar: *${direccionClinica}*`
 
             await enviarBotonesWhatsApp(creds, cleanPhone, mensaje, [
                 { id: `CONFIRMAR_TURNO_${turnoPorTelefono.id}`, title: '✅ Confirmar' },
@@ -334,42 +714,12 @@ export async function procesarMensajeAutonomo({
             return { handled: true, action: 'turno_consultado_por_telefono' }
         }
 
-        // Si no lo encontramos por teléfono (escribe familiar o número distinto):
         const pedirDniMsg = `📋 *Localizador de Turnos*\n\n` +
-            `Para ubicar tu turno en la agenda al instante, por favor **escribí tu número de DNI** (o el del paciente si estás consultando por un familiar) sin puntos ni letras.\n\n` +
+            `Para ubicar tu turno en la agenda al instante, por favor **escribí tu número de DNI** (sin puntos ni letras).\n\n` +
             `_Ejemplo: 38452109_`
 
         await enviarTextoWhatsApp(creds, cleanPhone, pedirDniMsg)
         return { handled: true, action: 'solicito_dni_localizador' }
-    }
-
-    // ─────────────────────────────────────────────────────────────
-    // 3. INTENCIÓN: SACAR TURNO NUEVO
-    // ─────────────────────────────────────────────────────────────
-    const pideTurnoNuevo = 
-        normText.includes('sacar turno') ||
-        normText.includes('pedir turno') ||
-        normText.includes('nuevo turno') ||
-        normText.includes('quiero un turno') ||
-        normText.includes('solicitar turno') ||
-        normText.includes('turno para') ||
-        buttonPayload === 'SACAR_TURNO_NUEVO' ||
-        buttonPayload === 'MENU_TURNOS'
-
-    if (pideTurnoNuevo) {
-        console.log(`[WA AUTO-FLOW] Petición de turno nuevo por ${cleanPhone}...`)
-        const textoTurno = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
-            `Podés elegir el día, horario y profesional que más te convenga en tiempo real desde nuestro portal digital:\n\n` +
-            `👉 *Reservá tu turno aquí:* ${reservaUrl}\n\n` +
-            `✨ Es rápido, elegís el horario exacto y te llega la confirmación automática por WhatsApp.\n\n` +
-            `¿O preferís consultar por una urgencia con dolor?`
-
-        await enviarBotonesWhatsApp(creds, cleanPhone, textoTurno, [
-            { id: 'CONSULTAR_MI_TURNO', title: '🔎 Ya tengo turno' },
-            { id: 'ACTIVAR_GUARDIA_URGENCIA', title: '🚨 Tengo Urgencia' },
-            { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-        ])
-        return { handled: true, action: 'enviado_link_reserva' }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -385,16 +735,14 @@ export async function procesarMensajeAutonomo({
         buttonPayload === 'FAQ_UBICACION'
 
     if (pideUbicacion) {
-        console.log(`[WA AUTO-FLOW] Consulta de ubicación por ${cleanPhone}...`)
         const msgDireccion = `📍 *Ubicación de ${nombreClinica}*\n\n` +
             `Estamos en: *${direccionClinica}*.\n\n` +
             `🕐 *Horarios de atención:*\n` +
             `Lunes a Viernes de 09:00 a 20:00 hs.\n` +
-            `Sábados de 09:00 a 13:00 hs.\n\n` +
-            `¿En qué más podemos ayudarte?`
+            `Sábados de 09:00 a 13:00 hs.`
 
         await enviarBotonesWhatsApp(creds, cleanPhone, msgDireccion, [
-            { id: 'SACAR_TURNO_NUEVO', title: '📅 Sacar Turno' },
+            { id: 'MENU_TURNOS', title: '📅 Sacar Turno' },
             { id: 'FAQ_PREPAGAS', title: '🩺 Obras Sociales' },
             { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
         ])
@@ -417,8 +765,6 @@ export async function procesarMensajeAutonomo({
         buttonPayload === 'FAQ_PREPAGAS'
 
     if (pidePrepagas) {
-        console.log(`[WA AUTO-FLOW] Consulta de obras sociales por ${cleanPhone}...`)
-        // Consultar obras sociales activas en la BD del tenant
         const { data: obras } = await admin
             .from('obras_sociales')
             .select('nombre')
@@ -430,10 +776,10 @@ export async function procesarMensajeAutonomo({
             (listaObras.length > 0 
                 ? `Trabajamos con las siguientes prepagas y convenios:\n${listaObras}\n\n` 
                 : `Trabajamos con principales prepagas por reintegro y atención particular.\n\n`) +
-            `💳 También atendemos de forma particular y emitimos factura oficial para reintegro con tu cobertura.`
+            `💳 También atendemos de forma particular y emitimos factura oficial para reintegro.`
 
         await enviarBotonesWhatsApp(creds, cleanPhone, msgObras, [
-            { id: 'SACAR_TURNO_NUEVO', title: '📅 Sacar Turno' },
+            { id: 'MENU_TURNOS', title: '📅 Sacar Turno' },
             { id: 'FAQ_PRECIOS', title: '💳 Medios de Pago' },
             { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
         ])
@@ -458,15 +804,13 @@ export async function procesarMensajeAutonomo({
         buttonPayload === 'MENU_INFO_GENERAL'
 
     if (pidePrecios) {
-        console.log(`[WA AUTO-FLOW] Consulta de precios/pagos por ${cleanPhone}...`)
         const msgPrecios = `💳 *Aranceles y Medios de Pago — ${nombreClinica}*\n\n` +
-            `• *Medios de pago aceptados:* Efectivo, Transferencia bancaria, Tarjetas de Débito y Crédito (consultá planes en cuotas).\n\n` +
+            `• *Medios de pago:* Efectivo, Transferencia bancaria, Tarjetas de Débito y Crédito en cuotas.\n\n` +
             `🔍 *Presupuestos y Diagnósticos:*\n` +
-            `Para tratamientos como ortodoncia, implantes, prótesis o extracciones, se realiza una primera consulta diagnóstica para evaluar radiografías y darte un presupuesto exacto y a medida.\n\n` +
-            `¿Deseás agendar una consulta de valoración inicial?`
+            `Para tratamientos como ortodoncia, prótesis o implantes, se realiza una primera consulta diagnóstica para evaluar tu caso puntual y darte un presupuesto a medida.`
 
         await enviarBotonesWhatsApp(creds, cleanPhone, msgPrecios, [
-            { id: 'SACAR_TURNO_NUEVO', title: '📅 Agendar Consulta' },
+            { id: 'MENU_TURNOS', title: '📅 Agendar Consulta' },
             { id: 'FAQ_UBICACION', title: '📍 Dónde estamos' },
             { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
         ])
@@ -504,7 +848,6 @@ export async function procesarMensajeAutonomo({
             leida: false
         })
 
-        // Push a administradores
         try {
             const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
             await sendPushToRole('admin', tenantId, '🚨 Reclamo Prioritario WhatsApp', `Reclamo de +${cleanPhone}. Revisar mensajes urgente.`, '/mensajes')
