@@ -147,28 +147,25 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
 
     const { data: turnosOcupados } = await supabase
         .from('turnos')
-        .select('fecha_inicio, profesional_id')
+        .select('fecha_inicio, fecha_fin, profesional_id')
         .eq('tenant_id', tenant.id)
-        .gte('fecha_inicio', startOfTodayArgentina.toISOString())
+        .gte('fecha_fin', startOfTodayArgentina.toISOString())
         .lte('fecha_inicio', endDate.toISOString())
         .in('estado', ['CONFIRMADO', 'PENDIENTE', 'EN_SALA'])
 
-    // Count how many bookings exist per local time slot
-    // DB stores UTC — Argentina is UTC-3
-    const slotBookedProfs = new Map<string, Set<string>>()
-    for (const t of turnosOcupados ?? []) {
-        const utcDate = new Date(t.fecha_inicio)
-        const localStr = utcDate.toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' })
-        const [datePart, timePart] = localStr.split(' ')
-        const slotKey = `${datePart}|${timePart.slice(0, 5)}`
-        
-        if (!slotBookedProfs.has(slotKey)) {
-            slotBookedProfs.set(slotKey, new Set())
+    // Convertir turnos existentes a rangos de milisegundos para comprobación de solapamiento (overlap)
+    const turnosRangos = (turnosOcupados ?? []).map(t => {
+        const startMs = new Date(t.fecha_inicio).getTime()
+        let endMs = t.fecha_fin ? new Date(t.fecha_fin).getTime() : startMs + 20 * 60 * 1000
+        if (endMs <= startMs) {
+            endMs = startMs + 20 * 60 * 1000
         }
-        if (t.profesional_id) {
-            slotBookedProfs.get(slotKey)!.add(t.profesional_id)
+        return {
+            profesional_id: t.profesional_id,
+            startMs,
+            endMs
         }
-    }
+    })
 
     function generarSlotsParaDia(horario: any): string[] {
         if (!horario || !horario.activo) return [];
@@ -282,9 +279,18 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
 
             const profSlots = generarSlotsParaDia(h)
             for (const slot of profSlots) {
-                const key = `${dateStr}|${slot}`
-                const booked = slotBookedProfs.get(key)
-                if (!booked || !booked.has(prof.id)) {
+                const slotStartMs = new Date(`${dateStr}T${slot}:00-03:00`).getTime()
+                const slotEndMs = slotStartMs + 20 * 60 * 1000
+
+                // Un slot colisiona si un turno existente se solapa con el intervalo del slot:
+                // (t.startMs < slotEndMs && t.endMs > slotStartMs)
+                const estaOcupado = turnosRangos.some(t =>
+                    t.profesional_id === prof.id &&
+                    t.startMs < slotEndMs &&
+                    t.endMs > slotStartMs
+                )
+
+                if (!estaOcupado) {
                     availableSlotsSet.add(slot)
                 }
             }
@@ -400,15 +406,31 @@ export async function crearReservaPublica(data: {
 
     if (!profs || profs.length === 0) return { error: 'No hay profesionales disponibles' }
 
-    // Find existing bookings at this exact datetime
-    const { data: ocupados } = await supabase
-        .from('turnos')
-        .select('profesional_id')
-        .eq('tenant_id', tenant.id)
-        .eq('fecha_inicio', fechaInicio.toISOString())
-        .in('estado', ['CONFIRMADO', 'PENDIENTE', 'EN_SALA'])
+    // Buscar turnos del día que se solapen con el intervalo [fechaInicio, fechaFin)
+    const localStartMs = fechaInicio.getTime()
+    const localEndMs = fechaFin.getTime()
+    const dayStartIso = new Date(`${data.fecha}T00:00:00-03:00`).toISOString()
+    const dayEndIso = new Date(`${data.fecha}T23:59:59-03:00`).toISOString()
 
-    const ocupadosSet = new Set((ocupados ?? []).map(o => o.profesional_id))
+    const { data: turnosDelDia } = await supabase
+        .from('turnos')
+        .select('profesional_id, fecha_inicio, fecha_fin')
+        .eq('tenant_id', tenant.id)
+        .in('estado', ['CONFIRMADO', 'PENDIENTE', 'EN_SALA'])
+        .gte('fecha_fin', dayStartIso)
+        .lte('fecha_inicio', dayEndIso)
+
+    const ocupadosSet = new Set<string>()
+    for (const t of turnosDelDia ?? []) {
+        const tStart = new Date(t.fecha_inicio).getTime()
+        let tEnd = t.fecha_fin ? new Date(t.fecha_fin).getTime() : tStart + 20 * 60 * 1000
+        if (tEnd <= tStart) tEnd = tStart + 20 * 60 * 1000
+
+        // Regla matemática de solapamiento: (tStart < localEndMs && tEnd > localStartMs)
+        if (tStart < localEndMs && tEnd > localStartMs && t.profesional_id) {
+            ocupadosSet.add(t.profesional_id)
+        }
+    }
 
     // Determine profesional
     let profesionalId = data.profesionalId

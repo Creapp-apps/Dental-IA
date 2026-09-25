@@ -14,6 +14,7 @@ import {
     enviarMenuTriageWhatsApp, 
     enviarTipsYPropuestaTurno 
 } from '@/lib/whatsapp-guardia'
+import { procesarMensajeAutonomo, enviarMenuPrincipalAutonomo } from '@/lib/whatsapp-auto-flow'
 
 
 // GET: Webhook Verification (Meta Verification Challenge)
@@ -674,12 +675,25 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            // 8. Para mensajes generales, saludos o consultas libres: Enviar Menú Principal con botones Quick Reply
+            // 8. Procesamiento conversacional autónomo (DNI, Turnos, FAQs de Ubicación/Precios/Obras Sociales, Menús)
             if (waCreds) {
-                console.log(`[WA WEBHOOK] Enviando Menú Principal interactivo con botones a ${from}...`)
-                const enviadoMenu = await enviarMenuPrincipalWhatsApp(
-                    waCreds.phoneNumberId,
-                    waCreds.accessToken,
+                const autoRes = await procesarMensajeAutonomo({
+                    tenantId,
+                    fromPhone: cleanPhone,
+                    textBody: textToAnalyze || '',
+                    buttonPayload,
+                    creds: waCreds,
+                    conversacionId: conversacionId || undefined
+                })
+
+                if (autoRes.handled) {
+                    console.log(`[WA WEBHOOK] Mensaje auto-resuelto por bot: ${autoRes.action}`)
+                    return NextResponse.json({ success: true })
+                }
+
+                console.log(`[WA WEBHOOK] Enviando Menú Principal interactivo autónomo a ${from}...`)
+                const enviadoMenu = await enviarMenuPrincipalAutonomo(
+                    waCreds,
                     cleanPhone
                 )
                 if (enviadoMenu) {
