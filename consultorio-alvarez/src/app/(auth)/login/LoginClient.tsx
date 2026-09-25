@@ -3,8 +3,10 @@
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
 import { AlertCircle, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
+import { AnimatePresence } from 'framer-motion'
 import { loginAction } from '@/lib/actions/auth'
 import { hexToHsl } from '@/lib/theme'
+import { LoginCinematicLoader } from '@/components/auth/LoginCinematicLoader'
 
 const FloatingLines = dynamic(() => import('@/components/FloatingLines'), { ssr: false })
 
@@ -52,6 +54,17 @@ export default function LoginClient({
                 backgroundColor: `hsl(${h}, 30%, 4%)`
             }}
         >
+            <AnimatePresence>
+                {status === 'ingresando' && (
+                    <LoginCinematicLoader 
+                        colorPrimary={colorPrimary}
+                        logoUrl={logoUrl}
+                        tenantNombre={tenantNombre}
+                        isAlvarez={isAlvarez}
+                    />
+                )}
+            </AnimatePresence>
+
             {/* Animated background — mixBlendMode "normal" avoids GPU re-compositing on CSS repaints */}
             <div className="absolute inset-0 z-0" style={{ willChange: 'transform' }}>
                 <FloatingLines
@@ -183,8 +196,11 @@ export default function LoginClient({
                                     }
 
                                     if (result?.success && result?.redirectTo) {
+                                        const targetUrl = result.redirectTo
                                         setStatus('ingresando')
-                                        window.location.assign(result.redirectTo)
+                                        setTimeout(() => {
+                                            window.location.assign(targetUrl)
+                                        }, 1200)
                                         return
                                     }
 

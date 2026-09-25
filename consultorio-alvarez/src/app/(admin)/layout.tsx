@@ -12,6 +12,7 @@ import { getBillingConfig } from '@/lib/actions/billing'
 import { BillingGuard } from '@/components/providers/BillingGuard'
 import { NumpadTabProvider } from '@/components/providers/NumpadTabProvider'
 import { generateTenantCssTheme } from '@/lib/theme'
+import { SessionResumeHandler } from '@/components/providers/SessionResumeHandler'
 
 export default async function AdminLayout({
     children,
@@ -95,6 +96,7 @@ export default async function AdminLayout({
                 <AdminBackground colorHex={primaryStr} />
                 <div className="relative z-10 flex w-full h-full flex-col lg:flex-row">
                     <NotificationProvider tenantId={usuario.tenant_id}>
+                        <SessionResumeHandler themeColor={primaryStr} />
                         <Sidebar 
                             tenantId={usuario.tenant_id}
                             userEmail={user.email} 
