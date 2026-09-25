@@ -18,6 +18,19 @@ export async function proxy(request: NextRequest) {
     const cleanHost = rawHost.split(':')[0].toLowerCase().replace(/^www\./, '').trim()
     const requestHeaders = new Headers(request.headers)
     
+    // ── Bypass Server Actions ──────────────────────────────────
+    // Las Server Actions de Next.js transportan el encabezado 'next-action' y gestionan
+    // su propia autenticación y permisos internamente en cada Server Action.
+    // El middleware NUNCA debe redirigir (307) una Server Action porque el cliente React
+    // falla con "An unexpected response was received from the server".
+    if (request.headers.has('next-action')) {
+        return NextResponse.next({
+            request: {
+                headers: requestHeaders,
+            },
+        })
+    }
+
     // ── Enforce SaaS Domain for /superadmin ─────────────────────
     // El ingreso y administración de superadmin vive EXCLUSIVAMENTE en el dominio raíz SaaS Dental-IA (dentalia.com.ar).
     // Si se accede a /superadmin desde el dominio de una clínica (ej: dentalva.ar), redirigir de inmediato al dominio central.
