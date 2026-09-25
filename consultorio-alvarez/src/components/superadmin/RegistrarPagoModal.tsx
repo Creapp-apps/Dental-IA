@@ -41,7 +41,7 @@ export function RegistrarPagoModal({ tenant, isOpen, onClose, onSuccess }: Regis
 
         startTransition(async () => {
             try {
-                await registrarCobroSaaS(tenant.id, {
+                const res = await registrarCobroSaaS(tenant.id, {
                     monto: Number(monto),
                     periodo: periodo.trim(),
                     metodo,
@@ -49,6 +49,10 @@ export function RegistrarPagoModal({ tenant, isOpen, onClose, onSuccess }: Regis
                     comprobante: comprobante.trim(),
                     renovarVencimiento
                 })
+                if (!res.success) {
+                    setErrorMsg(res.error || 'Error al registrar el cobro.')
+                    return
+                }
                 onSuccess()
                 onClose()
             } catch (err: any) {

@@ -31,7 +31,7 @@ export function TenantBillingModal({ tenant, isOpen, onClose, onSuccess }: Tenan
 
         startTransition(async () => {
             try {
-                await updateTenantBillingDetails(tenant.id, {
+                const res = await updateTenantBillingDetails(tenant.id, {
                     monto_abono: Number(montoAbono),
                     fecha_vencimiento: fechaVencimiento,
                     estado,
@@ -40,6 +40,10 @@ export function TenantBillingModal({ tenant, isOpen, onClose, onSuccess }: Tenan
                     banco_transferencia: banco.trim(),
                     mp_link: mpLink.trim()
                 })
+                if (!res.success) {
+                    setErrorMsg(res.error || 'Error al guardar los cambios.')
+                    return
+                }
                 onSuccess()
                 onClose()
             } catch (err: any) {

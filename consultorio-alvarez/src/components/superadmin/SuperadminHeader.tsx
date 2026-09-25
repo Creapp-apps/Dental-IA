@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation'
 import { Sparkles, ArrowUpRight, LogOut, ShieldCheck, ExternalLink, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 
+import { logoutAction } from '@/lib/actions/auth'
+
 interface SuperadminHeaderProps {
     userEmail: string
     tenants: Array<{ id: string; slug: string; nombre: string }>
@@ -79,13 +81,13 @@ export function SuperadminHeader({ userEmail, tenants }: SuperadminHeaderProps) 
                             <p className="text-xs font-medium text-slate-200">{userEmail}</p>
                             <p className="text-[10px] text-cyan-400">Superadministrador</p>
                         </div>
-                        <Link
-                            href="/api/auth/logout?redirectTo=/login"
-                            className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all"
+                        <button
+                            onClick={() => logoutAction()}
+                            className="p-2 rounded-xl text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 transition-all cursor-pointer"
                             title="Cerrar sesión"
                         >
                             <LogOut className="w-4 h-4" />
-                        </Link>
+                        </button>
                     </div>
                 </div>
             </div>

@@ -243,109 +243,119 @@ export async function getSaasOverview(): Promise<{
 /**
  * Cambia el estado de facturación / servicio de un tenant (ACTIVO, SUSPENDIDO, PRUEBA, etc.)
  */
-export async function updateTenantStatus(tenantId: string, nuevoEstado: TenantBillingInfo['estado']) {
-    await assertSuperadmin()
-    const supabase = getAdmin()
+export async function updateTenantStatus(tenantId: string, nuevoEstado: TenantBillingInfo['estado']): Promise<{ success: boolean; error?: string }> {
+    try {
+        await assertSuperadmin()
+        const supabase = getAdmin()
 
-    // 1. Obtener settings existentes
-    const { data: current } = await supabase
-        .from('tenant_integrations')
-        .select('credentials')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'billing_settings')
-        .maybeSingle()
+        // 1. Obtener settings existentes
+        const { data: current } = await supabase
+            .from('tenant_integrations')
+            .select('credentials')
+            .eq('tenant_id', tenantId)
+            .eq('provider', 'billing_settings')
+            .maybeSingle()
 
-    const creds = current?.credentials || {}
-    const updatedCreds = {
-        ...creds,
-        estado: nuevoEstado,
-        updated_at: new Date().toISOString()
+        const creds = current?.credentials || {}
+        const updatedCreds = {
+            ...creds,
+            estado: nuevoEstado,
+            updated_at: new Date().toISOString()
+        }
+
+        // 2. Guardar en tenant_integrations
+        await supabase
+            .from('tenant_integrations')
+            .upsert({
+                tenant_id: tenantId,
+                provider: 'billing_settings',
+                is_active: nuevoEstado === 'ACTIVO' || nuevoEstado === 'PRUEBA',
+                credentials: updatedCreds
+            }, { onConflict: 'tenant_id,provider' })
+
+        // 3. Sincronizar flag `activo` en tabla `tenants`
+        const isTenantActive = nuevoEstado !== 'SUSPENDIDO' && nuevoEstado !== 'VENCIDO'
+        await supabase
+            .from('tenants')
+            .update({ activo: isTenantActive })
+            .eq('id', tenantId)
+
+        safeRevalidatePath('/superadmin')
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/mis-pagos')
+
+        return { success: true }
+    } catch (err: any) {
+        console.error('Error en updateTenantStatus:', err)
+        return { success: false, error: err.message || 'Error al actualizar estado.' }
     }
-
-    // 2. Guardar en tenant_integrations
-    await supabase
-        .from('tenant_integrations')
-        .upsert({
-            tenant_id: tenantId,
-            provider: 'billing_settings',
-            is_active: nuevoEstado === 'ACTIVO' || nuevoEstado === 'PRUEBA',
-            credentials: updatedCreds
-        }, { onConflict: 'tenant_id,provider' })
-
-    // 3. Sincronizar flag `activo` en tabla `tenants`
-    const isTenantActive = nuevoEstado !== 'SUSPENDIDO' && nuevoEstado !== 'VENCIDO'
-    await supabase
-        .from('tenants')
-        .update({ activo: isTenantActive })
-        .eq('id', tenantId)
-
-    safeRevalidatePath('/superadmin')
-    safeRevalidatePath('/admin')
-    safeRevalidatePath('/mis-pagos')
-
-    return { success: true }
 }
 
 /**
  * Extiende la fecha de vencimiento de un tenant (por defecto +30 días) y asegura estado ACTIVO.
  */
-export async function extendTenantDueDate(tenantId: string, dias: number = 30) {
-    await assertSuperadmin()
-    const supabase = getAdmin()
+export async function extendTenantDueDate(tenantId: string, dias: number = 30): Promise<{ success: boolean; newDueDate?: string; error?: string }> {
+    try {
+        await assertSuperadmin()
+        const supabase = getAdmin()
 
-    const { data: current } = await supabase
-        .from('tenant_integrations')
-        .select('credentials')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'billing_settings')
-        .maybeSingle()
+        const { data: current } = await supabase
+            .from('tenant_integrations')
+            .select('credentials')
+            .eq('tenant_id', tenantId)
+            .eq('provider', 'billing_settings')
+            .maybeSingle()
 
-    const creds = current?.credentials || {}
-    
-    // Si la fecha actual ya venció, sumamos a partir de hoy. Si no, a partir de la fecha actual.
-    const today = new Date()
-    let baseDate = today
-    if (creds.fecha_vencimiento) {
-        const currentDue = new Date(creds.fecha_vencimiento + 'T00:00:00')
-        if (currentDue > today) {
-            baseDate = currentDue
+        const creds = current?.credentials || {}
+        
+        // Si la fecha actual ya venció, sumamos a partir de hoy. Si no, a partir de la fecha actual.
+        const today = new Date()
+        let baseDate = today
+        if (creds.fecha_vencimiento) {
+            const currentDue = new Date(creds.fecha_vencimiento + 'T00:00:00')
+            if (currentDue > today) {
+                baseDate = currentDue
+            }
         }
+
+        baseDate.setDate(baseDate.getDate() + dias)
+        const newDueDate = baseDate.toISOString().split('T')[0]
+
+        const updatedCreds = {
+            ...creds,
+            fecha_vencimiento: newDueDate,
+            estado: 'ACTIVO',
+            updated_at: new Date().toISOString()
+        }
+
+        const { error: upsertErr } = await supabase
+            .from('tenant_integrations')
+            .upsert({
+                tenant_id: tenantId,
+                provider: 'billing_settings',
+                is_active: true,
+                credentials: updatedCreds
+            }, { onConflict: 'tenant_id,provider' })
+
+        if (upsertErr) {
+            console.error('Error al actualizar billing_settings:', upsertErr)
+            return { success: false, error: `Error en base de datos al extender fecha: ${upsertErr.message}` }
+        }
+
+        await supabase
+            .from('tenants')
+            .update({ activo: true })
+            .eq('id', tenantId)
+
+        safeRevalidatePath('/superadmin')
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/mis-pagos')
+
+        return { success: true, newDueDate }
+    } catch (err: any) {
+        console.error('Error en extendTenantDueDate:', err)
+        return { success: false, error: err.message || 'Error al extender vencimiento.' }
     }
-
-    baseDate.setDate(baseDate.getDate() + dias)
-    const newDueDate = baseDate.toISOString().split('T')[0]
-
-    const updatedCreds = {
-        ...creds,
-        fecha_vencimiento: newDueDate,
-        estado: 'ACTIVO',
-        updated_at: new Date().toISOString()
-    }
-
-    const { error: upsertErr } = await supabase
-        .from('tenant_integrations')
-        .upsert({
-            tenant_id: tenantId,
-            provider: 'billing_settings',
-            is_active: true,
-            credentials: updatedCreds
-        }, { onConflict: 'tenant_id,provider' })
-
-    if (upsertErr) {
-        console.error('Error al actualizar billing_settings:', upsertErr)
-        throw new Error(`Error en base de datos al extender fecha: ${upsertErr.message}`)
-    }
-
-    await supabase
-        .from('tenants')
-        .update({ activo: true })
-        .eq('id', tenantId)
-
-    safeRevalidatePath('/superadmin')
-    safeRevalidatePath('/admin')
-    safeRevalidatePath('/mis-pagos')
-
-    return { success: true, newDueDate }
 }
 
 /**
@@ -362,44 +372,49 @@ export async function updateTenantBillingDetails(
         banco_transferencia?: string
         mp_link?: string
     }
-) {
-    await assertSuperadmin()
-    const supabase = getAdmin()
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        await assertSuperadmin()
+        const supabase = getAdmin()
 
-    const { data: current } = await supabase
-        .from('tenant_integrations')
-        .select('credentials')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'billing_settings')
-        .maybeSingle()
+        const { data: current } = await supabase
+            .from('tenant_integrations')
+            .select('credentials')
+            .eq('tenant_id', tenantId)
+            .eq('provider', 'billing_settings')
+            .maybeSingle()
 
-    const creds = current?.credentials || {}
-    const updatedCreds = {
-        ...creds,
-        ...data,
-        updated_at: new Date().toISOString()
+        const creds = current?.credentials || {}
+        const updatedCreds = {
+            ...creds,
+            ...data,
+            updated_at: new Date().toISOString()
+        }
+
+        await supabase
+            .from('tenant_integrations')
+            .upsert({
+                tenant_id: tenantId,
+                provider: 'billing_settings',
+                is_active: data.estado === 'ACTIVO' || data.estado === 'PRUEBA',
+                credentials: updatedCreds
+            }, { onConflict: 'tenant_id,provider' })
+
+        const isTenantActive = data.estado !== 'SUSPENDIDO' && data.estado !== 'VENCIDO'
+        await supabase
+            .from('tenants')
+            .update({ activo: isTenantActive })
+            .eq('id', tenantId)
+
+        safeRevalidatePath('/superadmin')
+        safeRevalidatePath('/admin')
+        safeRevalidatePath('/mis-pagos')
+
+        return { success: true }
+    } catch (err: any) {
+        console.error('Error en updateTenantBillingDetails:', err)
+        return { success: false, error: err.message || 'Error al actualizar datos de cobro.' }
     }
-
-    await supabase
-        .from('tenant_integrations')
-        .upsert({
-            tenant_id: tenantId,
-            provider: 'billing_settings',
-            is_active: data.estado === 'ACTIVO' || data.estado === 'PRUEBA',
-            credentials: updatedCreds
-        }, { onConflict: 'tenant_id,provider' })
-
-    const isTenantActive = data.estado !== 'SUSPENDIDO' && data.estado !== 'VENCIDO'
-    await supabase
-        .from('tenants')
-        .update({ activo: isTenantActive })
-        .eq('id', tenantId)
-
-    safeRevalidatePath('/superadmin')
-    safeRevalidatePath('/admin')
-    safeRevalidatePath('/mis-pagos')
-
-    return { success: true }
 }
 
 /**
@@ -415,54 +430,59 @@ export async function registrarCobroSaaS(
         comprobante?: string
         renovarVencimiento?: boolean
     }
-) {
-    await assertSuperadmin()
-    const supabase = getAdmin()
+): Promise<{ success: boolean; error?: string }> {
+    try {
+        await assertSuperadmin()
+        const supabase = getAdmin()
 
-    // 1. Obtener pagos anteriores
-    const { data: pData } = await supabase
-        .from('tenant_integrations')
-        .select('credentials')
-        .eq('tenant_id', tenantId)
-        .eq('provider', 'billing_payments')
-        .maybeSingle()
+        // 1. Obtener pagos anteriores
+        const { data: pData } = await supabase
+            .from('tenant_integrations')
+            .select('credentials')
+            .eq('tenant_id', tenantId)
+            .eq('provider', 'billing_payments')
+            .maybeSingle()
 
-    const currentPayments = pData?.credentials?.payments || []
-    const nuevoPagoItem = {
-        id: crypto.randomUUID(),
-        monto: pago.monto,
-        metodo: pago.metodo,
-        periodo: pago.periodo,
-        fecha_pago: pago.fecha_pago,
-        comprobante: pago.comprobante || '',
-        created_at: new Date().toISOString()
+        const currentPayments = pData?.credentials?.payments || []
+        const nuevoPagoItem = {
+            id: crypto.randomUUID(),
+            monto: pago.monto,
+            metodo: pago.metodo,
+            periodo: pago.periodo,
+            fecha_pago: pago.fecha_pago,
+            comprobante: pago.comprobante || '',
+            created_at: new Date().toISOString()
+        }
+
+        const updatedPayments = [nuevoPagoItem, ...currentPayments]
+
+        const { error: upsertErr } = await supabase
+            .from('tenant_integrations')
+            .upsert({
+                tenant_id: tenantId,
+                provider: 'billing_payments',
+                is_active: true,
+                credentials: { payments: updatedPayments }
+            }, { onConflict: 'tenant_id,provider' })
+
+        if (upsertErr) {
+            console.error('Error al registrar cobro en tenant_integrations:', upsertErr)
+            return { success: false, error: `Error en base de datos al registrar pago: ${upsertErr.message}` }
+        }
+
+        // 2. Si se solicitó renovar vencimiento, extender +30 días
+        if (pago.renovarVencimiento) {
+            await extendTenantDueDate(tenantId, 30)
+        }
+
+        safeRevalidatePath('/superadmin')
+        safeRevalidatePath('/mis-pagos')
+
+        return { success: true }
+    } catch (err: any) {
+        console.error('Error en registrarCobroSaaS:', err)
+        return { success: false, error: err.message || 'Error inesperado al registrar el cobro.' }
     }
-
-    const updatedPayments = [nuevoPagoItem, ...currentPayments]
-
-    const { error: upsertErr } = await supabase
-        .from('tenant_integrations')
-        .upsert({
-            tenant_id: tenantId,
-            provider: 'billing_payments',
-            is_active: true,
-            credentials: { payments: updatedPayments }
-        }, { onConflict: 'tenant_id,provider' })
-
-    if (upsertErr) {
-        console.error('Error al registrar cobro en tenant_integrations:', upsertErr)
-        throw new Error(`Error en base de datos al registrar pago: ${upsertErr.message}`)
-    }
-
-    // 2. Si se solicitó renovar vencimiento, extender +30 días
-    if (pago.renovarVencimiento) {
-        await extendTenantDueDate(tenantId, 30)
-    }
-
-    safeRevalidatePath('/superadmin')
-    safeRevalidatePath('/mis-pagos')
-
-    return { success: true }
 }
 
 /**
