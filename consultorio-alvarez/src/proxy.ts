@@ -30,11 +30,11 @@ export async function proxy(request: NextRequest) {
             cleanHost.endsWith('.vercel.app')
 
         if (!isSaaSDomain) {
-            const redirectUrl = new URL(request.url)
-            redirectUrl.host = 'dentalia.com.ar'
-            redirectUrl.protocol = 'https:'
-            redirectUrl.port = ''
-            return NextResponse.redirect(redirectUrl, 307)
+            // Un dominio de consultorio (ej: dentalva.ar) no debe tener conocimiento de /superadmin.
+            // Redirigir limpiamente al login de la propia clínica para total aislamiento.
+            const url = request.nextUrl.clone()
+            url.pathname = '/login'
+            return NextResponse.redirect(url, 307)
         }
     }
 

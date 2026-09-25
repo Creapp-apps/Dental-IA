@@ -17,7 +17,6 @@ import {
     Clock,
     CalendarCheck,
     ArrowUpRight,
-    ShieldCheck,
     MessageSquareText,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -188,12 +187,6 @@ export function Sidebar({ tenantId, userEmail, userRole, themeColor, logoConfig,
     const [pendingChatsCount, setPendingChatsCount] = useState(0)
 
     const isProfesional = userRole === 'profesional'
-    const isSuperadmin = 
-        userRole === 'superadmin' || 
-        userEmail === 'creapp.ar@gmail.com' ||
-        userEmail === 'mazasebastian@hotmail.com' || 
-        userEmail?.endsWith('@creapp.com') || 
-        userEmail?.endsWith('@dental-ia.com')
 
     useEffect(() => {
         if (!tenantId) return
@@ -362,18 +355,6 @@ export function Sidebar({ tenantId, userEmail, userRole, themeColor, logoConfig,
                             )
                         })}
 
-                        {isSuperadmin && (
-                            <div className="pt-2">
-                                <a
-                                    href={typeof window !== 'undefined' && !window.location.hostname.includes('dentalia.com.ar') && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? 'https://dentalia.com.ar/superadmin' : '/superadmin'}
-                                    className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-xs font-bold bg-gradient-to-r from-indigo-500/15 via-cyan-500/10 to-indigo-500/15 text-cyan-400 hover:text-white border border-cyan-500/30 hover:border-cyan-500/50 transition-all shadow-sm group"
-                                >
-                                    <ShieldCheck className="h-4 w-4 text-cyan-400 group-hover:scale-110 transition-transform" />
-                                    <span className="flex-1">Panel SaaS</span>
-                                    <ArrowUpRight className="h-3.5 w-3.5 opacity-60 group-hover:opacity-100" />
-                                </a>
-                            </div>
-                        )}
                     </div>
                 )}
 
