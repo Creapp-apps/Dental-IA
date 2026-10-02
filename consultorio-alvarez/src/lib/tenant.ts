@@ -127,6 +127,12 @@ export async function resolveTenant(hostOrSlug?: string | null): Promise<TenantI
         // Ignorar si falla la consulta
     }
 
+    // Si el host es una dirección IP (IPv4) o localhost/local, no tratar los octetos como subdominios
+    const isIpAddress = /^(\d{1,3}\.){3}\d{1,3}$/.test(cleanIdentifier)
+    if (isIpAddress || cleanIdentifier === 'localhost' || cleanIdentifier === '127.0.0.1') {
+        return null
+    }
+
     // 3. Buscar por subdominio (ej: "curadent.dental-ia.com", "curadent.local", "curadent.localhost")
     const parts = cleanIdentifier.split('.')
     if (parts.length > 1) {

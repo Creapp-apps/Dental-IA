@@ -177,6 +177,7 @@ export default function LoginClient({
                         )}
 
                         <form
+                            method="POST"
                             onSubmit={async (e) => {
                                 e.preventDefault()
                                 if (status !== 'idle') return
@@ -205,9 +206,9 @@ export default function LoginClient({
                                     }
 
                                     setStatus('idle')
-                                } catch (err) {
-                                    console.error(err)
-                                    setLocalError('Error de conexión con el servidor. Intente nuevamente.')
+                                } catch (err: any) {
+                                    console.error('Error en login:', err)
+                                    setLocalError(err?.message || 'Error de conexión con el servidor. Intente nuevamente.')
                                     setStatus('idle')
                                 }
                             }}

@@ -40,6 +40,10 @@ export async function proxy(request: NextRequest) {
             cleanHost === 'dental-ia.com' || 
             cleanHost === 'localhost' || 
             cleanHost === '127.0.0.1' || 
+            cleanHost.startsWith('192.168.') ||
+            cleanHost.startsWith('10.') ||
+            cleanHost.startsWith('172.') ||
+            cleanHost.endsWith('.local') ||
             cleanHost.endsWith('.vercel.app')
 
         if (!isSaaSDomain) {

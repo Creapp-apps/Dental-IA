@@ -49,7 +49,14 @@ export default async function AdminLayout({
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
     const cleanHost = rawHost ? rawHost.split(':')[0].toLowerCase() : ''
-    const isLocalhost = cleanHost === 'localhost' || cleanHost === '127.0.0.1' || cleanHost.endsWith('.vercel.app')
+    const isLocalhost = 
+        cleanHost === 'localhost' || 
+        cleanHost === '127.0.0.1' || 
+        cleanHost.startsWith('192.168.') || 
+        cleanHost.startsWith('10.') || 
+        cleanHost.startsWith('172.') || 
+        cleanHost.endsWith('.local') || 
+        cleanHost.endsWith('.vercel.app')
 
     const isSuperadmin = 
         usuario.rol === 'superadmin' || 
