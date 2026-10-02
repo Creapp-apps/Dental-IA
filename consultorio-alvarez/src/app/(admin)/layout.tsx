@@ -13,6 +13,7 @@ import { BillingGuard } from '@/components/providers/BillingGuard'
 import { NumpadTabProvider } from '@/components/providers/NumpadTabProvider'
 import { generateTenantCssTheme } from '@/lib/theme'
 import { SessionResumeHandler } from '@/components/providers/SessionResumeHandler'
+import { BillingDueModalToast } from '@/components/billing/BillingDueModalToast'
 
 export default async function AdminLayout({
     children,
@@ -43,6 +44,7 @@ export default async function AdminLayout({
 
     let isBlocked = false
     let showSidebarAlert = false
+    let diffDays = 999
 
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
@@ -72,7 +74,7 @@ export default async function AdminLayout({
         expiry.setHours(0, 0, 0, 0)
 
         const diffTime = expiry.getTime() - today.getTime()
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
         const hasActivePayment = settings.estado === 'ACTIVO'
 
@@ -81,7 +83,8 @@ export default async function AdminLayout({
         const suspended = settings.estado === 'SUSPENDIDO' || settings.estado === 'VENCIDO'
 
         isBlocked = expired || suspended
-        showSidebarAlert = diffDays <= 7 && !hasActivePayment
+        // Mostrar alerta en sidebar si faltan 7 días o menos, o está vencido
+        showSidebarAlert = diffDays <= 7
     }
 
     // Inyectamos el tema CSS dinámico armonizado para toda la suite de componentes
@@ -97,6 +100,15 @@ export default async function AdminLayout({
                 <div className="relative z-10 flex w-full h-full flex-col lg:flex-row">
                     <NotificationProvider tenantId={usuario.tenant_id}>
                         <SessionResumeHandler themeColor={primaryStr} />
+                        <BillingDueModalToast
+                            tenantId={usuario.tenant_id}
+                            clinicName={config?.logo_config?.text || 'Consultorio'}
+                            fechaVencimiento={settings?.fecha_vencimiento || ''}
+                            montoAbono={settings?.monto_abono || 0}
+                            isSuperadmin={Boolean(isSuperadmin)}
+                            diffDays={diffDays}
+                            themeColor={primaryStr}
+                        />
                         <Sidebar 
                             tenantId={usuario.tenant_id}
                             userEmail={user.email} 

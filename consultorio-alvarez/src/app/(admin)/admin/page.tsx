@@ -68,28 +68,89 @@ export default async function DashboardPage(props: {
         const diffTime = expiry.getTime() - today.getTime()
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
 
-        const hasActivePayment = settings.estado === 'ACTIVO'
-
-        if (!hasActivePayment && diffDays >= 0) {
+        if (diffDays >= 0 && diffDays <= 5) {
             if (diffDays === 5 || diffDays === 4) {
                 alertBanner = (
-                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex items-center gap-3 text-sm">
-                        <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
-                        <span className="font-medium flex-1">
-                            En {diffDays} días deberá renovar su abono mensual, por favor dirigirse a <a href="/mis-pagos" className="underline font-bold hover:opacity-80">Mis Pagos</a>.
-                        </span>
+                    <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sm">
+                        <div className="flex items-center gap-3">
+                            <AlertCircle className="h-5 w-5 shrink-0 text-amber-500" />
+                            <span className="font-medium">
+                                En {diffDays} días deberá renovar su abono mensual. Por favor diríjase a <a href="/mis-pagos" className="underline font-bold hover:opacity-80">Mis Pagos</a> o contáctese con soporte.
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <a 
+                                href="https://wa.me/5491130288564?text=Hola%20Soporte%20CreAPP%2C%20quisiera%20regularizar%20mi%20abono%20mensual" 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white text-xs font-semibold shadow-sm transition-all"
+                            >
+                                WhatsApp Soporte
+                            </a>
+                            <a 
+                                href="/mis-pagos" 
+                                className="px-3 py-1.5 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold shadow-sm transition-all"
+                            >
+                                Mis Pagos
+                            </a>
+                        </div>
                     </div>
                 )
             } else if (diffDays <= 3) {
                 alertBanner = (
-                    <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 flex items-center gap-3 text-sm animate-red-banner-pulse">
-                        <AlertCircle className="h-5 w-5 shrink-0 text-rose-500 animate-[bounce_2s_infinite]" />
-                        <span className="font-medium flex-1">
-                            Por favor, renovar el abono en la sección <a href="/mis-pagos" className="underline font-bold hover:opacity-80">Mis Pagos</a> para evitar la suspensión del servicio.
-                        </span>
+                    <div className="p-4 rounded-2xl bg-rose-500/15 border border-rose-500/30 text-rose-600 dark:text-rose-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sm animate-red-banner-pulse">
+                        <div className="flex items-center gap-3">
+                            <AlertCircle className="h-5 w-5 shrink-0 text-rose-500 animate-[bounce_2s_infinite]" />
+                            <span className="font-medium">
+                                Por favor, regularice el abono en <a href="/mis-pagos" className="underline font-bold hover:opacity-80">Mis Pagos</a> (vence en {diffDays === 0 ? 'el día de hoy' : `${diffDays} días`}) para evitar la suspensión del servicio.
+                            </span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                            <a 
+                                href="https://wa.me/5491130288564?text=Hola%20Soporte%20CreAPP%2C%20quisiera%20regularizar%20mi%20abono%20mensual" 
+                                target="_blank" 
+                                rel="noreferrer"
+                                className="px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white text-xs font-semibold shadow-sm transition-all"
+                            >
+                                WhatsApp Soporte
+                            </a>
+                            <a 
+                                href="/mis-pagos" 
+                                className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm transition-all"
+                            >
+                                Mis Pagos
+                            </a>
+                        </div>
                     </div>
                 )
             }
+        } else if (diffDays < 0 && settings.estado !== 'SUSPENDIDO') {
+            alertBanner = (
+                <div className="p-4 rounded-2xl bg-rose-500/20 border border-rose-500/40 text-rose-600 dark:text-rose-400 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-sm">
+                    <div className="flex items-center gap-3">
+                        <AlertCircle className="h-5 w-5 shrink-0 text-rose-500 animate-[pulse_1.5s_infinite]" />
+                        <span className="font-medium">
+                            Su abono mensual se encuentra vencido. Por favor comuníquese con soporte para regularizar su situación y evitar suspensiones.
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <a 
+                            href="https://wa.me/5491130288564?text=Hola%20Soporte%20CreAPP%2C%20quisiera%20regularizar%20mi%20abono%20mensual" 
+                            target="_blank" 
+                            rel="noreferrer"
+                            className="px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#20ba5a] text-white text-xs font-semibold shadow-sm transition-all"
+                        >
+                            WhatsApp Soporte
+                        </a>
+                        <a 
+                            href="/mis-pagos" 
+                            className="px-3 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold shadow-sm transition-all"
+                        >
+                            Mis Pagos
+                        </a>
+                    </div>
+                </div>
+            )
         }
     }
 
