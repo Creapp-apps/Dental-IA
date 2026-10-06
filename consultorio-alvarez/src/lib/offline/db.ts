@@ -89,6 +89,17 @@ export interface SyncOutboxItem {
     error_message?: string
 }
 
+export interface LocalFichaReciente {
+    paciente_id: string
+    turnos: any[]
+    historial: any[]
+    odontograma: any[]
+    presupuestos: any[]
+    adjuntos: any[]
+    escaneos3d: any[]
+    cached_at: string
+}
+
 export interface SyncMetaItem {
     key: string // e.g. 'last_synced_at', 'auto_sync_interval_min', 'last_pull_count'
     value: any
@@ -103,6 +114,7 @@ export class DentalIaLocalDatabase extends Dexie {
     obras_sociales!: EntityTable<LocalObraSocial, 'id'>
     sync_outbox!: EntityTable<SyncOutboxItem, 'id'>
     sync_meta!: EntityTable<SyncMetaItem, 'key'>
+    fichas_recientes!: EntityTable<LocalFichaReciente, 'paciente_id'>
 
     constructor() {
         super('DentalIa_OfflineDB')
@@ -116,8 +128,13 @@ export class DentalIaLocalDatabase extends Dexie {
             sync_outbox: '++id, tenant_id, entity, entity_id, status, created_at',
             sync_meta: 'key'
         })
+
+        this.version(2).stores({
+            fichas_recientes: 'paciente_id, cached_at'
+        })
     }
 }
 
 // Instancia única (Singleton) para el cliente web
 export const localDb = new DentalIaLocalDatabase()
+

@@ -1,18 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box } from 'lucide-react'
+import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box, Plus, Zap } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
 import { TabAdjuntos } from '@/components/pacientes/TabAdjuntos'
 import { TabEscaneos3D } from '@/components/pacientes/TabEscaneos3D'
 import { ModalCrearPresupuesto } from '@/components/pacientes/ModalCrearPresupuesto'
 import { type EstadoTurno } from '@/types'
-import { Plus } from 'lucide-react'
+import { localDb, type LocalFichaReciente } from '@/lib/offline/db'
 
 const TABS = [
     { id: 'consulta', label: 'Consulta', icon: Stethoscope },
@@ -52,6 +52,49 @@ export function FichaPacienteTabs({
     tiposTratamiento,
 }: FichaPacienteTabsProps) {
     const [tab, setTab] = useState<TabId>('consulta')
+    const [cachedData, setCachedData] = useState<LocalFichaReciente | null>(null)
+
+    // Cargar ficha desde IndexedDB si estamos offline o como respaldo instantáneo
+    useEffect(() => {
+        if (!pacienteId) return
+        localDb.fichas_recientes.get(pacienteId).then((cached) => {
+            if (cached) {
+                setCachedData(cached)
+            }
+        }).catch((err) => console.warn('Error leyendo ficha desde IndexedDB:', err))
+    }, [pacienteId])
+
+    // Guardar o actualizar la ficha en IndexedDB automáticamente (Stale-While-Revalidate)
+    useEffect(() => {
+        if (!pacienteId) return
+        const hasServerData = 
+            (turnos && turnos.length > 0) || 
+            (historial && historial.length > 0) || 
+            (odontograma && odontograma.length > 0) || 
+            (presupuestos && presupuestos.length > 0) ||
+            (adjuntos && adjuntos.length > 0) ||
+            (escaneos3d && escaneos3d.length > 0)
+
+        if (hasServerData) {
+            localDb.fichas_recientes.put({
+                paciente_id: pacienteId,
+                turnos: turnos ?? [],
+                historial: historial ?? [],
+                odontograma: odontograma ?? [],
+                presupuestos: presupuestos ?? [],
+                adjuntos: adjuntos ?? [],
+                escaneos3d: escaneos3d ?? [],
+                cached_at: new Date().toISOString()
+            }).catch(err => console.warn('Error guardando ficha en IndexedDB:', err))
+        }
+    }, [pacienteId, turnos, historial, odontograma, presupuestos, adjuntos, escaneos3d])
+
+    const effectiveTurnos = (turnos && turnos.length > 0) ? turnos : (cachedData?.turnos ?? [])
+    const effectiveHistorial = (historial && historial.length > 0) ? historial : (cachedData?.historial ?? [])
+    const effectiveOdontograma = (odontograma && odontograma.length > 0) ? odontograma : (cachedData?.odontograma ?? [])
+    const effectivePresupuestos = (presupuestos && presupuestos.length > 0) ? presupuestos : (cachedData?.presupuestos ?? [])
+    const effectiveAdjuntos = (adjuntos && adjuntos.length > 0) ? adjuntos : (cachedData?.adjuntos ?? [])
+    const effectiveEscaneos3d = (escaneos3d && escaneos3d.length > 0) ? escaneos3d : (cachedData?.escaneos3d ?? [])
 
     return (
         <div className="space-y-4">
@@ -70,12 +113,12 @@ export function FichaPacienteTabs({
                     >
                         <t.icon className="h-4 w-4" />
                         <span className="hidden sm:inline">{t.label}</span>
-                        {t.id === 'escaneos3d' && escaneos3d.length > 0 && (
+                        {t.id === 'escaneos3d' && effectiveEscaneos3d.length > 0 && (
                             <span className={cn(
                                 'text-[10px] px-1.5 py-0.2 rounded-full font-bold',
                                 tab === t.id ? 'bg-white/20 text-white' : 'bg-primary/10 text-primary'
                             )}>
-                                {escaneos3d.length}
+                                {effectiveEscaneos3d.length}
                             </span>
                         )}
                     </button>
@@ -92,23 +135,23 @@ export function FichaPacienteTabs({
                     transition={{ duration: 0.2 }}
                 >
                     {tab === 'consulta' && <TabConsulta motivoConsulta={motivoConsulta} />}
-                    {tab === 'turnos' && <TabTurnos turnos={turnos} />}
-                    {tab === 'evoluciones' && <TabEvoluciones historial={historial} />}
+                    {tab === 'turnos' && <TabTurnos turnos={effectiveTurnos} />}
+                    {tab === 'evoluciones' && <TabEvoluciones historial={effectiveHistorial} />}
                     {tab === 'odontograma' && (
-                        <OdontogramaInteractivo pacienteId={pacienteId} piezasData={odontograma} />
+                        <OdontogramaInteractivo pacienteId={pacienteId} piezasData={effectiveOdontograma} />
                     )}
                     {tab === 'escaneos3d' && (
-                        <TabEscaneos3D pacienteId={pacienteId} escaneosIniciales={escaneos3d} />
+                        <TabEscaneos3D pacienteId={pacienteId} escaneosIniciales={effectiveEscaneos3d} />
                     )}
                     {tab === 'presupuestos' && (
                         <TabPresupuestos 
                             pacienteId={pacienteId} 
-                            presupuestos={presupuestos} 
+                            presupuestos={effectivePresupuestos} 
                             profesionales={profesionales} 
                             tiposTratamiento={tiposTratamiento} 
                         />
                     )}
-                    {tab === 'adjuntos' && <TabAdjuntos pacienteId={pacienteId} adjuntos={adjuntos} />}
+                    {tab === 'adjuntos' && <TabAdjuntos pacienteId={pacienteId} adjuntos={effectiveAdjuntos} />}
                 </motion.div>
             </AnimatePresence>
         </div>

@@ -42,12 +42,8 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
     const [inputQuery, setInputQuery] = useState(initialQuery)
     const [activeQuery, setActiveQuery] = useState(initialQuery)
     const router = useRouter()
-    const [isNavigating, startNavigation] = useTransition()
     const [isDeleting, startDeleting] = useTransition()
     const [deleteCandidate, setDeleteCandidate] = useState<{ id: string, nombre: string } | null>(null)
-    const [navigatingId, setNavigatingId] = useState<string | null>(null)
-    const [editingId, setEditingId] = useState<string | null>(null)
-    const [isCreatingNew, setIsCreatingNew] = useState(false)
     const [serverResults, setServerResults] = useState<any[]>([])
     const [isSearchingServer, setIsSearchingServer] = useState(false)
     const [isLoadingMore, setIsLoadingMore] = useState(false)
@@ -200,25 +196,6 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
         window.history.replaceState(null, '', url)
     }
 
-    function handleNuevoPaciente() {
-        if (isCreatingNew || navigatingId || editingId) return
-        setIsCreatingNew(true)
-        startNavigation(() => {
-            router.push('/pacientes/nuevo')
-        })
-    }
-
-    function handleCardClick(e: React.MouseEvent, id: string) {
-        if (editingId || navigatingId || isCreatingNew) {
-            e.preventDefault()
-            return
-        }
-        setNavigatingId(id)
-        startNavigation(() => {
-            router.push(`/pacientes/${id}`)
-        })
-    }
-
     async function handleEliminar(e: React.MouseEvent, id: string, nombre: string) {
         e.preventDefault()
         e.stopPropagation()
@@ -235,16 +212,6 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
             } else {
                 glassAlert.success({ title: 'Paciente eliminado' })
             }
-        })
-    }
-
-    function handleEditar(e: React.MouseEvent, id: string) {
-        e.preventDefault()
-        e.stopPropagation()
-        if (editingId || navigatingId || isCreatingNew) return
-        setEditingId(id)
-        startNavigation(() => {
-            router.push(`/pacientes/${id}/editar`)
         })
     }
 
@@ -271,14 +238,12 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
                         )}
                     </p>
                 </div>
-                <GlassButton
-                    onClick={handleNuevoPaciente}
-                    loading={isCreatingNew}
-                    className="w-full sm:w-auto shrink-0 font-semibold"
-                >
-                    {!isCreatingNew && <Plus className="h-4 w-4 mr-1.5" />}
-                    Nuevo paciente
-                </GlassButton>
+                <Link href="/pacientes/nuevo" prefetch={true} className="w-full sm:w-auto shrink-0">
+                    <GlassButton className="w-full sm:w-auto shrink-0 font-semibold cursor-pointer">
+                        <Plus className="h-4 w-4 mr-1.5" />
+                        Nuevo paciente
+                    </GlassButton>
+                </Link>
             </div>
 
             {/* Search */}
@@ -325,56 +290,30 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="grid gap-2">
                     {displayedPacientes.map((p: any) => {
                         const iniciales = `${p.nombre.charAt(0)}${p.apellido.charAt(0)}`
-                        const isNavigatingCard = navigatingId === p.id
-                        const isEditingThis = editingId === p.id
-                        const isRowBusy = isNavigatingCard || isEditingThis
 
                         return (
                             <div
                                 key={p.id}
-                                onClick={(e) => handleCardClick(e, p.id)}
-                                onMouseEnter={() => {
-                                    router.prefetch(`/pacientes/${p.id}`)
-                                    router.prefetch(`/pacientes/${p.id}/editar`)
-                                }}
-                                className={cn(
-                                    "flex items-center gap-4 glass rounded-xl px-4 py-3.5 shadow-glass transition-all duration-200 group relative overflow-hidden cursor-pointer select-none",
-                                        "hover:shadow-glass-lg hover:-translate-y-0.5 hover:border-primary/40 active:scale-[0.985] active:bg-primary/5",
-                                        isNavigatingCard && "border-primary/60 bg-primary/10 shadow-primary/10 ring-2 ring-primary/30 animate-pulse",
-                                        isEditingThis && "border-amber-500/60 bg-amber-500/10 shadow-amber-500/10 ring-2 ring-amber-500/30 animate-pulse"
-                                    )}
+                                className="flex items-center gap-4 glass rounded-xl px-4 py-3.5 shadow-glass transition-all duration-200 group relative overflow-hidden hover:shadow-glass-lg hover:-translate-y-0.5 hover:border-primary/40 active:scale-[0.99]"
+                            >
+                                {/* Link directo de apertura instantánea 0ms */}
+                                <Link
+                                    href={`/pacientes/${p.id}`}
+                                    prefetch={true}
+                                    className="flex items-center gap-4 flex-1 min-w-0"
                                 >
                                     {/* Avatar */}
-                                    <div className={cn(
-                                        "h-10 w-10 rounded-full flex items-center justify-center shrink-0 transition-colors",
-                                        isRowBusy ? "bg-primary/20 ring-2 ring-primary/40" : "bg-primary/10 group-hover:bg-primary/20"
-                                    )}>
-                                        {isRowBusy ? (
-                                            <Loader2 className="h-4 w-4 text-primary animate-spin" />
-                                        ) : (
-                                            <span className="text-sm font-bold text-primary">{iniciales}</span>
-                                        )}
+                                    <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 transition-colors bg-primary/10 group-hover:bg-primary/20">
+                                        <span className="text-sm font-bold text-primary">{iniciales}</span>
                                     </div>
 
                                     {/* Info */}
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2 flex-wrap">
-                                            <p className="text-sm font-semibold text-foreground truncate">
+                                            <p className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                                                 {p.apellido}, {p.nombre}
                                             </p>
-                                            {isNavigatingCard && (
-                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/15 text-primary text-[11px] font-semibold animate-pulse shrink-0 border border-primary/30">
-                                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                                    Abriendo...
-                                                </span>
-                                            )}
-                                            {isEditingThis && (
-                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 text-[11px] font-semibold animate-pulse shrink-0 border border-amber-500/30">
-                                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                                    Abriendo edición...
-                                                </span>
-                                            )}
-                                            {p.registro_completo === false && !isRowBusy && (
+                                            {p.registro_completo === false && (
                                                 <span className="inline-flex items-center rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400 border border-red-500/30 animate-pulse shrink-0">
                                                     ⚠️ Incompleto
                                                 </span>
@@ -406,36 +345,28 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
                                             {p.obra_social.nombre}
                                         </span>
                                     )}
+                                </Link>
 
-                                    {/* Acciones */}
-                                    <div className="flex items-center gap-1 opacity-90 sm:opacity-70 group-hover:opacity-100 transition-opacity ml-2">
-                                        <button
-                                            type="button"
-                                            disabled={isRowBusy}
-                                            onClick={(e) => handleEditar(e, p.id)}
-                                            className={cn(
-                                                "p-2.5 rounded-xl transition-all text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 active:scale-90 cursor-pointer",
-                                                isEditingThis && "bg-primary/20 text-primary scale-105"
-                                            )}
-                                            title="Editar paciente"
-                                        >
-                                            {isEditingThis ? (
-                                                <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                                            ) : (
-                                                <Pencil className="h-4 w-4" />
-                                            )}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            disabled={isRowBusy}
-                                            onClick={(e) => handleEliminar(e, p.id, `${p.nombre} ${p.apellido}`)}
-                                            className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/15 active:scale-90 cursor-pointer"
-                                            title="Eliminar paciente"
-                                        >
-                                            <Trash className="h-4 w-4" />
-                                        </button>
-                                    </div>
+                                {/* Acciones fuera del enlace */}
+                                <div className="flex items-center gap-1 opacity-90 sm:opacity-70 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
+                                    <Link
+                                        href={`/pacientes/${p.id}/editar`}
+                                        prefetch={true}
+                                        className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 active:scale-90"
+                                        title="Editar paciente"
+                                    >
+                                        <Pencil className="h-4 w-4" />
+                                    </Link>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => handleEliminar(e, p.id, `${p.nombre} ${p.apellido}`)}
+                                        className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/15 active:scale-90 cursor-pointer"
+                                        title="Eliminar paciente"
+                                    >
+                                        <Trash className="h-4 w-4" />
+                                    </button>
                                 </div>
+                            </div>
                         )
                     })}
                 </motion.div>
