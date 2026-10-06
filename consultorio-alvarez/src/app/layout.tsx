@@ -1,3 +1,4 @@
+import SentryInit from '@/components/providers/SentryInit';
 import type { Metadata, Viewport } from 'next'
 import { Geist, Geist_Mono, Playfair_Display, Montserrat, Space_Grotesk } from 'next/font/google'
 import './globals.css'
@@ -56,6 +57,7 @@ export default function RootLayout({
   return (
     <html lang="es" suppressHydrationWarning>
       <body className={`${geistSans.variable} ${geistMono.variable} ${playfair.variable} ${montserrat.variable} ${spaceGrotesk.variable}`}>
+        <SentryInit />
         <ThemeProvider>
           {children}
           <Toaster

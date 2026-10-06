@@ -314,6 +314,20 @@ export async function POST(request: NextRequest) {
                         normalized.includes('cancel') ||
                         normalized.includes('no asisto') ||
                         normalized.includes('no voy') ||
+                        normalized.includes('suspender') ||
+                        normalized.includes('dar de baja') ||
+                        normalized.includes('no puedo ir') ||
+                        normalized.includes('no llego') ||
+                        normalized.includes('se me complica') ||
+                        normalized.includes('reposo') ||
+                        normalized.includes('accidente') ||
+                        normalized.includes('antibiotico') ||
+                        normalized.includes('infeccion') ||
+                        normalized.includes('lastime') ||
+                        normalized.includes('enfermo') ||
+                        normalized.includes('enferma') ||
+                        normalized.includes('fiebre') ||
+                        normalized.includes('imposible ir') ||
                         (normalized.startsWith('no ') && normalized.length <= 15);
 
                     const matchesReprogram = 
@@ -323,6 +337,9 @@ export async function POST(request: NextRequest) {
                         normalized.includes('otro horario') ||
                         normalized.includes('otro dia') ||
                         normalized.includes('otra fecha') ||
+                        normalized.includes('mas horario') ||
+                        normalized.includes('a partir del') ||
+                        normalized.includes('re programar') ||
                         normalized.includes('reprogramar el turno');
 
                     if (matchesConfirm) {
@@ -568,7 +585,8 @@ export async function POST(request: NextRequest) {
 
                 if (waCreds) {
                     try {
-                        await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
+                        const textoRecepcion = '¡Recibido! 💬 Un asesor de nuestro equipo de recepción te responderá a la brevedad por este medio.'
+                        const res = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${waCreds.accessToken}`,
@@ -581,10 +599,27 @@ export async function POST(request: NextRequest) {
                                 type: 'text',
                                 text: {
                                     preview_url: false,
-                                    body: '¡Recibido! 💬 Un asesor de nuestro equipo de recepción te responderá a la brevedad por este medio.'
+                                    body: textoRecepcion
                                 }
                             })
                         })
+                        const resData = await res.json()
+                        if (conversacionId) {
+                            await admin.from('whatsapp_mensajes').insert({
+                                tenant_id: tenantId,
+                                conversacion_id: conversacionId,
+                                tipo: 'texto',
+                                remitente: 'bot',
+                                contenido: textoRecepcion,
+                                wa_message_id: resData?.messages?.[0]?.id || null,
+                                estado_envio: 'enviado',
+                                metadata: { accion: 'derivado_recepcion' }
+                            })
+                            await admin.from('whatsapp_conversaciones').update({
+                                ultimo_mensaje_at: new Date().toISOString(),
+                                ultimo_mensaje_texto: `🤖 ${textoRecepcion.slice(0, 80)}`,
+                            }).eq('id', conversacionId)
+                        }
                     } catch (replyErr) {
                         console.error('Error al responder confirmación de recepcionista:', replyErr)
                     }
@@ -626,7 +661,8 @@ export async function POST(request: NextRequest) {
                 })
 
                 try {
-                    await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
+                    const textoGuardia = `✅ *¡Turno de Urgencia Confirmado!*\n\nTe esperamos el día *${fecha} a las ${hora} hs* en Consultorio Álvarez.\n📍 Av. Rivadavia 1234.\n\nPor favor concurrí 5 minutos antes con tu DNI.\nCualquier consulta podés escribirnos directamente por este chat.`
+                    const res = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
                         method: 'POST',
                         headers: {
                             'Authorization': `Bearer ${waCreds.accessToken}`,
@@ -639,10 +675,27 @@ export async function POST(request: NextRequest) {
                             type: 'text',
                             text: {
                                 preview_url: false,
-                                body: `✅ *¡Turno de Urgencia Confirmado!*\n\nTe esperamos el día *${fecha} a las ${hora} hs* en Consultorio Álvarez.\n📍 Av. Rivadavia 1234.\n\nPor favor concurrí 5 minutos antes con tu DNI.\nCualquier consulta podés escribirnos directamente por este chat.`
+                                body: textoGuardia
                             }
                         })
                     })
+                    const resJson = await res.json()
+                    if (conversacionId) {
+                        await admin.from('whatsapp_mensajes').insert({
+                            tenant_id: tenantId,
+                            conversacion_id: conversacionId,
+                            tipo: 'texto',
+                            remitente: 'bot',
+                            contenido: textoGuardia,
+                            wa_message_id: resJson?.messages?.[0]?.id || null,
+                            estado_envio: 'enviado',
+                            metadata: { accion: 'confirmacion_guardia' }
+                        })
+                        await admin.from('whatsapp_conversaciones').update({
+                            ultimo_mensaje_at: new Date().toISOString(),
+                            ultimo_mensaje_texto: `🤖 ${textoGuardia.slice(0, 80)}`,
+                        }).eq('id', conversacionId)
+                    }
                 } catch (confErr) {
                     console.error('Error al responder confirmación de turno de guardia:', confErr)
                 }
@@ -694,7 +747,9 @@ export async function POST(request: NextRequest) {
                 console.log(`[WA WEBHOOK] Enviando Menú Principal interactivo autónomo a ${from}...`)
                 const enviadoMenu = await enviarMenuPrincipalAutonomo(
                     waCreds,
-                    cleanPhone
+                    cleanPhone,
+                    'Consultorio Odontológico',
+                    conversacionId ? { tenantId, conversacionId, accion: 'menu_principal_fallback' } : undefined
                 )
                 if (enviadoMenu) {
                     return NextResponse.json({ success: true })

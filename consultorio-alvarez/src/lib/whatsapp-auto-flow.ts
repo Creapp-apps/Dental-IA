@@ -67,12 +67,13 @@ function limpiarNombreYApellido(input: string): { nombre: string; apellido: stri
 }
 
 /**
- * Envía un mensaje de texto simple a través de WhatsApp Cloud API.
+ * Envía un mensaje de texto simple a través de WhatsApp Cloud API y lo persiste para tracking/auditoría.
  */
 export async function enviarTextoWhatsApp(
     creds: WhatsAppCreds,
     toPhone: string,
-    body: string
+    body: string,
+    tracking?: { tenantId?: string; conversacionId?: string; accion?: string }
 ): Promise<boolean> {
     try {
         const response = await fetch(`https://graph.facebook.com/v20.0/${creds.phoneNumberId}/messages`, {
@@ -94,6 +95,30 @@ export async function enviarTextoWhatsApp(
             console.error('[WA AUTO-FLOW] Error al enviar mensaje de texto:', res)
             return false
         }
+
+        // Persistencia para tracking y auditoría en /mensajes
+        if (tracking?.tenantId && tracking?.conversacionId) {
+            try {
+                const admin = createAdminClient()
+                await admin.from('whatsapp_mensajes').insert({
+                    tenant_id: tracking.tenantId,
+                    conversacion_id: tracking.conversacionId,
+                    tipo: 'texto',
+                    remitente: 'bot',
+                    contenido: body,
+                    wa_message_id: res?.messages?.[0]?.id || null,
+                    estado_envio: 'enviado',
+                    metadata: { accion: tracking.accion || 'bot_texto' }
+                })
+                await admin.from('whatsapp_conversaciones').update({
+                    ultimo_mensaje_at: new Date().toISOString(),
+                    ultimo_mensaje_texto: `🤖 ${body.slice(0, 80)}`,
+                }).eq('id', tracking.conversacionId)
+            } catch (dbErr) {
+                console.warn('[WA TRACKING] Error persistiendo mensaje bot:', dbErr)
+            }
+        }
+
         return true
     } catch (err) {
         console.error('[WA AUTO-FLOW] Excepción al enviar mensaje de texto:', err)
@@ -102,13 +127,14 @@ export async function enviarTextoWhatsApp(
 }
 
 /**
- * Envía un mensaje con botones interactivos (máximo 3 botones permitidos por WhatsApp Cloud API).
+ * Envía un mensaje con botones interactivos (máximo 3 botones permitidos por WhatsApp Cloud API) y lo persiste para tracking.
  */
 export async function enviarBotonesWhatsApp(
     creds: WhatsAppCreds,
     toPhone: string,
     textoCuerpo: string,
-    botones: { id: string; title: string }[]
+    botones: { id: string; title: string }[],
+    tracking?: { tenantId?: string; conversacionId?: string; accion?: string }
 ): Promise<boolean> {
     try {
         const response = await fetch(`https://graph.facebook.com/v20.0/${creds.phoneNumberId}/messages`, {
@@ -142,6 +168,35 @@ export async function enviarBotonesWhatsApp(
             console.error('[WA AUTO-FLOW] Error al enviar botones interactivos:', res)
             return false
         }
+
+        // Persistencia para tracking y auditoría en /mensajes
+        if (tracking?.tenantId && tracking?.conversacionId) {
+            try {
+                const admin = createAdminClient()
+                const botonesTxt = botones.slice(0, 3).map(b => `[🔘 ${b.title}]`).join(' ')
+                const contenidoCompleto = `${textoCuerpo}\n\n${botonesTxt}`
+                await admin.from('whatsapp_mensajes').insert({
+                    tenant_id: tracking.tenantId,
+                    conversacion_id: tracking.conversacionId,
+                    tipo: 'interactivo',
+                    remitente: 'bot',
+                    contenido: contenidoCompleto,
+                    wa_message_id: res?.messages?.[0]?.id || null,
+                    estado_envio: 'enviado',
+                    metadata: { 
+                        accion: tracking.accion || 'bot_botones',
+                        botones: botones.slice(0, 3) 
+                    }
+                })
+                await admin.from('whatsapp_conversaciones').update({
+                    ultimo_mensaje_at: new Date().toISOString(),
+                    ultimo_mensaje_texto: `🤖 ${textoCuerpo.slice(0, 80)}`,
+                }).eq('id', tracking.conversacionId)
+            } catch (dbErr) {
+                console.warn('[WA TRACKING] Error persistiendo botones bot:', dbErr)
+            }
+        }
+
         return true
     } catch (err) {
         console.error('[WA AUTO-FLOW] Excepción enviando botones interactivos:', err)
@@ -293,7 +348,8 @@ export async function buscarProximoTurnoPaciente(tenantId: string, phone: string
 export async function enviarMenuPrincipalAutonomo(
     creds: WhatsAppCreds,
     toPhone: string,
-    nombreConsultorio: string = 'Consultorio Odontológico'
+    nombreConsultorio: string = 'Consultorio Odontológico',
+    tracking?: { tenantId?: string; conversacionId?: string; accion?: string }
 ): Promise<boolean> {
     const cuerpo = `🦷 *${nombreConsultorio} — Asistente Digital*\n\n` +
         `¡Hola! Bienvenido/a. ¿Cómo podemos ayudarte hoy?\n` +
@@ -302,8 +358,8 @@ export async function enviarMenuPrincipalAutonomo(
     return enviarBotonesWhatsApp(creds, toPhone, cuerpo, [
         { id: 'MENU_TURNOS', title: '📅 Sacar / Ver Turno' },
         { id: 'ACTIVAR_GUARDIA_URGENCIA', title: '🚨 Urgencia / Dolor' },
-        { id: 'MENU_INFO_GENERAL', title: 'ℹ️ Dirección y Precios' }
-    ])
+        { id: 'FAQ_UBICACION', title: '📍 Ubicación y Horas' }
+    ], tracking)
 }
 
 /**
@@ -328,6 +384,11 @@ export async function procesarMensajeAutonomo({
     const cleanPhone = fromPhone.replace(/\D/g, '')
     const normText = normalizarTexto(textBody)
     const dniDetectado = extraerDni(textBody)
+
+    const trackingBase = {
+        tenantId,
+        conversacionId
+    }
 
     // Traer datos del consultorio para las respuestas de FAQ y reservas
     const { data: tenant } = await admin
@@ -360,7 +421,8 @@ export async function procesarMensajeAutonomo({
             await enviarTextoWhatsApp(
                 creds,
                 cleanPhone,
-                `✍️ Por favor escribí solo los números de tu DNI (por ejemplo: *14234567*) para poder registrar tu turno en la agenda médica:`
+                `✍️ Por favor escribí solo los números de tu DNI (por ejemplo: *14234567*) para poder registrar tu turno en la agenda médica:`,
+                { ...trackingBase, accion: 'reintentar_dni' }
             )
             return { handled: true, action: 'reintentar_dni' }
         }
@@ -388,7 +450,7 @@ export async function procesarMensajeAutonomo({
             await enviarBotonesWhatsApp(creds, cleanPhone, msgError, [
                 { id: 'MENU_TURNOS', title: '📅 Ver otros turnos' },
                 { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-            ])
+            ], { ...trackingBase, accion: 'conflicto_reserva' })
             return { handled: true, action: 'conflicto_reserva' }
         }
 
@@ -400,9 +462,9 @@ export async function procesarMensajeAutonomo({
             `¡Te esperamos con gusto!`
 
         await enviarBotonesWhatsApp(creds, cleanPhone, msgExito, [
-            { id: 'MENU_INFO_GENERAL', title: '📍 Cómo llegar' },
+            { id: 'FAQ_UBICACION', title: '📍 Cómo llegar' },
             { id: 'MENU_PRINCIPAL', title: '👍 ¡Muchas gracias!' }
-        ])
+        ], { ...trackingBase, accion: 'turno_creado_con_exito' })
         return { handled: true, action: 'turno_creado_con_exito' }
     }
 
@@ -423,7 +485,7 @@ export async function procesarMensajeAutonomo({
         const msgPideDni = `🪪 ¡Muchas gracias, *${nombre}*!\n\n` +
             `Por último, por favor escribí tu número de **DNI** (sin puntos ni letras) para generar tu ficha médica:`
 
-        await enviarTextoWhatsApp(creds, cleanPhone, msgPideDni)
+        await enviarTextoWhatsApp(creds, cleanPhone, msgPideDni, { ...trackingBase, accion: 'pidiendo_dni' })
         return { handled: true, action: 'nombre_recibido_pidiendo_dni' }
     }
 
@@ -464,7 +526,7 @@ export async function procesarMensajeAutonomo({
                 { id: `CONFIRMAR_AUTO_${fecha}_${hora}_${pacienteExistente.dni}`, title: '✅ A mi nombre' },
                 { id: `RESERVA_OTRA_PERSONA_${fecha}_${hora}`, title: '👤 Para otra persona' },
                 { id: 'MENU_PRINCIPAL', title: '⬅️ Volver' }
-            ])
+            ], { ...trackingBase, accion: 'ofrecida_confirmacion_auto_pct' })
             return { handled: true, action: 'ofrecida_confirmacion_auto_pct' }
         }
 
@@ -481,7 +543,7 @@ export async function procesarMensajeAutonomo({
             `Reservamos para el:\n📅 *${fechaLegible}*\n\n` +
             `Para anotarte en la agenda del consultorio, por favor **escribí tu Nombre y Apellido**:`
 
-        await enviarTextoWhatsApp(creds, cleanPhone, msgPideNombre)
+        await enviarTextoWhatsApp(creds, cleanPhone, msgPideNombre, { ...trackingBase, accion: 'slot_elegido_pidiendo_nombre' })
         return { handled: true, action: 'slot_elegido_pidiendo_nombre' }
     }
 
@@ -524,9 +586,9 @@ export async function procesarMensajeAutonomo({
             `¡Te esperamos!`
 
         await enviarBotonesWhatsApp(creds, cleanPhone, msgExito, [
-            { id: 'MENU_INFO_GENERAL', title: '📍 Cómo llegar' },
+            { id: 'FAQ_UBICACION', title: '📍 Cómo llegar' },
             { id: 'MENU_PRINCIPAL', title: '👍 ¡Muchas gracias!' }
-        ])
+        ], { ...trackingBase, accion: 'reserva_auto_confirmada_1click' })
         return { handled: true, action: 'reserva_auto_confirmada_1click' }
     }
 
@@ -553,9 +615,181 @@ export async function procesarMensajeAutonomo({
         await enviarTextoWhatsApp(
             creds,
             cleanPhone,
-            `✍️ Perfecto. Por favor escribí el **Nombre y Apellido del paciente** que va a asistir a la consulta:`
+            `✍️ Perfecto. Por favor escribí el **Nombre y Apellido del paciente** que va a asistir a la consulta:`,
+            { ...trackingBase, accion: 'pidiendo_nombre_familiar' }
         )
         return { handled: true, action: 'pidiendo_nombre_familiar' }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // PARCHE 1: ACUSE DE RECIBO INTELIGENTE DE FOTOS / ESTUDIOS
+    // ─────────────────────────────────────────────────────────────
+    if (textBody.includes('[Foto adjunta]') || textBody.includes('📷') || (normText.includes('foto') && (normText.includes('envio') || normText.includes('adjunt') || normText.includes('mando')))) {
+        console.log(`[WA AUTO-FLOW] Foto o estudio recibido de ${cleanPhone}. Acusando recibo y alertando recepción...`)
+        
+        if (conversacionId) {
+            await admin.from('whatsapp_conversaciones').update({
+                estado: 'HUMANO_PENDIENTE',
+                updated_at: new Date().toISOString()
+            }).eq('id', conversacionId)
+        }
+
+        await admin.from('notificaciones').insert({
+            tenant_id: tenantId,
+            titulo: '📸 Foto enviada por Paciente',
+            mensaje: `El paciente (+${cleanPhone}) envió una foto/estudio por WhatsApp. Revisar en mensajes.`,
+            tipo: 'turno_reprogramado',
+            referencia_id: conversacionId || '',
+            leida: false
+        })
+
+        try {
+            const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+            await sendPushToRole('secretaria', tenantId, '📸 Foto Clínica Recibida', `Paciente +${cleanPhone} envió una foto por WhatsApp.`, '/mensajes')
+            await sendPushToRole('admin', tenantId, '📸 Foto Clínica Recibida', `Paciente +${cleanPhone} envió una foto por WhatsApp.`, '/mensajes')
+        } catch (e) {}
+
+        const msgFoto = `¡Foto recibida correctamente! 📸✨\n\n` +
+            `Ya la adjuntamos a tu ficha médica para que el equipo odontológico pueda verla y evaluarla.\n` +
+            `Un profesional o asesor de nuestro equipo te responderá a la brevedad por este medio.`
+
+        await enviarTextoWhatsApp(creds, cleanPhone, msgFoto, {
+            ...trackingBase,
+            accion: 'foto_recibida_acuse'
+        })
+        return { handled: true, action: 'foto_recibida_acuse' }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // PARCHE 2: CORTESÍA Y AGRADECIMIENTOS (Cierre cálido sin loops)
+    // ─────────────────────────────────────────────────────────────
+    const esAgradecimiento = 
+        normText === 'gracias' ||
+        normText === 'muchas gracias' ||
+        normText === 'muchas gracias!' ||
+        normText === 'gracias!!' ||
+        normText === 'gracias!' ||
+        normText.startsWith('gracias') ||
+        normText.startsWith('muchas gracias') ||
+        normText === 'perfecto gracias' ||
+        normText === 'muy bien gracias' ||
+        normText.includes('excelente estado') ||
+        normText === 'buen dia' ||
+        normText === 'buenas tardes'
+
+    if (esAgradecimiento && !normText.includes('turno') && !normText.includes('dolor')) {
+        const msgAgradecimiento = `¡De nada! Que tengas un excelente día. Quedamos a tu entera disposición ante cualquier duda o consulta 😊🦷✨`
+        await enviarTextoWhatsApp(creds, cleanPhone, msgAgradecimiento, {
+            ...trackingBase,
+            accion: 'cortesia_agradecimiento'
+        })
+        return { handled: true, action: 'cortesia_agradecimiento' }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // PARCHE 3: CANCELACIÓN / REPROGRAMACIÓN POR SALUD O FUERZA MAYOR
+    // ─────────────────────────────────────────────────────────────
+    const esImpedimentoSalud = 
+        normText.includes('accidente') ||
+        normText.includes('reposo') ||
+        normText.includes('antibiotico') ||
+        normText.includes('infeccion') ||
+        normText.includes('lastime') ||
+        normText.includes('enfermo') ||
+        normText.includes('enferma') ||
+        normText.includes('imposible ir') ||
+        normText.includes('no puedo asistir') ||
+        normText.includes('no voy a poder ir') ||
+        normText.includes('no llego') ||
+        normText.includes('se me complica') ||
+        normText.includes('fiebre') ||
+        normText.includes('operaron') ||
+        normText.includes('cancelar el turno') ||
+        normText.includes('podrias cancelar')
+
+    if (esImpedimentoSalud) {
+        console.log(`[WA AUTO-FLOW] Motivo de fuerza mayor o salud detectado en ${cleanPhone}. Buscando turno activo...`)
+        const turnoActivo = await buscarProximoTurnoPaciente(tenantId, cleanPhone, null)
+
+        if (turnoActivo) {
+            await admin.from('turnos').update({ estado: 'CANCELADO' }).eq('id', turnoActivo.id)
+            await admin.from('recordatorios').update({
+                estado_envio: 'RESPONDIDO',
+                respuesta_paciente: 'CANCELAR',
+                fecha_respuesta: new Date().toISOString()
+            }).eq('turno_id', turnoActivo.id)
+
+            await admin.from('notificaciones').insert({
+                tenant_id: tenantId,
+                titulo: '🏥 Turno Cancelado por Motivo de Salud',
+                mensaje: `El paciente (+${cleanPhone}) canceló su turno: "${textBody.slice(0, 100)}"`,
+                tipo: 'turno_cancelado',
+                referencia_id: turnoActivo.id,
+                leida: false
+            })
+
+            const msgSalud = `Entendido totalmente 🙏\n\n` +
+                `Ya cancelamos tu turno para que puedas hacer reposo y recuperarte tranquilamente.\n\n` +
+                `Cuando estés mejor, volvé a escribirnos por este chat y te ayudamos a coordinar una nueva fecha. ¡Que te mejores pronto! ❤️🦷`
+
+            await enviarTextoWhatsApp(creds, cleanPhone, msgSalud, {
+                ...trackingBase,
+                accion: 'cancelacion_empatica_salud'
+            })
+            return { handled: true, action: 'cancelacion_empatica_salud' }
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // PARCHE 4: TURNOS ESPECIALES / MAYOR DURACIÓN (Evita turno corto)
+    // ─────────────────────────────────────────────────────────────
+    const esTratamientoComplejo = 
+        normText.includes('incrustacion') ||
+        normText.includes('protesis') ||
+        normText.includes('implante') ||
+        normText.includes('cirugia') ||
+        normText.includes('extraccion') ||
+        normText.includes('conducto') ||
+        normText.includes('perno') ||
+        normText.includes('corona') ||
+        normText.includes('40 minutos') ||
+        normText.includes('45 minutos') ||
+        normText.includes('1 hora') ||
+        normText.includes('tiempo especial')
+
+    if (esTratamientoComplejo) {
+        console.log(`[WA AUTO-FLOW] Tratamiento especial o tiempo extendido detectado en ${cleanPhone}.`)
+        
+        if (conversacionId) {
+            await admin.from('whatsapp_conversaciones').update({
+                estado: 'HUMANO_PENDIENTE',
+                updated_at: new Date().toISOString()
+            }).eq('id', conversacionId)
+        }
+
+        await admin.from('notificaciones').insert({
+            tenant_id: tenantId,
+            titulo: '🦷 Solicitud de Turno Especial / Extenso',
+            mensaje: `Paciente (+${cleanPhone}) solicita turno especial: "${textBody.slice(0, 100)}"`,
+            tipo: 'turno_reprogramado',
+            referencia_id: conversacionId || '',
+            leida: false
+        })
+
+        try {
+            const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+            await sendPushToRole('secretaria', tenantId, '🦷 Turno Especial Solicitado', `Paciente (+${cleanPhone}) requiere turno especial/extenso.`, '/mensajes')
+        } catch (e) {}
+
+        const msgTratamiento = `¡Recibido! 🦷✨\n\n` +
+            `Al tratarse de un procedimiento que requiere un tiempo especial en el sillón odontológico o preparación de instrumental, derivamos tu solicitud directamente al equipo de recepción.\n\n` +
+            `Te responderemos a la brevedad con los días y horarios que mejor se adapten a tu caso.`
+
+        await enviarTextoWhatsApp(creds, cleanPhone, msgTratamiento, {
+            ...trackingBase,
+            accion: 'derivado_turno_especial'
+        })
+        return { handled: true, action: 'derivado_turno_especial' }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -596,7 +830,7 @@ export async function procesarMensajeAutonomo({
                 { id: `CONFIRMAR_TURNO_${turno.id}`, title: '✅ Confirmar' },
                 { id: `REPROGRAMAR_TURNO_${turno.id}`, title: '🔄 Reprogramar' },
                 { id: `CANCELAR_TURNO_${turno.id}`, title: '❌ Cancelar' }
-            ])
+            ], { ...trackingBase, accion: 'turno_dni_encontrado' })
             return { handled: true, action: 'turno_dni_encontrado' }
         } else {
             // El DNI es válido pero no tiene turno activo futuro: ofrecer sacar turno inmediatamente
@@ -607,7 +841,7 @@ export async function procesarMensajeAutonomo({
             await enviarBotonesWhatsApp(creds, cleanPhone, msgNoTurno, [
                 { id: 'MENU_TURNOS', title: '📅 Sacar Turno Aquí' },
                 { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-            ])
+            ], { ...trackingBase, accion: 'dni_sin_turno' })
             return { handled: true, action: 'dni_sin_turno' }
         }
     }
@@ -649,7 +883,10 @@ export async function procesarMensajeAutonomo({
                 title: s.btnTitulo
             }))
 
-            await enviarBotonesWhatsApp(creds, cleanPhone, textoPropuesta, botonesSlots)
+            await enviarBotonesWhatsApp(creds, cleanPhone, textoPropuesta, botonesSlots, {
+                ...trackingBase,
+                accion: 'ofrecidos_slots_conversacionales'
+            })
             return { handled: true, action: 'ofrecidos_slots_conversacionales' }
         } else {
             // Fallback si no hay slots en los próximos días
@@ -661,7 +898,7 @@ export async function procesarMensajeAutonomo({
             await enviarBotonesWhatsApp(creds, cleanPhone, msgSinSlots, [
                 { id: 'ACTIVAR_GUARDIA_URGENCIA', title: '🚨 Tengo Urgencia' },
                 { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-            ])
+            ], { ...trackingBase, accion: 'sin_slots_link_portal' })
             return { handled: true, action: 'sin_slots_link_portal' }
         }
     }
@@ -710,7 +947,7 @@ export async function procesarMensajeAutonomo({
                 { id: `CONFIRMAR_TURNO_${turnoPorTelefono.id}`, title: '✅ Confirmar' },
                 { id: `REPROGRAMAR_TURNO_${turnoPorTelefono.id}`, title: '🔄 Reprogramar' },
                 { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-            ])
+            ], { ...trackingBase, accion: 'turno_consultado_por_telefono' })
             return { handled: true, action: 'turno_consultado_por_telefono' }
         }
 
@@ -718,12 +955,12 @@ export async function procesarMensajeAutonomo({
             `Para ubicar tu turno en la agenda al instante, por favor **escribí tu número de DNI** (sin puntos ni letras).\n\n` +
             `_Ejemplo: 38452109_`
 
-        await enviarTextoWhatsApp(creds, cleanPhone, pedirDniMsg)
+        await enviarTextoWhatsApp(creds, cleanPhone, pedirDniMsg, { ...trackingBase, accion: 'solicito_dni_localizador' })
         return { handled: true, action: 'solicito_dni_localizador' }
     }
 
     // ─────────────────────────────────────────────────────────────
-    // 4. INTENCIÓN: FAQ - DIRECCIÓN, UBICACIÓN Y CÓMO LLEGAR
+    // 4. INTENCIÓN: FAQ - DIRECCIÓN, UBICACIÓN Y CÓMO LLEGAR (SIN RODEOS)
     // ─────────────────────────────────────────────────────────────
     const pideUbicacion = 
         normText.includes('donde queda') ||
@@ -732,20 +969,37 @@ export async function procesarMensajeAutonomo({
         normText.includes('ubicacion') ||
         normText.includes('como llego') ||
         normText.includes('calle') ||
-        buttonPayload === 'FAQ_UBICACION'
+        normText.includes('pasar la direccion') ||
+        normText.includes('pasarias la direccion') ||
+        normText.includes('ir hoy al turno') ||
+        buttonPayload === 'FAQ_UBICACION' ||
+        buttonPayload === 'MENU_INFO_GENERAL'
 
     if (pideUbicacion) {
-        const msgDireccion = `📍 *Ubicación de ${nombreClinica}*\n\n` +
+        // Verificar si el paciente tiene turno hoy para darle respuesta directa
+        const turnoHoy = await buscarProximoTurnoPaciente(tenantId, cleanPhone, null)
+        let encabezadoTurno = ''
+
+        if (turnoHoy) {
+            const fechaObj = new Date(turnoHoy.fecha_inicio)
+            const horaStr = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })
+            const fechaStr = fechaObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Argentina/Buenos_Aires' })
+            const prof = turnoHoy.profesional as any
+
+            encabezadoTurno = `👋 ¡Hola! Te recordamos que tu turno es el *${fechaStr} a las ${horaStr} hs* con el/la Dr/a. *${prof?.apellido || 'Álvarez'}*.\n\n`
+        }
+
+        const msgDireccion = `${encabezadoTurno}📍 *Ubicación de ${nombreClinica}*\n\n` +
             `Estamos en: *${direccionClinica}*.\n\n` +
             `🕐 *Horarios de atención:*\n` +
-            `Lunes a Viernes de 09:00 a 20:00 hs.\n` +
-            `Sábados de 09:00 a 13:00 hs.`
+            `• Lunes a Viernes de 09:00 a 20:00 hs.\n` +
+            `• Sábados de 09:00 a 13:00 hs.`
 
         await enviarBotonesWhatsApp(creds, cleanPhone, msgDireccion, [
             { id: 'MENU_TURNOS', title: '📅 Sacar Turno' },
-            { id: 'FAQ_PREPAGAS', title: '🩺 Obras Sociales' },
+            { id: 'FAQ_PRECIOS', title: '💳 Medios de Pago' },
             { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-        ])
+        ], { ...trackingBase, accion: 'faq_ubicacion' })
         return { handled: true, action: 'faq_ubicacion' }
     }
 
@@ -782,7 +1036,7 @@ export async function procesarMensajeAutonomo({
             { id: 'MENU_TURNOS', title: '📅 Sacar Turno' },
             { id: 'FAQ_PRECIOS', title: '💳 Medios de Pago' },
             { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-        ])
+        ], { ...trackingBase, accion: 'faq_prepagas' })
         return { handled: true, action: 'faq_prepagas' }
     }
 
@@ -800,8 +1054,7 @@ export async function procesarMensajeAutonomo({
         normText.includes('tarjeta') ||
         normText.includes('efectivo') ||
         normText.includes('cuotas') ||
-        buttonPayload === 'FAQ_PRECIOS' ||
-        buttonPayload === 'MENU_INFO_GENERAL'
+        buttonPayload === 'FAQ_PRECIOS'
 
     if (pidePrecios) {
         const msgPrecios = `💳 *Aranceles y Medios de Pago — ${nombreClinica}*\n\n` +
@@ -813,7 +1066,7 @@ export async function procesarMensajeAutonomo({
             { id: 'MENU_TURNOS', title: '📅 Agendar Consulta' },
             { id: 'FAQ_UBICACION', title: '📍 Dónde estamos' },
             { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-        ])
+        ], { ...trackingBase, accion: 'faq_precios' })
         return { handled: true, action: 'faq_precios' }
     }
 
@@ -856,7 +1109,7 @@ export async function procesarMensajeAutonomo({
         const msgEmpatia = `Estimado/a, lamentamos sinceramente cualquier inconveniente.\n\n` +
             `Tu mensaje fue derivado con **prioridad alta** a la administración de ${nombreClinica}. Una persona de nuestro equipo se comunicará por este medio a la brevedad para darte una solución.`
 
-        await enviarTextoWhatsApp(creds, cleanPhone, msgEmpatia)
+        await enviarTextoWhatsApp(creds, cleanPhone, msgEmpatia, { ...trackingBase, accion: 'queja_derivada_urgente' })
         return { handled: true, action: 'queja_derivada_urgente' }
     }
 
@@ -883,15 +1136,15 @@ export async function procesarMensajeAutonomo({
         const msgRecepcion = `¡Entendido! 💬 Derivamos tu chat con nuestro equipo de recepción.\n\n` +
             `Para que puedan ayudarte más rápido apenas tomen tu consulta, por favor indicanos tu **nombre y apellido** y el **motivo de tu consulta** ✍️`
 
-        await enviarTextoWhatsApp(creds, cleanPhone, msgRecepcion)
+        await enviarTextoWhatsApp(creds, cleanPhone, msgRecepcion, { ...trackingBase, accion: 'derivado_recepcion' })
         return { handled: true, action: 'derivado_recepcion' }
     }
 
     // ─────────────────────────────────────────────────────────────
     // 9. MENÚ PRINCIPAL POR DEFECTO
     // ─────────────────────────────────────────────────────────────
-    if (buttonPayload === 'MENU_PRINCIPAL' || normText.includes('menu') || normText.includes('hola') || normText.includes('buen dia') || normText.includes('buenas tardes')) {
-        await enviarMenuPrincipalAutonomo(creds, cleanPhone, nombreClinica)
+    if (buttonPayload === 'MENU_PRINCIPAL' || normText.includes('menu') || normText.includes('hola')) {
+        await enviarMenuPrincipalAutonomo(creds, cleanPhone, nombreClinica, { ...trackingBase, accion: 'menu_principal' })
         return { handled: true, action: 'menu_principal' }
     }
 

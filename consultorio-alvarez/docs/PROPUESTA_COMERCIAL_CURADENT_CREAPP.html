@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Propuesta Comercial Estratégica | Curadent Moreno & CreAPP Software Lab</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#1e3a8a',
+                        },
+                        curadent: {
+                            cyan: '#06b6d4',
+                            emerald: '#10b981',
+                            navy: '#0f172a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @media print {
+            body {
+                background: white !important;
+                color: #0f172a !important;
+            }
+            .no-print {
+                display: none !important;
+            }
+            .print-break-inside {
+                break-inside: avoid;
+            }
+            .page-break {
+                page-break-before: always;
+            }
+            .glass-card {
+                box-shadow: none !important;
+                border: 1px solid #cbd5e1 !important;
+                background: white !important;
+            }
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .hero-mesh {
+            background: radial-gradient(circle at 10% 20%, rgba(37, 99, 235, 0.08) 0%, transparent 40%),
+                        radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.08) 0%, transparent 40%);
+        }
+        .badge-pulse {
+            box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.5);
+            animation: pulse-green 2s infinite;
+        }
+        @keyframes pulse-green {
+            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.6); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased font-sans min-h-screen hero-mesh">
+
+    <!-- Top Navigation / Action Bar -->
+    <header class="sticky top-0 z-50 bg-white/80 backdrop-blur-md border-b border-slate-200 no-print">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-blue-600 text-white font-bold text-lg shadow-sm">
+                    C
+                </span>
+                <div>
+                    <h1 class="text-sm font-bold text-slate-900 leading-tight">CreAPP Software Lab</h1>
+                    <p class="text-xs text-slate-500">Propuesta de Modernización • Curadent Moreno</p>
+                </div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <span class="hidden sm:inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5 animate-pulse"></span>
+                    Beneficio Cliente Dental-IA
+                </span>
+                <button onclick="window.print()" class="inline-flex items-center px-4 py-2 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-400 transition shadow-sm cursor-pointer">
+                    <svg class="w-4 h-4 mr-1.5 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+                    </svg>
+                    Descargar en PDF / Imprimir
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-5xl mx-auto px-4 sm:px-6 py-10 space-y-12">
+
+        <!-- Cover / Hero Section -->
+        <section class="bg-white rounded-3xl p-8 sm:p-12 border border-slate-200/80 shadow-sm relative overflow-hidden">
+            <div class="absolute top-0 right-0 -mt-10 -mr-10 w-72 h-72 bg-gradient-to-br from-blue-100 to-cyan-100 rounded-full blur-3xl opacity-70 pointer-events-none"></div>
+
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-8 border-b border-slate-100">
+                <div>
+                    <div class="inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold tracking-wide uppercase bg-blue-50 text-blue-700 border border-blue-200/60 mb-3">
+                        Plan Integral de Crecimiento y Alojamiento
+                    </div>
+                    <h2 class="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+                        Evolución Digital para <br><span class="gradient-text">Curadent Odontología</span>
+                    </h2>
+                    <p class="text-sm sm:text-base text-slate-600 mt-2 max-w-xl">
+                        Unificación de infraestructura web, turnos inteligentes en tiempo real y posicionamiento local en Moreno para multiplicar la llegada de pacientes de calidad.
+                    </p>
+                </div>
+                <div class="flex md:flex-col items-end justify-between md:justify-center p-4 rounded-2xl bg-slate-50 border border-slate-200/60 text-right">
+                    <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider">Dominio Destino</span>
+                    <span class="text-sm font-bold text-blue-600 font-mono">curadentmoreno.com</span>
+                    <span class="text-xs text-emerald-600 font-semibold mt-1 flex items-center">
+                        <svg class="w-3.5 h-3.5 mr-1" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path></svg>
+                        Migración Sin Caídas (0 Min)
+                    </span>
+                </div>
+            </div>
+
+            <!-- Key Metric Highlights -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-8">
+                <div class="p-4 rounded-xl bg-blue-50/50 border border-blue-100">
+                    <div class="text-xs font-bold text-blue-600 uppercase">Tecnología</div>
+                    <div class="text-xl font-bold text-slate-900 mt-1">Dental-IA Core</div>
+                    <div class="text-xs text-slate-500 mt-0.5">Turnero 24/7 + Cobro de seña en vivo</div>
+                </div>
+                <div class="p-4 rounded-xl bg-cyan-50/50 border border-cyan-100">
+                    <div class="text-xs font-bold text-cyan-700 uppercase">Posicionamiento</div>
+                    <div class="text-xl font-bold text-slate-900 mt-1">SEO Local Moreno</div>
+                    <div class="text-xs text-slate-500 mt-0.5">Google Maps + Odontopediatría líder</div>
+                </div>
+                <div class="p-4 rounded-xl bg-emerald-50/50 border border-emerald-100">
+                    <div class="text-xs font-bold text-emerald-700 uppercase">Transparencia</div>
+                    <div class="text-xl font-bold text-slate-900 mt-1">Meta Ads Directo</div>
+                    <div class="text-xs text-slate-500 mt-0.5">0% comisiones ocultas sobre la pauta</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Comparative: Gurú vs CreAPP -->
+        <section class="bg-white rounded-3xl p-8 sm:p-10 border border-slate-200/80 shadow-sm print-break-inside">
+            <div class="max-w-2xl mb-8">
+                <h3 class="text-xs font-bold uppercase tracking-wider text-blue-600">Comparativa Estratégica</h3>
+                <h4 class="text-2xl font-bold text-slate-900 tracking-tight mt-1">¿Por qué cambiar el modelo tradicional de Gurú?</h4>
+                <p class="text-sm text-slate-600 mt-2">
+                    El servicio contratado históricamente mantiene cautivo al consultorio en una web tipo folleto y campañas opacas. Aquí el contraste con la solución moderna de CreAPP:
+                </p>
+            </div>
+
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-sm border-collapse">
+                    <thead>
+                        <tr class="border-b border-slate-200 text-xs font-bold text-slate-400 uppercase tracking-wider">
+                            <th class="py-3 px-4">Pilar Operativo</th>
+                            <th class="py-3 px-4 text-red-600 bg-red-50/40 rounded-t-lg">Modelo Actual (Gurú)</th>
+                            <th class="py-3 px-4 text-blue-700 bg-blue-50/60 rounded-t-lg">Ecosistema CreAPP + Dental-IA</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100 font-medium">
+                        <tr>
+                            <td class="py-4 px-4 font-semibold text-slate-900">Página Web</td>
+                            <td class="py-4 px-4 text-slate-600 bg-red-50/20">Plantilla estática genérica en Duda. No aporta valor funcional.</td>
+                            <td class="py-4 px-4 text-slate-900 bg-blue-50/30">Plataforma médica de alta velocidad en Next.js con diseño institucional premium.</td>
+                        </tr>
+                        <tr>
+                            <td class="py-4 px-4 font-semibold text-slate-900">Reserva de Turnos</td>
+                            <td class="py-4 px-4 text-slate-600 bg-red-50/20">Enlace a WhatsApp o formulario ciego que el paciente suele abandonar.</td>
+                            <td class="py-4 px-4 text-emerald-700 bg-blue-50/30 font-semibold">Turnero online autónomo 24/7 conectado a la agenda real de los doctores.</td>
+                        </tr>
+                        <tr>
+                            <td class="py-4 px-4 font-semibold text-slate-900">Ausentismo / Seña</td>
+                            <td class="py-4 px-4 text-slate-600 bg-red-50/20">Inexistente. Altas pérdidas por pacientes que reservan y no asisten.</td>
+                            <td class="py-4 px-4 text-slate-900 bg-blue-50/30">Cobro de seña obligatorio por Mercado Pago + recordatorios de WhatsApp.</td>
+                        </tr>
+                        <tr>
+                            <td class="py-4 px-4 font-semibold text-slate-900">Anuncios en Meta (Instagram/FB)</td>
+                            <td class="py-4 px-4 text-slate-600 bg-red-50/20">Caja negra: no se sabe cuánto va a pauta y cuánto se queda la agencia.</td>
+                            <td class="py-4 px-4 text-slate-900 bg-blue-50/30">100% transparente. La inversión se paga directo a Meta con tarjeta del consultorio.</td>
+                        </tr>
+                        <tr>
+                            <td class="py-4 px-4 font-semibold text-slate-900">Trazabilidad de Publicidad</td>
+                            <td class="py-4 px-4 text-slate-600 bg-red-50/20">Miden solo "clics" y "visitas" superficiales.</td>
+                            <td class="py-4 px-4 text-blue-700 bg-blue-50/30 font-semibold">Píxel de Meta sincronizado: reporte exacto de "Costo por Turno Efectivo".</td>
+                        </tr>
+                        <tr>
+                            <td class="py-4 px-4 font-semibold text-slate-900">Google Maps (Moreno)</td>
+                            <td class="py-4 px-4 text-slate-600 bg-red-50/20">Ficha estática sin estrategia de reseñas activas.</td>
+                            <td class="py-4 px-4 text-slate-900 bg-blue-50/30">Optimización semanal + automatización de reseñas 5★ post-consulta.</td>
+                        </tr>
+                        <tr>
+                            <td class="py-4 px-4 font-semibold text-slate-900">Atención y Soporte</td>
+                            <td class="py-4 px-4 text-slate-600 bg-red-50/20">Tickets lentos en call center corporativo.</td>
+                            <td class="py-4 px-4 text-slate-900 bg-blue-50/30">Canal directo por WhatsApp con los ingenieros y creativos de CreAPP.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Funnel Diagram Section -->
+        <section class="bg-gradient-to-br from-slate-900 via-slate-800 to-blue-950 rounded-3xl p-8 sm:p-10 text-white shadow-xl print-break-inside">
+            <div class="text-center max-w-2xl mx-auto mb-10">
+                <span class="text-xs font-bold tracking-widest text-cyan-400 uppercase">Embudo de Conversión</span>
+                <h3 class="text-2xl sm:text-3xl font-extrabold mt-1 tracking-tight">El Nuevo Circuito de Captación Automática</h3>
+                <p class="text-xs sm:text-sm text-slate-300 mt-2">
+                    De desconocidos en Moreno a pacientes fidelizados en el sillón odontológico:
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 relative">
+                <!-- Step 1 -->
+                <div class="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 flex flex-col justify-between">
+                    <div>
+                        <div class="w-8 h-8 rounded-lg bg-blue-500 text-white font-bold flex items-center justify-center text-sm mb-3">1</div>
+                        <h4 class="font-bold text-base text-white">Atracción Local</h4>
+                        <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                            Anuncios en Instagram/FB y búsquedas en Google Maps: *"Dentista en Moreno"*, *"Odontopediatría"*, *"Ortodoncia"*.
+                        </p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-white/10 text-cyan-400 text-xs font-semibold">Tráfico Calificado</div>
+                </div>
+
+                <!-- Step 2 -->
+                <div class="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 flex flex-col justify-between">
+                    <div>
+                        <div class="w-8 h-8 rounded-lg bg-cyan-500 text-white font-bold flex items-center justify-center text-sm mb-3">2</div>
+                        <h4 class="font-bold text-base text-white">curadentmoreno.com</h4>
+                        <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                            Aterrizan en la nueva plataforma de Curadent. Sin demoras ni pérdidas. Visualizan los doctores, servicios y fotos del consultorio.
+                        </p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-white/10 text-cyan-400 text-xs font-semibold">Conversión Inmediata</div>
+                </div>
+
+                <!-- Step 3 -->
+                <div class="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 flex flex-col justify-between">
+                    <div>
+                        <div class="w-8 h-8 rounded-lg bg-emerald-500 text-white font-bold flex items-center justify-center text-sm mb-3">3</div>
+                        <h4 class="font-bold text-base text-white">Reserva + Seña</h4>
+                        <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                            El paciente elige día, horario y especialista. Paga la seña en el acto por Mercado Pago. El turno se bloquea en la agenda de Dental-IA.
+                        </p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-white/10 text-emerald-400 text-xs font-semibold">Cero Ausentismo</div>
+                </div>
+
+                <!-- Step 4 -->
+                <div class="bg-white/10 backdrop-blur-md rounded-2xl p-5 border border-white/15 flex flex-col justify-between">
+                    <div>
+                        <div class="w-8 h-8 rounded-lg bg-amber-500 text-white font-bold flex items-center justify-center text-sm mb-3">4</div>
+                        <h4 class="font-bold text-base text-white">Atención & Review</h4>
+                        <p class="text-xs text-slate-300 mt-1.5 leading-relaxed">
+                            Recordatorios automáticos por WhatsApp previos a la cita. Luego de la atención, solicitud automática de reseña 5★ en Google Maps.
+                        </p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-white/10 text-amber-400 text-xs font-semibold">Liderazgo en Moreno</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Pricing Tiers with Dental-IA Benefit -->
+        <section class="space-y-6 page-break">
+            <div class="text-center max-w-2xl mx-auto">
+                <span class="text-xs font-bold uppercase tracking-wider text-blue-600">Estructura Comercial</span>
+                <h3 class="text-3xl font-extrabold text-slate-900 tracking-tight mt-1">Planes de Crecimiento & Alojamiento</h3>
+                <p class="text-sm text-slate-600 mt-2">
+                    Diseñados para transferir la gestión técnica de Gurú a CreAPP y potenciar el rendimiento clínico de Curadent.
+                </p>
+            </div>
+
+            <!-- Benefit Callout Banner -->
+            <div class="bg-emerald-50 border-2 border-emerald-200 rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center space-x-3.5">
+                    <span class="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-bold text-xl shadow-sm badge-pulse">
+                        ★
+                    </span>
+                    <div>
+                        <h5 class="font-bold text-slate-900 text-sm">Beneficio Exclusivo: Comunidad Dental-IA</h5>
+                        <p class="text-xs text-slate-600">Por ser usuarios de la plataforma Dental-IA, el setup y migración técnica de servidores está 100% bonificado.</p>
+                    </div>
+                </div>
+                <span class="text-xs font-extrabold text-emerald-800 bg-emerald-100/80 px-3 py-1.5 rounded-lg whitespace-nowrap self-start sm:self-center">
+                    Ahorro Setup: $120.000 ARS BONIFICADO
+                </span>
+            </div>
+
+            <!-- The 3 Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                <!-- Tier 1 -->
+                <div class="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-sm flex flex-col justify-between hover:border-slate-300 transition">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Tier 1</span>
+                        <h4 class="text-xl font-bold text-slate-900 mt-1">Presencia & Dominio</h4>
+                        <p class="text-xs text-slate-500 mt-1">Reemplazo directo del sitio web de Gurú para activar Dental-IA en su dominio.</p>
+
+                        <div class="mt-6 mb-6 pb-6 border-b border-slate-100">
+                            <span class="text-3xl font-extrabold text-slate-900">$0</span>
+                            <span class="text-xs font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded ml-1">Bonificado</span>
+                            <div class="text-xs text-slate-400 mt-1">Incluido con la suscripción de Dental-IA</div>
+                        </div>
+
+                        <ul class="space-y-3 text-xs text-slate-600">
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span>Alojamiento de Dental-IA en <strong>curadentmoreno.com</strong></span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span>Migración técnica de DNS y Certificado SSL sin caídas</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span>Preservación intacta de cuentas de correo corporativas</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span>Vinculación del botón de turnos en Google Maps</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-8 pt-4 border-t border-slate-100">
+                        <span class="text-xs text-slate-400 block text-center font-medium">Ideal para iniciar la migración</span>
+                    </div>
+                </div>
+
+                <!-- Tier 2 (Highlighted) -->
+                <div class="bg-white rounded-3xl p-6 sm:p-7 border-2 border-blue-600 shadow-xl flex flex-col justify-between relative transform md:-translate-y-2">
+                    <div class="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[11px] font-extrabold uppercase tracking-wider py-1 px-3.5 rounded-full shadow-sm">
+                        Recomendado • Sustituto de Gurú
+                    </div>
+
+                    <div>
+                        <span class="text-xs font-bold text-blue-600 uppercase tracking-wider">Tier 2</span>
+                        <h4 class="text-xl font-bold text-slate-900 mt-1">Crecimiento Moreno</h4>
+                        <p class="text-xs text-slate-500 mt-1">Reemplaza todo el paquete de Gurú sumando captación activa y medición real.</p>
+
+                        <div class="mt-6 mb-6 pb-6 border-b border-slate-100">
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-3xl font-extrabold text-blue-600">$160.000</span>
+                                <span class="text-xs font-medium text-slate-400 line-through">$240.000 ARS</span>
+                            </div>
+                            <div class="text-xs text-emerald-600 font-semibold mt-1">Ahorro 33% por ser cliente Dental-IA / mes</div>
+                        </div>
+
+                        <ul class="space-y-3 text-xs text-slate-700">
+                            <li class="flex items-start font-medium">
+                                <svg class="w-4 h-4 text-blue-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Todo lo incluido en Tier 1</strong></span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>SEO Local Google Maps:</strong> optimización continua para búsquedas en Moreno</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Meta Ads (Instagram & FB):</strong> gestión y optimización de campañas segmentadas</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Diseño mensual:</strong> 4 a 6 flyers profesionales para tratamientos clave</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Píxel de Meta con Turnero:</strong> medición exacta de costo por turno agendado</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Automatización de Reseñas:</strong> post-consulta para acumular 5 estrellas</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-8 pt-4 border-t border-slate-100">
+                        <span class="text-xs text-blue-600 block text-center font-bold">Opción más elegida por clínicas</span>
+                    </div>
+                </div>
+
+                <!-- Tier 3 -->
+                <div class="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200 shadow-sm flex flex-col justify-between hover:border-slate-300 transition">
+                    <div>
+                        <span class="text-xs font-bold text-slate-400 uppercase tracking-wider">Tier 3</span>
+                        <h4 class="text-xl font-bold text-slate-900 mt-1">Dominancia Odontológica</h4>
+                        <p class="text-xs text-slate-500 mt-1">Para saturar la agenda y maximizar tratamientos de alto ticket.</p>
+
+                        <div class="mt-6 mb-6 pb-6 border-b border-slate-100">
+                            <div class="flex items-baseline gap-2">
+                                <span class="text-3xl font-extrabold text-slate-900">$260.000</span>
+                                <span class="text-xs font-medium text-slate-400 line-through">$380.000 ARS</span>
+                            </div>
+                            <div class="text-xs text-emerald-600 font-semibold mt-1">Tarifa Ecosistema CreAPP / mes</div>
+                        </div>
+
+                        <ul class="space-y-3 text-xs text-slate-600">
+                            <li class="flex items-start font-medium text-slate-800">
+                                <svg class="w-4 h-4 text-blue-600 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Todo lo incluido en Tier 2</strong></span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Google Search Ads:</strong> captura activa de urgencias y turnos inmediatos en Moreno</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Campañas High-Ticket:</strong> específicas para Implantes y Ortodoncia Invisible</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Reactivación de Pacientes:</strong> disparos por WhatsApp a bases inactivas</span>
+                            </li>
+                            <li class="flex items-start">
+                                <svg class="w-4 h-4 text-emerald-500 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                <span><strong>Reporte mensual de ROI:</strong> reunión estratégica trimestral con directores</span>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="mt-8 pt-4 border-t border-slate-100">
+                        <span class="text-xs text-slate-400 block text-center font-medium">Para clínicas en fase de expansión</span>
+                    </div>
+                </div>
+
+            </div>
+            <p class="text-[11px] text-slate-400 text-center italic">
+                * Nota de transparencia: La inversión publicitaria en Meta Ads o Google Ads la abona el cliente directamente con su tarjeta en las plataformas oficiales. CreAPP no retiene comisión sobre su pauta.
+            </p>
+        </section>
+
+        <!-- Migration Timeline Section -->
+        <section class="bg-white rounded-3xl p-8 sm:p-10 border border-slate-200/80 shadow-sm print-break-inside">
+            <div class="max-w-2xl mb-8">
+                <span class="text-xs font-bold uppercase tracking-wider text-blue-600">Plan de Implementación</span>
+                <h4 class="text-2xl font-bold text-slate-900 tracking-tight mt-1">Hoja de Ruta de Migración en 48 Horas</h4>
+                <p class="text-sm text-slate-600 mt-2">
+                    Transición ágil, garantizando continuidad absoluta de los servicios de Curadent:
+                </p>
+            </div>
+
+            <div class="relative pl-6 sm:pl-8 border-l-2 border-blue-200 space-y-8">
+                <div class="relative">
+                    <span class="absolute -left-[31px] sm:-left-[39px] top-0 w-6 h-6 rounded-full bg-blue-600 border-4 border-white shadow-sm flex items-center justify-center text-white text-[10px] font-bold">1</span>
+                    <h5 class="text-base font-bold text-slate-900">Hora 0 a 12: Aseguramiento de Zona DNS y Correos</h5>
+                    <p class="text-xs sm:text-sm text-slate-600 mt-1">
+                        Se extrae el respaldo de los registros MX de correo corporativo (<code class="text-blue-600 font-mono text-xs">mx.serviciodecorreo.es</code>) y registros SPF. Se prepara la zona en Cloudflare o panel de DNS para que los emails no sufran ningún corte.
+                    </p>
+                </div>
+
+                <div class="relative">
+                    <span class="absolute -left-[31px] sm:-left-[39px] top-0 w-6 h-6 rounded-full bg-blue-600 border-4 border-white shadow-sm flex items-center justify-center text-white text-[10px] font-bold">2</span>
+                    <h5 class="text-base font-bold text-slate-900">Hora 12 a 24: Conexión de curadentmoreno.com a Dental-IA</h5>
+                    <p class="text-xs sm:text-sm text-slate-600 mt-1">
+                        Se configuran los registros A y CNAME apuntando a la infraestructura de Dental-IA en Vercel. Se emite el certificado SSL de seguridad en tiempo real. La nueva plataforma queda online en el dominio oficial.
+                    </p>
+                </div>
+
+                <div class="relative">
+                    <span class="absolute -left-[31px] sm:-left-[39px] top-0 w-6 h-6 rounded-full bg-blue-600 border-4 border-white shadow-sm flex items-center justify-center text-white text-[10px] font-bold">3</span>
+                    <h5 class="text-base font-bold text-slate-900">Hora 24 a 48: Integración de Google Maps & Meta Ads</h5>
+                    <p class="text-xs sm:text-sm text-slate-600 mt-1">
+                        Se actualiza la ficha de Google Business Profile enlazando los botones de "Sitio Web" y "Reservar Cita" directo al turnero. Se instala el Píxel de Meta en Dental-IA y se activan los anuncios locales en Moreno.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Final Call to Action -->
+        <section class="bg-slate-900 text-white rounded-3xl p-8 sm:p-10 text-center relative overflow-hidden print-break-inside">
+            <div class="max-w-xl mx-auto space-y-4">
+                <span class="inline-block px-3 py-1 rounded-full text-xs font-semibold bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                    Siguiente Paso
+                </span>
+                <h3 class="text-2xl sm:text-3xl font-extrabold tracking-tight">
+                    ¿Avanzamos con la activación de Curadent?
+                </h3>
+                <p class="text-sm text-slate-300 leading-relaxed">
+                    Podemos comenzar hoy mismo con el Tier 1 bonificado para dejar la plataforma y el turnero funcionando en <span class="text-cyan-400 font-mono">curadentmoreno.com</span>, o activar directamente el Tier 2 para no interrumpir el flujo de pacientes de Moreno.
+                </p>
+                <div class="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <div class="p-3 rounded-xl bg-white/5 border border-white/10 text-xs text-slate-400 font-mono">
+                        CreAPP Software Lab • Soporte Directo & Alianza Odontológica
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="border-t border-slate-200 bg-white py-6 mt-12 text-center text-xs text-slate-400 no-print">
+        Propuesta confeccionada para uso exclusivo de Clínica Curadent Moreno por CreAPP Software Lab. © 2026.
+    </footer>
+
+</body>
+</html>

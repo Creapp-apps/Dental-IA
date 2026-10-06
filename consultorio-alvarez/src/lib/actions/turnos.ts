@@ -574,6 +574,70 @@ export async function notificarTurnoPorWhatsApp(
                 mensaje_enviado: `Plantilla: ${templateName}. Parámetros: ${JSON.stringify(parameters)}`,
                 fecha_envio: new Date().toISOString()
             })
+
+            // Persistir plantilla en la conversación para trazabilidad en /mensajes
+            try {
+                let convId: string | null = null
+                const { data: conv } = await admin
+                    .from('whatsapp_conversaciones')
+                    .select('id')
+                    .eq('tenant_id', turno.tenant_id)
+                    .eq('telefono', cleanPhone)
+                    .maybeSingle()
+
+                if (conv) {
+                    convId = conv.id
+                } else {
+                    const { data: newConv } = await admin
+                        .from('whatsapp_conversaciones')
+                        .insert({
+                            tenant_id: turno.tenant_id,
+                            paciente_id: (turno as any).paciente_id || null,
+                            telefono: cleanPhone,
+                            nombre_contacto: pct?.nombre ? `${pct.nombre}` : null,
+                            estado: 'BOT',
+                            ultimo_mensaje_at: new Date().toISOString(),
+                            ultimo_mensaje_texto: `Plantilla: ${templateName}`,
+                            no_leidos_operador: 0
+                        })
+                        .select('id')
+                        .maybeSingle()
+                    if (newConv) convId = newConv.id
+                }
+
+                if (convId) {
+                    let textoVisual = `[Plantilla WhatsApp: ${templateName}]`
+                    if (templateName === 'turno_confirmado') {
+                        textoVisual = `✅ Hola ${pct.nombre}! Tu turno para ${parameters[1]?.text || 'Consulta'} el día ${parameters[2]?.text || ''} a las ${parameters[3]?.text || ''} hs con ${parameters[4]?.text || 'el especialista'} fue confirmado.`
+                    } else if (templateName === 'turno_cancelado') {
+                        textoVisual = `❌ Hola ${pct.nombre}! Tu turno del día ${parameters[1]?.text || ''} a las ${parameters[2]?.text || ''} hs con ${parameters[3]?.text || 'el especialista'} fue cancelado.`
+                    } else if (templateName === 'turno_reprogramado') {
+                        textoVisual = `🔄 Hola ${pct.nombre}! Registramos tu solicitud para reprogramar el turno del día ${parameters[1]?.text || ''} a las ${parameters[2]?.text || ''} hs con ${parameters[3]?.text || 'el especialista'}.`
+                    } else if (templateName === 'solicitud_turnos') {
+                        textoVisual = `📅 Hola ${pct.nombre}! Te recordamos tu turno para ${parameters[1]?.text || 'Consulta'} el día ${parameters[2]?.text || ''} a las ${parameters[3]?.text || ''} hs con ${parameters[4]?.text || 'el especialista'}.\n\n[🔘 Confirmar] [🔘 Reprogramar] [🔘 Cancelar]`
+                    } else if (templateName === 'aviso_ausencia') {
+                        textoVisual = `⚠️ Hola ${pct.nombre}! Notamos que no pudiste asistir a tu turno de hoy a las ${parameters[1]?.text || ''} hs con ${parameters[2]?.text || 'el especialista'}.`
+                    }
+
+                    await admin.from('whatsapp_mensajes').insert({
+                        tenant_id: turno.tenant_id,
+                        conversacion_id: convId,
+                        tipo: 'plantilla',
+                        remitente: 'bot',
+                        contenido: textoVisual,
+                        wa_message_id: wpResult?.messages?.[0]?.id || null,
+                        estado_envio: 'enviado',
+                        metadata: { plantilla: templateName, parametros: parameters }
+                    })
+
+                    await admin.from('whatsapp_conversaciones').update({
+                        ultimo_mensaje_at: new Date().toISOString(),
+                        ultimo_mensaje_texto: `🤖 ${textoVisual.slice(0, 80)}`,
+                    }).eq('id', convId)
+                }
+            } catch (pErr) {
+                console.warn('[WA LOG] Advertencia persistiendo plantilla en chat:', pErr)
+            }
         }
     } catch (err) {
         console.error(`[WA LOG] ❌ Error al procesar notificación WhatsApp "${templateName}":`, err)
