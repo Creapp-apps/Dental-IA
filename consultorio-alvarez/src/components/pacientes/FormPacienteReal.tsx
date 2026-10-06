@@ -14,6 +14,8 @@ import { GlassSelect } from '@/components/ui/glass-select'
 import { ComboboxAutocomplete } from '@/components/ui/combobox-autocomplete'
 import { GlassPhotoCapture } from '@/components/ui/glass-photo-capture'
 import { crearPaciente, actualizarPaciente } from '@/lib/actions/pacientes'
+import { guardarPacienteLocal } from '@/lib/offline/local-queries'
+import { syncManager } from '@/lib/offline/sync-manager'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { Sparkles, Loader2, Check, X, FileText, FileImage, AlertTriangle } from 'lucide-react'
 import { processPatientCardOcr } from '@/lib/actions/ocr'
@@ -301,20 +303,114 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             }
 
             if (paciente) {
-                const result = await actualizarPaciente(paciente.id, payload)
-                if (result.error) {
-                    glassAlert.error({ title: 'Error al actualizar paciente', description: result.error })
+                // 1. Guardar de inmediato en la base local (0ms de latencia)
+                await guardarPacienteLocal({
+                    id: paciente.id,
+                    ...payload,
+                    updated_at: new Date().toISOString()
+                }, paciente.tenant_id, false)
+
+                // 2. Si hay conexión a internet, sincronizar con Supabase
+                if (typeof navigator !== 'undefined' && navigator.onLine) {
+                    try {
+                        const result = await actualizarPaciente(paciente.id, payload)
+                        if (result.error) {
+                            // Encolar en Outbox para no perder el cambio
+                            if (paciente.tenant_id) {
+                                await syncManager.enqueueMutation(
+                                    paciente.tenant_id,
+                                    'pacientes',
+                                    paciente.id,
+                                    'UPDATE',
+                                    payload
+                                )
+                            }
+                            glassAlert.warning({ 
+                                title: 'Guardado en esta PC', 
+                                description: 'El servidor tuvo una demora. Tu cambio quedó guardado en esta máquina y se subirá automáticamente.' 
+                            })
+                            router.push(`/pacientes/${paciente.id}`)
+                        } else {
+                            glassAlert.success({ title: 'Paciente actualizado' })
+                            await syncManager.refreshLocalMetrics()
+                            router.push(`/pacientes/${paciente.id}`)
+                        }
+                    } catch {
+                        // Encolar en Outbox si la red falló
+                        if (paciente.tenant_id) {
+                            await syncManager.enqueueMutation(
+                                paciente.tenant_id,
+                                'pacientes',
+                                paciente.id,
+                                'UPDATE',
+                                payload
+                            )
+                        }
+                        glassAlert.warning({ 
+                            title: 'Guardado en esta PC', 
+                            description: 'Sin conexión a la nube. El cambio se guardó en esta computadora y se sincronizará solo.' 
+                        })
+                        router.push(`/pacientes/${paciente.id}`)
+                    }
                 } else {
-                    glassAlert.success({ title: 'Paciente actualizado' })
+                    // Modo Offline: Encolar en Outbox para cuando vuelva internet
+                    if (paciente.tenant_id) {
+                        await syncManager.enqueueMutation(
+                            paciente.tenant_id,
+                            'pacientes',
+                            paciente.id,
+                            'UPDATE',
+                            payload
+                        )
+                    }
+                    glassAlert.success({ 
+                        title: 'Guardado en Modo Local', 
+                        description: 'Operación realizada sin internet. El cambio se subirá apenas vuelva la red.' 
+                    })
                     router.push(`/pacientes/${paciente.id}`)
                 }
             } else {
-                const result = await crearPaciente(payload)
-                if (result.error) {
-                    glassAlert.error({ title: 'Error al crear paciente', description: result.error })
+                // Creación de nuevo paciente
+                if (typeof navigator !== 'undefined' && navigator.onLine) {
+                    try {
+                        const result = await crearPaciente(payload)
+                        if (result.error) {
+                            glassAlert.error({ title: 'Error al crear paciente', description: result.error })
+                        } else if (result.data) {
+                            // Guardar también en la base local inmediatamente
+                            await guardarPacienteLocal({
+                                ...result.data,
+                            }, result.data.tenant_id, false)
+                            glassAlert.success({ title: 'Paciente creado', description: `HC: ${result.data?.nro_historia_clinica}` })
+                            router.push(`/pacientes/${result.data?.id}`)
+                        }
+                    } catch (err: any) {
+                        glassAlert.error({ title: 'Error al crear paciente', description: err.message })
+                    }
                 } else {
-                    glassAlert.success({ title: 'Paciente creado', description: `HC: ${result.data?.nro_historia_clinica}` })
-                    router.push(`/pacientes/${result.data?.id}`)
+                    // Modo Offline para crear paciente
+                    const tempId = crypto.randomUUID()
+                    const tempHC = 'TEMP-' + Math.floor(1000 + Math.random() * 9000)
+                    const localNuevo = {
+                        id: tempId,
+                        ...payload,
+                        nro_historia_clinica: payload.nro_historia_clinica || tempHC,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString()
+                    }
+                    await guardarPacienteLocal(localNuevo as any, undefined, false)
+                    await syncManager.enqueueMutation(
+                        '',
+                        'pacientes',
+                        tempId,
+                        'INSERT',
+                        localNuevo
+                    )
+                    glassAlert.success({ 
+                        title: 'Paciente guardado en esta PC', 
+                        description: 'Creado en modo offline. Se sincronizará con la nube al conectar.' 
+                    })
+                    router.push('/pacientes')
                 }
             }
         })

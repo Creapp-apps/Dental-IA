@@ -3,6 +3,7 @@ import Dexie, { type EntityTable } from 'dexie'
 export interface LocalPaciente {
     id: string
     tenant_id: string
+    nro_historia_clinica?: string | null
     nombre: string
     apellido: string
     dni: string | null

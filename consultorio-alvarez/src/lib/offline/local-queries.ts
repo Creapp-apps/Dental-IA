@@ -2,37 +2,80 @@ import { localDb, LocalPaciente, LocalTurno } from './db'
 import { syncManager } from './sync-manager'
 
 /**
- * Búsqueda ultra veloz (0ms) en la base de datos local de pacientes.
- * Soporta búsqueda por DNI (números), Apellido o Nombre.
+ * Normaliza strings para comparación: minúsculas y sin acentos.
  */
-export async function searchPacientesLocal(query: string, limit: number = 30): Promise<LocalPaciente[]> {
+function normalizeStr(str: string | undefined | null): string {
+    return (str || '').toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+}
+
+/**
+ * Búsqueda ultra veloz (0ms) en la base de datos local de pacientes.
+ * Soporta búsqueda por DNI (con y sin puntos), Apellido, Nombre o Historia Clínica.
+ */
+export async function searchPacientesLocal(query: string, limit: number = 50): Promise<LocalPaciente[]> {
     if (!query || !query.trim()) {
-        return localDb.pacientes.limit(limit).toArray()
+        return localDb.pacientes.orderBy('apellido').limit(limit).toArray()
     }
 
-    const clean = query.trim().toLowerCase()
-    const isNum = /^\d+$/.test(clean)
+    const cleanQuery = normalizeStr(query.trim())
+    const tokens = cleanQuery.split(/\s+/).filter(Boolean)
 
-    if (isNum) {
-        // Búsqueda por DNI con índice de prefijo
-        return localDb.pacientes
-            .where('dni')
-            .startsWith(clean)
-            .limit(limit)
-            .toArray()
-    }
-
-    // Búsqueda combinada por Apellido o Nombre
     const results = await localDb.pacientes
         .filter(p => {
-            const nom = (p.nombre || '').toLowerCase()
-            const ape = (p.apellido || '').toLowerCase()
-            return ape.includes(clean) || nom.includes(clean)
+            const nom = normalizeStr(p.nombre)
+            const ape = normalizeStr(p.apellido)
+            const dni = normalizeStr(p.dni)
+            const dniClean = dni.replace(/\./g, '')
+            const hc = normalizeStr(p.nro_historia_clinica)
+            const hcClean = hc.replace(/\./g, '')
+            const full = `${ape} ${nom} ${ape}, ${nom} ${nom} ${ape} ${dni} ${dniClean} ${hc} ${hcClean}`
+
+            return tokens.every(token => {
+                const tokenClean = token.replace(/\./g, '')
+                return full.includes(token) || (tokenClean !== '' && full.includes(tokenClean))
+            })
         })
         .limit(limit)
         .toArray()
 
     return results
+}
+
+/**
+ * Obtiene un paciente por su ID directamente de IndexedDB a 0ms.
+ */
+export async function getPacienteLocal(id: string): Promise<LocalPaciente | undefined> {
+    return localDb.pacientes.get(id)
+}
+
+/**
+ * Guarda o actualiza un paciente en la base de datos local y maneja su sincronización con la nube.
+ */
+export async function guardarPacienteLocal(
+    paciente: Partial<LocalPaciente> & { id: string },
+    tenantId?: string,
+    enqueueOutbox: boolean = true
+): Promise<void> {
+    const existing = await localDb.pacientes.get(paciente.id)
+    const updated: LocalPaciente = {
+        ...(existing || {}),
+        ...paciente,
+        updated_at: new Date().toISOString()
+    } as LocalPaciente
+
+    await localDb.pacientes.put(updated)
+
+    if (enqueueOutbox && tenantId) {
+        await syncManager.enqueueMutation(
+            tenantId,
+            'pacientes',
+            paciente.id,
+            existing ? 'UPDATE' : 'INSERT',
+            updated
+        )
+    }
+
+    await syncManager.refreshLocalMetrics()
 }
 
 /**

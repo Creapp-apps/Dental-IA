@@ -12,6 +12,8 @@ import { eliminarPaciente, searchPacientesAction, getPacientesAction } from '@/l
 import { glassAlert } from '@/components/ui/glass-alert'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 
+import { searchPacientesLocal } from '@/lib/offline/local-queries'
+
 // ── Apple-style staggered spring animation ─────────────────────
 const sectionVariants = {
     hidden: { opacity: 0, x: -40, filter: 'blur(6px)' },
@@ -36,6 +38,7 @@ interface PacientesListViewProps {
 
 export function PacientesListView({ pacientes, initialQuery, totalCount }: PacientesListViewProps) {
     const [allLoadedPacientes, setAllLoadedPacientes] = useState<any[]>(pacientes)
+    const [localDbResults, setLocalDbResults] = useState<any[]>([])
     const [inputQuery, setInputQuery] = useState(initialQuery)
     const [activeQuery, setActiveQuery] = useState(initialQuery)
     const router = useRouter()
@@ -53,6 +56,28 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
     useEffect(() => {
         setAllLoadedPacientes(pacientes)
     }, [pacientes])
+
+    // Búsqueda instantánea en 0ms contra la base local IndexedDB (1903 pacientes)
+    useEffect(() => {
+        const term = activeQuery.trim()
+        if (!term) {
+            setLocalDbResults([])
+            return
+        }
+
+        let isCurrent = true
+        searchPacientesLocal(term, 60)
+            .then(res => {
+                if (isCurrent) {
+                    setLocalDbResults(res)
+                }
+            })
+            .catch(console.warn)
+
+        return () => {
+            isCurrent = false
+        }
+    }, [activeQuery])
 
     const filteredLocal = useMemo(() => {
         const q = activeQuery.trim()
@@ -72,10 +97,8 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
             const nroHistoria = normalizeStr(p.nro_historia_clinica || '')
             const nroHistoriaWithoutDots = nroHistoria.replace(/\./g, '')
             
-            // Texto completo combinando Apellido + Nombre + DNI + HC en múltiples órdenes
             const fullText = `${apellido} ${nombre} ${apellido}, ${nombre} ${nombre} ${apellido} ${dni} ${dniWithoutDots} ${nroHistoria} ${nroHistoriaWithoutDots}`
 
-            // Verifica que CADA token ingresado por el usuario esté presente en el paciente
             return tokens.every(token => {
                 const tokenWithoutDots = token.replace(/\./g, '')
                 return fullText.includes(token) || (tokenWithoutDots !== '' && fullText.includes(tokenWithoutDots))
@@ -83,12 +106,15 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
         })
     }, [allLoadedPacientes, activeQuery])
 
-    // Búsqueda server-side con debounce si hay término >= 2 caracteres
+    // Búsqueda server-side en segundo plano como respaldo si el término es largo
     useEffect(() => {
         const term = activeQuery.trim()
         if (term.length >= 2) {
             let isCancelled = false
-            setIsSearchingServer(true)
+            // Solo activar spinner server si todavía no hay resultados locales
+            if (localDbResults.length === 0) {
+                setIsSearchingServer(true)
+            }
             const timeout = setTimeout(() => {
                 searchPacientesAction(term, 50)
                     .then((res) => {
@@ -100,7 +126,7 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
                     .catch(() => {
                         if (!isCancelled) setIsSearchingServer(false)
                     })
-            }, 250)
+            }, 300)
 
             return () => {
                 isCancelled = true
@@ -110,22 +136,22 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
             setServerResults([])
             setIsSearchingServer(false)
         }
-    }, [activeQuery])
+    }, [activeQuery, localDbResults.length])
 
     // Si hay búsqueda activa:
-    // Unimos los resultados del servidor con los locales para máxima rapidez y cobertura sin duplicados
+    // 1. Prioridad: resultados locales en memoria a 0ms
+    // 2. Si no hay locales aún, unir con serverResults
     const displayedPacientes = useMemo(() => {
         const term = activeQuery.trim()
         if (!term) return allLoadedPacientes
+        if (localDbResults.length > 0) return localDbResults
         if (serverResults.length === 0 && !isSearchingServer) return filteredLocal
         
         const map = new Map<string, any>()
-        // Primero locales que ya coinciden
         filteredLocal.forEach(p => map.set(p.id, p))
-        // Luego los del server (que pueden ser muchos más)
         serverResults.forEach(p => map.set(p.id, p))
         return Array.from(map.values())
-    }, [activeQuery, allLoadedPacientes, filteredLocal, serverResults, isSearchingServer])
+    }, [activeQuery, allLoadedPacientes, localDbResults, filteredLocal, serverResults, isSearchingServer])
 
     async function handleCargarMas() {
         if (isLoadingMore) return
@@ -307,6 +333,10 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
                             <div
                                 key={p.id}
                                 onClick={(e) => handleCardClick(e, p.id)}
+                                onMouseEnter={() => {
+                                    router.prefetch(`/pacientes/${p.id}`)
+                                    router.prefetch(`/pacientes/${p.id}/editar`)
+                                }}
                                 className={cn(
                                     "flex items-center gap-4 glass rounded-xl px-4 py-3.5 shadow-glass transition-all duration-200 group relative overflow-hidden cursor-pointer select-none",
                                         "hover:shadow-glass-lg hover:-translate-y-0.5 hover:border-primary/40 active:scale-[0.985] active:bg-primary/5",
