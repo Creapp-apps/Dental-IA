@@ -26,6 +26,7 @@ import { NotificationBell } from '@/components/layout/NotificationBell'
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '@/components/ui/sheet'
 import { useTheme } from 'next-themes'
 import { createClient } from '@/lib/supabase/client'
+import { OfflineSyncWidget } from '@/components/offline/OfflineSyncWidget'
 
 const navItems = [
     { label: 'Dashboard', href: '/admin', icon: LayoutDashboard },
@@ -360,6 +361,9 @@ export function Sidebar({ tenantId, userEmail, userRole, themeColor, logoConfig,
 
                 {/* Widget de Resumen Operativo de Hoy (Mini Agenda) */}
                 <TodaySummaryWidget summary={todaySummary} />
+
+                {/* Widget de Modo Offline y Sincronización Local */}
+                <OfflineSyncWidget themeColor={themeColor} />
 
                 {/* Widget de Hora & Fecha en Tiempo Real */}
                 <RealtimeClockWidget />

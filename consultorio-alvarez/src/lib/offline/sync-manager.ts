@@ -1,0 +1,310 @@
+'use client'
+
+import { localDb, SyncOutboxItem, LocalPaciente, LocalTurno } from './db'
+import {
+    fetchFullSnapshotAction,
+    fetchIncrementalPullAction,
+    pushOutboxChangesAction
+} from '@/lib/actions/offline-sync'
+
+export interface SyncStatus {
+    isOnline: boolean
+    isSyncing: boolean
+    lastSyncedAt: string | null
+    pendingOutboxCount: number
+    totalPacientesLocales: number
+    totalTurnosLocales: number
+    error: string | null
+}
+
+type SyncListener = (status: SyncStatus) => void
+
+class OfflineSyncManager {
+    private listeners: Set<SyncListener> = new Set()
+    private intervalId: NodeJS.Timeout | null = null
+    private currentIntervalMinutes: number = 15 // Default 15 min
+
+    private status: SyncStatus = {
+        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        isSyncing: false,
+        lastSyncedAt: null,
+        pendingOutboxCount: 0,
+        totalPacientesLocales: 0,
+        totalTurnosLocales: 0,
+        error: null
+    }
+
+    constructor() {
+        if (typeof window !== 'undefined') {
+            window.addEventListener('online', () => {
+                this.updateStatus({ isOnline: true })
+                // Intento automático de push/pull al recuperar internet
+                this.synchronize()
+            })
+            window.addEventListener('offline', () => {
+                this.updateStatus({ isOnline: false })
+            })
+
+            // Inicializar métricas locales
+            this.refreshLocalMetrics()
+            this.loadStoredSettings()
+        }
+    }
+
+    private async loadStoredSettings() {
+        try {
+            const metaInterval = await localDb.sync_meta.get('auto_sync_interval_min')
+            if (metaInterval && typeof metaInterval.value === 'number') {
+                this.currentIntervalMinutes = metaInterval.value
+            }
+            const lastSync = await localDb.sync_meta.get('last_synced_at')
+            if (lastSync) {
+                this.updateStatus({ lastSyncedAt: lastSync.value })
+            }
+            this.setupInterval()
+        } catch (e) {
+            console.warn('[SYNC MANAGER] Error cargando settings iniciales:', e)
+        }
+    }
+
+    public subscribe(listener: SyncListener): () => void {
+        this.listeners.add(listener)
+        listener(this.status)
+        return () => this.listeners.delete(listener)
+    }
+
+    private notify() {
+        this.listeners.forEach(fn => fn({ ...this.status }))
+    }
+
+    private updateStatus(partial: Partial<SyncStatus>) {
+        this.status = { ...this.status, ...partial }
+        this.notify()
+    }
+
+    public async refreshLocalMetrics() {
+        try {
+            const [pendingCount, pacientesCount, turnosCount, lastSyncMeta] = await Promise.all([
+                localDb.sync_outbox.where('status').equals('PENDIENTE').count(),
+                localDb.pacientes.count(),
+                localDb.turnos.count(),
+                localDb.sync_meta.get('last_synced_at')
+            ])
+
+            this.updateStatus({
+                pendingOutboxCount: pendingCount,
+                totalPacientesLocales: pacientesCount,
+                totalTurnosLocales: turnosCount,
+                lastSyncedAt: lastSyncMeta?.value || null
+            })
+        } catch (e) {
+            console.warn('[SYNC MANAGER] Error refrescando métricas locales:', e)
+        }
+    }
+
+    public setIntervalMinutes(minutes: number) {
+        this.currentIntervalMinutes = minutes
+        localDb.sync_meta.put({
+            key: 'auto_sync_interval_min',
+            value: minutes,
+            updated_at: new Date().toISOString()
+        })
+        this.setupInterval()
+    }
+
+    public getIntervalMinutes(): number {
+        return this.currentIntervalMinutes
+    }
+
+    private setupInterval() {
+        if (this.intervalId) {
+            clearInterval(this.intervalId)
+            this.intervalId = null
+        }
+
+        // Si es 0 o negativo, es modo solo manual
+        if (this.currentIntervalMinutes <= 0) return
+
+        const ms = this.currentIntervalMinutes * 60 * 1000
+        this.intervalId = setInterval(() => {
+            if (navigator.onLine && !this.status.isSyncing) {
+                console.log(`[SYNC MANAGER] Disparando sincronización periódica (${this.currentIntervalMinutes}m)...`)
+                this.synchronize()
+            }
+        }, ms)
+    }
+
+    /**
+     * Descarga una copia limpia completa desde cero (Snapshot Full).
+     */
+    public async downloadFullSnapshot(): Promise<{ success: boolean; error?: string }> {
+        if (!navigator.onLine) {
+            return { success: false, error: 'No hay conexión a internet para descargar la base de datos' }
+        }
+
+        this.updateStatus({ isSyncing: true, error: null })
+
+        try {
+            const res = await fetchFullSnapshotAction()
+            if (!res.success) {
+                this.updateStatus({ isSyncing: false, error: res.error || 'Error al descargar datos' })
+                return { success: false, error: res.error }
+            }
+
+            // Transacción local: Limpiar tablas y repoblar
+            await localDb.transaction('rw', [
+                localDb.pacientes,
+                localDb.turnos,
+                localDb.profesionales,
+                localDb.tipos_tratamiento,
+                localDb.obras_sociales,
+                localDb.sync_meta
+            ], async () => {
+                await localDb.pacientes.clear()
+                await localDb.turnos.clear()
+                await localDb.profesionales.clear()
+                await localDb.tipos_tratamiento.clear()
+                await localDb.obras_sociales.clear()
+
+                if (res.pacientes.length > 0) await localDb.pacientes.bulkPut(res.pacientes)
+                if (res.turnos.length > 0) await localDb.turnos.bulkPut(res.turnos)
+                if (res.profesionales.length > 0) await localDb.profesionales.bulkPut(res.profesionales)
+                if (res.tipos_tratamiento.length > 0) await localDb.tipos_tratamiento.bulkPut(res.tipos_tratamiento)
+                if (res.obras_sociales.length > 0) await localDb.obras_sociales.bulkPut(res.obras_sociales)
+
+                await localDb.sync_meta.put({
+                    key: 'last_synced_at',
+                    value: res.server_time,
+                    updated_at: new Date().toISOString()
+                })
+            })
+
+            await this.refreshLocalMetrics()
+            this.updateStatus({ isSyncing: false, lastSyncedAt: res.server_time, error: null })
+            return { success: true }
+        } catch (err: any) {
+            console.error('[SYNC MANAGER] Excepción en downloadFullSnapshot:', err)
+            this.updateStatus({ isSyncing: false, error: err.message || 'Error inesperado' })
+            return { success: false, error: err.message }
+        }
+    }
+
+    /**
+     * Sincronización inteligente bidireccional:
+     * 1. Push: Envía la cola local a Supabase
+     * 2. Pull: Descarga novedades creadas por WhatsApp u otros puestos
+     */
+    public async synchronize(): Promise<{ success: boolean; pushed: number; pulled: number; error?: string }> {
+        if (!navigator.onLine) {
+            return { success: false, pushed: 0, pulled: 0, error: 'Dispositivo sin conexión a internet' }
+        }
+
+        if (this.status.isSyncing) {
+            return { success: false, pushed: 0, pulled: 0, error: 'Sincronización ya en curso' }
+        }
+
+        this.updateStatus({ isSyncing: true, error: null })
+
+        let pushedCount = 0
+        let pulledCount = 0
+
+        try {
+            // ── 1. PASO PUSH: Subir cola local ──
+            const pendingItems = await localDb.sync_outbox
+                .where('status')
+                .equals('PENDIENTE')
+                .toArray()
+
+            if (pendingItems.length > 0) {
+                console.log(`[SYNC MANAGER] Subiendo ${pendingItems.length} cambios pendientes a Supabase...`)
+                const pushResults = await pushOutboxChangesAction(pendingItems)
+
+                for (const r of pushResults) {
+                    if (r.success) {
+                        await localDb.sync_outbox.delete(r.outbox_id)
+                        pushedCount++
+                    } else {
+                        await localDb.sync_outbox.update(r.outbox_id, {
+                            status: 'ERROR',
+                            error_message: r.error
+                        })
+                    }
+                }
+            }
+
+            // ── 2. PASO PULL: Bajar novedades de la nube ──
+            const lastSyncMeta = await localDb.sync_meta.get('last_synced_at')
+            const sinceDate = lastSyncMeta?.value
+
+            if (!sinceDate) {
+                // Si nunca sincronizó, hacer snapshot completo
+                const snapRes = await this.downloadFullSnapshot()
+                return { success: snapRes.success, pushed: pushedCount, pulled: this.status.totalTurnosLocales, error: snapRes.error }
+            }
+
+            const pullRes = await fetchIncrementalPullAction(sinceDate)
+            if (pullRes.success) {
+                await localDb.transaction('rw', [localDb.pacientes, localDb.turnos, localDb.sync_meta], async () => {
+                    if (pullRes.pacientes.length > 0) {
+                        await localDb.pacientes.bulkPut(pullRes.pacientes)
+                        pulledCount += pullRes.pacientes.length
+                    }
+                    if (pullRes.turnos.length > 0) {
+                        await localDb.turnos.bulkPut(pullRes.turnos)
+                        pulledCount += pullRes.turnos.length
+                    }
+                    await localDb.sync_meta.put({
+                        key: 'last_synced_at',
+                        value: pullRes.server_time,
+                        updated_at: new Date().toISOString()
+                    })
+                })
+            }
+
+            await this.refreshLocalMetrics()
+            this.updateStatus({
+                isSyncing: false,
+                lastSyncedAt: pullRes.server_time || new Date().toISOString(),
+                error: null
+            })
+
+            return { success: true, pushed: pushedCount, pulled: pulledCount }
+        } catch (err: any) {
+            console.error('[SYNC MANAGER] Error durante synchronize:', err)
+            this.updateStatus({ isSyncing: false, error: err.message || 'Error en sincronización' })
+            return { success: false, pushed: pushedCount, pulled: pulledCount, error: err.message }
+        }
+    }
+
+    /**
+     * Encola una mutación local (INSERT/UPDATE/DELETE) para que se aplique instantáneamente
+     * en IndexedDB y se suba en el próximo sync.
+     */
+    public async enqueueMutation(
+        tenantId: string,
+        entity: 'turnos' | 'pacientes',
+        entityId: string,
+        operation: 'INSERT' | 'UPDATE' | 'DELETE',
+        payload: any
+    ) {
+        await localDb.sync_outbox.add({
+            tenant_id: tenantId,
+            entity,
+            entity_id: entityId,
+            operation,
+            payload,
+            created_at: new Date().toISOString(),
+            attempts: 0,
+            status: 'PENDIENTE'
+        })
+
+        await this.refreshLocalMetrics()
+
+        // Si estamos online, intentar push inmediato en segundo plano
+        if (navigator.onLine && !this.status.isSyncing) {
+            this.synchronize().catch(console.warn)
+        }
+    }
+}
+
+export const syncManager = new OfflineSyncManager()
