@@ -78,6 +78,15 @@ class OfflineSyncManager {
                 this.updateStatus({ lastSyncedAt: lastSync.value })
             }
             this.setupInterval()
+
+            // Auto-reparar si la base local tiene la versión truncada previa en 1000
+            const fullSnapshotV2 = await localDb.sync_meta.get('full_snapshot_v2')
+            const pacCount = await localDb.pacientes.count()
+            if (!fullSnapshotV2 || pacCount <= 1000) {
+                if (typeof navigator !== 'undefined' && navigator.onLine) {
+                    this.downloadFullSnapshot().catch(console.warn)
+                }
+            }
         } catch (e) {
             console.warn('[SYNC MANAGER] Error cargando settings iniciales:', e)
         }
@@ -258,6 +267,11 @@ class OfflineSyncManager {
                     value: res.server_time,
                     updated_at: new Date().toISOString()
                 })
+                await localDb.sync_meta.put({
+                    key: 'full_snapshot_v2',
+                    value: 'true',
+                    updated_at: new Date().toISOString()
+                })
             })
 
             await this.refreshLocalMetrics()
@@ -316,9 +330,10 @@ class OfflineSyncManager {
             // ── 2. PASO PULL: Bajar novedades de la nube ──
             const lastSyncMeta = await localDb.sync_meta.get('last_synced_at')
             const sinceDate = lastSyncMeta?.value
+            const fullSnapshotV2 = await localDb.sync_meta.get('full_snapshot_v2')
 
-            if (!sinceDate) {
-                // Si nunca sincronizó, hacer snapshot completo
+            if (!sinceDate || !fullSnapshotV2 || this.status.totalPacientesLocales <= 1000) {
+                // Si nunca sincronizó o tiene la versión truncada (<=1000), hacer snapshot completo
                 const snapRes = await this.downloadFullSnapshot()
                 return { success: snapRes.success, pushed: pushedCount, pulled: this.status.totalTurnosLocales, error: snapRes.error }
             }
