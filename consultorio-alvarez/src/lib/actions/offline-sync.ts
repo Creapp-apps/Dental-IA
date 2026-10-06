@@ -30,6 +30,33 @@ export interface PushResultItem {
 }
 
 /**
+ * Helper para paginar y descargar el 100% de los registros de Supabase
+ * superando el límite por defecto de 1000 filas de PostgREST.
+ */
+async function fetchAllRows<T>(
+    fetcher: (from: number, to: number) => Promise<{ data: T[] | null; error: any }>
+): Promise<T[]> {
+    const results: T[] = []
+    const pageSize = 1000
+    let from = 0
+
+    while (true) {
+        const to = from + pageSize - 1
+        const { data, error } = await fetcher(from, to)
+        if (error) {
+            console.error('[OFFLINE SYNC] Error paginando registros:', error)
+            break
+        }
+        if (!data || data.length === 0) break
+        results.push(...data)
+        if (data.length < pageSize) break
+        from += pageSize
+    }
+
+    return results
+}
+
+/**
  * Descarga una copia limpia e integral de todos los datos clínicos del consultorio para uso offline.
  */
 export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
@@ -59,30 +86,36 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
         en180Dias.setDate(en180Dias.getDate() + 180)
 
         const [
-            { data: pacientesData },
-            { data: turnosData },
+            pacientesData,
+            turnosData,
             { data: profesionalesData },
             { data: tratamientosData },
             { data: obrasData }
         ] = await Promise.all([
-            admin
-                .from('pacientes')
-                .select('*')
-                .eq('tenant_id', tenantId)
-                .order('apellido', { ascending: true }),
+            fetchAllRows(async (from, to) => {
+                return admin
+                    .from('pacientes')
+                    .select('*')
+                    .eq('tenant_id', tenantId)
+                    .order('apellido', { ascending: true })
+                    .range(from, to)
+            }),
 
-            admin
-                .from('turnos')
-                .select(`
-                    *,
-                    paciente:pacientes(nombre, apellido, dni, telefono),
-                    profesional:profesionales(nombre, apellido),
-                    tipo_tratamiento:tipos_tratamiento(nombre, color)
-                `)
-                .eq('tenant_id', tenantId)
-                .gte('fecha_inicio', hace90Dias.toISOString())
-                .lte('fecha_inicio', en180Dias.toISOString())
-                .order('fecha_inicio', { ascending: true }),
+            fetchAllRows(async (from, to) => {
+                return admin
+                    .from('turnos')
+                    .select(`
+                        *,
+                        paciente:pacientes(nombre, apellido, dni, telefono),
+                        profesional:profesionales(nombre, apellido),
+                        tipo_tratamiento:tipos_tratamiento(nombre, color)
+                    `)
+                    .eq('tenant_id', tenantId)
+                    .gte('fecha_inicio', hace90Dias.toISOString())
+                    .lte('fecha_inicio', en180Dias.toISOString())
+                    .order('fecha_inicio', { ascending: true })
+                    .range(from, to)
+            }),
 
             admin
                 .from('profesionales')
@@ -174,25 +207,31 @@ export async function fetchIncrementalPullAction(sinceIsoDate: string): Promise<
 
     try {
         const [
-            { data: pacientesNuevos },
-            { data: turnosNuevos }
+            pacientesNuevos,
+            turnosNuevos
         ] = await Promise.all([
-            admin
-                .from('pacientes')
-                .select('*')
-                .eq('tenant_id', tenantId)
-                .gt('updated_at', sinceIsoDate),
+            fetchAllRows(async (from, to) => {
+                return admin
+                    .from('pacientes')
+                    .select('*')
+                    .eq('tenant_id', tenantId)
+                    .gt('updated_at', sinceIsoDate)
+                    .range(from, to)
+            }),
 
-            admin
-                .from('turnos')
-                .select(`
-                    *,
-                    paciente:pacientes(nombre, apellido, dni, telefono),
-                    profesional:profesionales(nombre, apellido),
-                    tipo_tratamiento:tipos_tratamiento(nombre, color)
-                `)
-                .eq('tenant_id', tenantId)
-                .gt('updated_at', sinceIsoDate)
+            fetchAllRows(async (from, to) => {
+                return admin
+                    .from('turnos')
+                    .select(`
+                        *,
+                        paciente:pacientes(nombre, apellido, dni, telefono),
+                        profesional:profesionales(nombre, apellido),
+                        tipo_tratamiento:tipos_tratamiento(nombre, color)
+                    `)
+                    .eq('tenant_id', tenantId)
+                    .gt('updated_at', sinceIsoDate)
+                    .range(from, to)
+            })
         ])
 
         const turnosMapeados: LocalTurno[] = (turnosNuevos || []).map((t: any) => ({
