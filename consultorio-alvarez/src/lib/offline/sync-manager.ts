@@ -7,8 +7,12 @@ import {
     pushOutboxChangesAction
 } from '@/lib/actions/offline-sync'
 
+export type NetworkQuality = 'excelente' | 'buena' | 'debil' | 'desconectado'
+
 export interface SyncStatus {
     isOnline: boolean
+    networkQuality: NetworkQuality
+    pingLatencyMs: number | null
     isSyncing: boolean
     lastSyncedAt: string | null
     pendingOutboxCount: number
@@ -22,10 +26,13 @@ type SyncListener = (status: SyncStatus) => void
 class OfflineSyncManager {
     private listeners: Set<SyncListener> = new Set()
     private intervalId: NodeJS.Timeout | null = null
+    private heartbeatIntervalId: NodeJS.Timeout | null = null
     private currentIntervalMinutes: number = 15 // Default 15 min
 
     private status: SyncStatus = {
         isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
+        networkQuality: typeof navigator !== 'undefined' && !navigator.onLine ? 'desconectado' : 'excelente',
+        pingLatencyMs: null,
         isSyncing: false,
         lastSyncedAt: null,
         pendingOutboxCount: 0,
@@ -38,16 +45,25 @@ class OfflineSyncManager {
         if (typeof window !== 'undefined') {
             window.addEventListener('online', () => {
                 this.updateStatus({ isOnline: true })
-                // Intento automático de push/pull al recuperar internet
-                this.synchronize()
+                this.checkConnectionQuality().then(res => {
+                    if (res.quality !== 'desconectado') {
+                        // Intento automático de push/pull al recuperar internet
+                        this.synchronize()
+                    }
+                })
             })
             window.addEventListener('offline', () => {
-                this.updateStatus({ isOnline: false })
+                this.updateStatus({
+                    isOnline: false,
+                    networkQuality: 'desconectado',
+                    pingLatencyMs: null
+                })
             })
 
-            // Inicializar métricas locales
+            // Inicializar métricas locales y chequeo de red
             this.refreshLocalMetrics()
             this.loadStoredSettings()
+            this.setupHeartbeat()
         }
     }
 
@@ -100,6 +116,71 @@ class OfflineSyncManager {
         } catch (e) {
             console.warn('[SYNC MANAGER] Error refrescando métricas locales:', e)
         }
+    }
+
+    /**
+     * Mide la latencia real y calidad de conexión a internet de la PC hacia el servidor.
+     */
+    public async checkConnectionQuality(): Promise<{ quality: NetworkQuality; pingMs: number | null }> {
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            this.updateStatus({ isOnline: false, networkQuality: 'desconectado', pingLatencyMs: null })
+            return { quality: 'desconectado', pingMs: null }
+        }
+
+        try {
+            const start = performance.now()
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 3500)
+
+            const res = await fetch('/api/ping', {
+                method: 'GET',
+                cache: 'no-store',
+                signal: controller.signal
+            })
+            clearTimeout(timeoutId)
+
+            if (!res.ok) {
+                this.updateStatus({ isOnline: true, networkQuality: 'debil', pingLatencyMs: null })
+                return { quality: 'debil', pingMs: null }
+            }
+
+            const pingMs = Math.round(performance.now() - start)
+            let quality: NetworkQuality = 'excelente'
+            if (pingMs > 500) {
+                quality = 'debil'
+            } else if (pingMs > 200) {
+                quality = 'buena'
+            } else {
+                quality = 'excelente'
+            }
+
+            this.updateStatus({ isOnline: true, networkQuality: quality, pingLatencyMs: pingMs })
+            return { quality, pingMs }
+        } catch {
+            const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : false
+            const quality: NetworkQuality = isOnline ? 'debil' : 'desconectado'
+            this.updateStatus({
+                isOnline,
+                networkQuality: quality,
+                pingLatencyMs: null
+            })
+            return { quality, pingMs: null }
+        }
+    }
+
+    private setupHeartbeat() {
+        if (this.heartbeatIntervalId) {
+            clearInterval(this.heartbeatIntervalId)
+            this.heartbeatIntervalId = null
+        }
+
+        // Chequeo inicial
+        this.checkConnectionQuality().catch(console.warn)
+
+        // Monitoreo cada 25 segundos en tiempo real
+        this.heartbeatIntervalId = setInterval(() => {
+            this.checkConnectionQuality().catch(console.warn)
+        }, 25000)
     }
 
     public setIntervalMinutes(minutes: number) {
