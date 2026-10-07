@@ -123,9 +123,7 @@ export async function crearPaciente(formData: {
             .single()
 
         if (!error) {
-            after(() => {
-                revalidatePath('/pacientes')
-            })
+            revalidatePath('/pacientes')
             return { data }
         }
 
@@ -219,10 +217,8 @@ export async function actualizarPaciente(id: string, formData: {
 
     if (error) return { error: error.message }
 
-    after(() => {
-        revalidatePath('/pacientes')
-        revalidatePath(`/pacientes/${id}`)
-    })
+    revalidatePath('/pacientes')
+    revalidatePath(`/pacientes/${id}`)
     return { success: true }
 }
 
@@ -239,9 +235,7 @@ export async function eliminarPaciente(id: string) {
 
     if (error) return { error: error.message }
 
-    after(() => {
-        revalidatePath('/pacientes')
-    })
+    revalidatePath('/pacientes')
     return { success: true }
 }
 

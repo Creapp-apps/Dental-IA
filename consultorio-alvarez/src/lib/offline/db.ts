@@ -11,12 +11,18 @@ export interface LocalPaciente {
     telefono: string | null
     email: string | null
     fecha_nacimiento?: string | null
+    genero?: string | null
+    direccion?: string | null
+    ciudad?: string | null
     obra_social_id?: string | null
+    plan_obra_social?: string | null
     n_afiliado?: string | null
     alergias?: string | null
     medicacion_actual?: string | null
     antecedentes?: string | null
     notas_internas?: string | null
+    registro_completo?: boolean | null
+    foto_url?: string | null
     created_at?: string
     updated_at?: string
 }

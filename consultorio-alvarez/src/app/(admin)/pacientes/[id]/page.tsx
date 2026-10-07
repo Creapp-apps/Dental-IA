@@ -5,12 +5,10 @@ import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
 import { getProfesionales, getTiposTratamiento } from '@/lib/supabase/queries'
 import { getEscaneosPacienteAction } from '@/lib/actions/escaneos-3d'
-import { ArrowLeft, Phone, Mail, MapPin, CreditCard, AlertCircle, Stethoscope, Edit2 } from 'lucide-react'
-import { GlassButton } from '@/components/ui/glass-button'
+import { ArrowLeft } from 'lucide-react'
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
 import { FichaPacienteTabs } from '@/components/pacientes/FichaPacienteTabs'
-
-const GENERO_LABEL: Record<string, string> = { M: 'Masculino', F: 'Femenino', X: 'No binario' }
+import { PacientePerfilOptimistic } from '@/components/pacientes/PacientePerfilOptimistic'
 
 async function getPacienteCompleto(id: string) {
     const supabase = await createClient()
@@ -82,83 +80,10 @@ export default async function FichaPacientePage({
                 <EditarPacienteBtn pacienteId={p.id} label="Editar Paciente" size="sm" />
             </div>
 
-            {/* Registro Incompleto Alert */}
-            {p.registro_completo === false && (
-                <div className="glass rounded-xl p-4 border-l-4 border-red-500 shadow-glass bg-red-500/5 dark:bg-red-500/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-pulse">
-                    <div className="flex items-start gap-2.5">
-                        <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
-                        <div>
-                            <h4 className="text-sm font-semibold text-red-700 dark:text-red-300">Falta completar información del paciente</h4>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                                Este paciente fue registrado mediante reserva rápida de turno. Completá sus datos de contacto y cobertura para habilitar su ficha completa.
-                            </p>
-                        </div>
-                    </div>
-                    <EditarPacienteBtn pacienteId={p.id} label="Completar información" size="sm" className="bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25 shrink-0" />
-                </div>
-            )}
-
-            {/* Clinical alerts */}
-            {(p.alergias || p.medicacion_actual || p.antecedentes) && (
-                <div className="glass rounded-xl p-3.5 border-l-4 border-amber-500 shadow-glass">
-                    <div className="flex items-start gap-2">
-                        <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400 mt-0.5 shrink-0" />
-                        <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
-                            {p.alergias && <span><strong className="text-amber-700 dark:text-amber-300">Alergias:</strong> {p.alergias}</span>}
-                            {p.medicacion_actual && <span><strong className="text-amber-700 dark:text-amber-300">Medicación:</strong> {p.medicacion_actual}</span>}
-                            {p.antecedentes && <span><strong className="text-amber-700 dark:text-amber-300">Antecedentes:</strong> {p.antecedentes}</span>}
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Layout: Profile sidebar + Tabbed content */}
             <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
-                {/* ── Left: Profile card ── */}
-                <div className="space-y-4">
-                    <div className="glass rounded-2xl shadow-glass p-5">
-                        <div className="flex flex-col items-center text-center mb-4">
-                            <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-3 ring-4 ring-primary/20 overflow-hidden relative">
-                                {p.foto_url ? (
-                                    /* eslint-disable-next-line @next/next/no-img-element */
-                                    <img src={p.foto_url} alt={`${p.nombre} ${p.apellido}`} className="h-full w-full object-cover" />
-                                ) : (
-                                    <span className="text-2xl font-bold text-primary">{iniciales}</span>
-                                )}
-                            </div>
-                            <h2 className="text-lg font-bold text-foreground">{p.nombre} {p.apellido}</h2>
-                            {edad !== null && (
-                                <span className="text-xs glass px-2 py-0.5 rounded-lg mt-1">{edad} años</span>
-                            )}
-                        </div>
-
-                        <div className="space-y-2.5 text-sm">
-                            <DatoFila label="DNI" valor={p.dni || '—'} />
-                            <DatoFila label="CUIT" valor={p.cuit || '—'} />
-                            <DatoFila label="Nac." valor={p.fecha_nacimiento ? format(new Date(p.fecha_nacimiento), "dd/MM/yyyy") : null} />
-                            <DatoFila label="Género" valor={p.genero ? GENERO_LABEL[p.genero] : null} />
-                            <div className="h-px bg-border my-1" />
-                            <DatoFila label="Teléfono" valor={p.telefono} icon={<Phone className="h-3 w-3" />} />
-                            <DatoFila label="Email" valor={p.email} icon={<Mail className="h-3 w-3" />} />
-                            <DatoFila label="Dirección" valor={p.direccion} icon={<MapPin className="h-3 w-3" />} />
-                            <div className="h-px bg-border my-1" />
-                            <DatoFila label="Obra Social" valor={p.obra_social?.nombre ?? 'Particular'} icon={<CreditCard className="h-3 w-3" />} />
-                            <DatoFila label="Plan" valor={p.plan_obra_social} />
-                            {p.n_afiliado && <DatoFila label="N° Afiliado" valor={p.n_afiliado} />}
-                        </div>
-
-                        <div className="mt-4 pt-3 border-t border-border">
-                            <EditarPacienteBtn pacienteId={p.id} label="Editar Información" className="w-full text-xs justify-center h-8" />
-                        </div>
-                    </div>
-
-                    {p.notas_internas && (
-                        <div className="glass rounded-xl p-4 border-l-4 border-blue-500 shadow-glass">
-                            <p className="text-xs font-semibold text-blue-600 dark:text-blue-400 mb-1">📝 Notas internas</p>
-                            <p className="text-sm text-foreground leading-relaxed">{p.notas_internas}</p>
-                        </div>
-                    )}
-                </div>
+                {/* ── Left: Profile card con soporte reactivo Local-First / Optimistic ── */}
+                <PacientePerfilOptimistic initialPaciente={p} />
 
                 {/* ── Right: Tabbed content ── */}
                 <FichaPacienteTabs
@@ -174,16 +99,6 @@ export default async function FichaPacientePage({
                     tiposTratamiento={tiposTratamiento}
                 />
             </div>
-        </div>
-    )
-}
-
-function DatoFila({ label, valor, icon }: { label: string; valor: string | null | undefined; icon?: React.ReactNode }) {
-    if (!valor) return null
-    return (
-        <div className="flex items-start justify-between gap-2">
-            <span className="text-muted-foreground shrink-0 flex items-center gap-1">{icon}{label}</span>
-            <span className="font-medium text-foreground text-right">{valor}</span>
         </div>
     )
 }

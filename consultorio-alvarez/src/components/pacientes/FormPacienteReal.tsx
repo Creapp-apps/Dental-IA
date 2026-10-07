@@ -118,6 +118,7 @@ function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 
 export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: any[], paciente?: any }) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
+    const [savingStatusText, setSavingStatusText] = useState<string | null>(null)
     const [isOcrPending, setIsOcrPending] = useState(false)
     const [ocrData, setOcrData] = useState<any>(null)
     const [geminiErrorModal, setGeminiErrorModal] = useState<{ isOpen: boolean; message: string }>({ isOpen: false, message: '' })
@@ -286,6 +287,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
     }
 
     function onSubmit(data: FormData) {
+        setSavingStatusText('Guardando en tu equipo...')
         startTransition(async () => {
             // Convert date to YYYY-MM-DD for storage
             let fechaIso = ''
@@ -312,10 +314,19 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
 
                 // 2. Si hay conexión a internet, sincronizar con Supabase
                 if (typeof navigator !== 'undefined' && navigator.onLine) {
+                    setSavingStatusText('Sincronizando con la nube...')
                     try {
-                        const result = await actualizarPaciente(paciente.id, payload)
-                        if (result.error) {
-                            // Encolar en Outbox para no perder el cambio
+                        // Timeout de seguridad de 3.2s: si la red de la clínica tiene latencia alta,
+                        // no bloqueamos a la secretaria; encolamos en segundo plano y redirigimos
+                        const timeoutPromise = new Promise<{ isTimeout: true }>((resolve) => {
+                            setTimeout(() => resolve({ isTimeout: true }), 3200)
+                        })
+
+                        const syncPromise = actualizarPaciente(paciente.id, payload)
+                        const raceResult = await Promise.race([syncPromise, timeoutPromise])
+
+                        if ('isTimeout' in raceResult) {
+                            // Internet lento: Encolar en Outbox para subida automática en background
                             if (paciente.tenant_id) {
                                 await syncManager.enqueueMutation(
                                     paciente.tenant_id,
@@ -325,14 +336,35 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                                     payload
                                 )
                             }
-                            glassAlert.warning({ 
-                                title: 'Guardado en esta PC', 
-                                description: 'El servidor tuvo una demora. Tu cambio quedó guardado en esta máquina y se subirá automáticamente.' 
+                            glassAlert.success({ 
+                                title: 'Guardado seguro en tu equipo', 
+                                description: 'Detectamos conexión lenta. Tu información ya quedó guardada y se sincronizará automáticamente con la nube.' 
                             })
                             router.push(`/pacientes/${paciente.id}`)
                         } else {
-                            glassAlert.success({ title: 'Paciente actualizado' })
-                            await syncManager.refreshLocalMetrics()
+                            const result = raceResult
+                            if (result.error) {
+                                // Encolar en Outbox para no perder el cambio
+                                if (paciente.tenant_id) {
+                                    await syncManager.enqueueMutation(
+                                        paciente.tenant_id,
+                                        'pacientes',
+                                        paciente.id,
+                                        'UPDATE',
+                                        payload
+                                    )
+                                }
+                                glassAlert.warning({ 
+                                    title: 'Guardado en esta PC', 
+                                    description: 'El servidor tuvo una demora. Tu cambio quedó guardado en esta máquina y se subirá automáticamente.' 
+                                })
+                            } else {
+                                glassAlert.success({ 
+                                    title: 'Paciente actualizado', 
+                                    description: 'Datos guardados y sincronizados correctamente.' 
+                                })
+                                await syncManager.refreshLocalMetrics()
+                            }
                             router.push(`/pacientes/${paciente.id}`)
                         }
                     } catch {
@@ -371,6 +403,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                 }
             } else {
                 // Creación de nuevo paciente
+                setSavingStatusText('Creando paciente...')
                 if (typeof navigator !== 'undefined' && navigator.onLine) {
                     try {
                         const result = await crearPaciente(payload)
@@ -656,8 +689,18 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                 <GlassButton type="button" variant="ghost" onClick={() => router.back()}>
                     Cancelar
                 </GlassButton>
-                <GlassButton type="submit" loading={isPending}>
-                    {paciente ? 'Guardar cambios' : 'Crear paciente'}
+                <GlassButton 
+                    type="submit" 
+                    loading={isPending}
+                    className="min-w-[210px] transition-all"
+                >
+                    {isPending ? (
+                        <span className="flex items-center gap-2">
+                            <span>{savingStatusText || (paciente ? 'Guardando cambios...' : 'Creando paciente...')}</span>
+                        </span>
+                    ) : (
+                        paciente ? 'Guardar cambios' : 'Crear paciente'
+                    )}
                 </GlassButton>
             </motion.div>
 

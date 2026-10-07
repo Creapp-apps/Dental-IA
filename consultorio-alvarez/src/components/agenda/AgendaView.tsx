@@ -16,6 +16,8 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { NuevoTurnoModal } from '@/components/agenda/NuevoTurnoModal'
 import { BuscadorTurnosModal } from '@/components/agenda/BuscadorTurnosModal'
 import { cambiarEstadoTurno, eliminarTurno, moverTurno, enviarRecordatorioManual, getTurnosRangoAction } from '@/lib/actions/turnos'
+import { localDb } from '@/lib/offline/db'
+import { getTurnosAgendaLocal } from '@/lib/offline/local-queries'
 
 import { glassAlert } from '@/components/ui/glass-alert'
 import {
@@ -251,12 +253,14 @@ export function AgendaView({
 
     const isFirstLoadRef = useRef(true)
 
-    // Función unificada de carga de turnos de rango (con caché, cancelación limpia y reintento)
+    // Función unificada de carga de turnos de rango (Local-First + Stale-While-Revalidate en 0ms)
     const cargarTurnosRango = (forceBypassCache = false) => {
         const { inicio, fin } = getRangoFechasParaVista(vistaActiva, baseDate)
-        const cacheKey = `${inicio.toISOString()}_${fin.toISOString()}_${filtroProf}`
+        const inicioIso = inicio.toISOString()
+        const finIso = fin.toISOString()
+        const cacheKey = `${inicioIso}_${finIso}_${filtroProf}`
 
-        // Si existe en caché y está vigente (< 5 minutos) y no forzamos recarga:
+        // 1. Memoria RAM ultrarrápida (0ms)
         if (!forceBypassCache) {
             const cached = turnosCacheRef.current.get(cacheKey)
             if (cached && (Date.now() - cached.timestamp < 1000 * 60 * 5)) {
@@ -267,24 +271,43 @@ export function AgendaView({
             }
         }
 
-        // Cancelar petición anterior si existía (evita que clics rápidos compitan o sobreescriban con datos viejos)
+        // Cancelar petición anterior si existía (evita carreras entre clics rápidos)
         if (abortControllerRef.current) {
             abortControllerRef.current.abort()
         }
         const controller = new AbortController()
         abortControllerRef.current = controller
 
-        setIsLoadingTurnos(true)
+        let hadLocalTurnos = false
+
+        // 2. Base Local IndexedDB (0 a 15ms): Carga inmediata de la semana desde el disco
+        getTurnosAgendaLocal(inicioIso, finIso, filtroProf)
+            .then(localTurnos => {
+                if (localTurnos && localTurnos.length > 0 && !controller.signal.aborted) {
+                    hadLocalTurnos = true
+                    setTurnos(localTurnos)
+                    // Si ya tenemos los turnos locales en la máquina, pintamos la semana al instante
+                    setIsLoadingTurnos(false)
+                    setFetchError(null)
+                }
+            })
+            .catch(err => console.warn('[AGENDA LOCAL] Error consultando turnos locales:', err))
+
+        // Si no teníamos en memoria, activamos loading sutil mientras chequea red o local
+        if (!turnosCacheRef.current.has(cacheKey)) {
+            setIsLoadingTurnos(true)
+        }
         setFetchError(null)
 
         const params = new URLSearchParams({
-            inicio: inicio.toISOString(),
-            fin: fin.toISOString(),
+            inicio: inicioIso,
+            fin: finIso,
         })
         if (filtroProf !== 'todos') {
             params.set('profesionalId', filtroProf)
         }
 
+        // 3. Revalidación en segundo plano contra Supabase / API para traer novedades
         const fetchConReintento = async (intento: number): Promise<void> => {
             try {
                 const res = await fetch(`/api/turnos?${params.toString()}`, {
@@ -303,10 +326,42 @@ export function AgendaView({
                     setTurnos(data.turnos)
                     setIsLoadingTurnos(false)
                     setFetchError(null)
+
+                    // Actualizar en segundo plano la base local para que siempre esté fresca
+                    try {
+                        const mapeados = data.turnos.map((t: any) => ({
+                            id: t.id,
+                            tenant_id: t.tenant_id,
+                            paciente_id: t.paciente_id,
+                            profesional_id: t.profesional_id,
+                            tipo_tratamiento_id: t.tipo_tratamiento_id,
+                            fecha_inicio: t.fecha_inicio,
+                            fecha_fin: t.fecha_fin,
+                            estado: t.estado,
+                            prioridad_override: t.prioridad_override,
+                            notas: t.notas,
+                            origen: t.origen,
+                            es_sobreturno: t.es_sobreturno,
+                            numero_pieza: t.numero_pieza,
+                            created_at: t.created_at,
+                            updated_at: t.updated_at,
+                            paciente_nombre: t.paciente?.nombre,
+                            paciente_apellido: t.paciente?.apellido,
+                            paciente_dni: t.paciente?.dni,
+                            paciente_telefono: t.paciente?.telefono,
+                            profesional_nombre: t.profesional?.nombre,
+                            profesional_apellido: t.profesional?.apellido,
+                            tipo_tratamiento_nombre: t.tipo_tratamiento?.nombre,
+                            tipo_tratamiento_color: t.tipo_tratamiento?.color
+                        }))
+                        if (mapeados.length > 0) {
+                            localDb.turnos.bulkPut(mapeados).catch(() => {})
+                        }
+                    } catch {}
                 }
             } catch (err: any) {
                 if (err.name === 'AbortError') {
-                    // Descartado voluntariamente por cambio de fecha rápido; no reportar error
+                    // Descartado voluntariamente por cambio de fecha rápido
                     return
                 }
                 // Si es el primer intento, reintentar automáticamente 1 vez tras 1.2 segundos
@@ -320,7 +375,10 @@ export function AgendaView({
                 }
                 console.error('Error cargando turnos del rango:', err)
                 setIsLoadingTurnos(false)
-                setFetchError('No se pudieron sincronizar los turnos del período seleccionado')
+                // Si ya teníamos turnos locales, no asustamos con error en rojo
+                if (!hadLocalTurnos) {
+                    setFetchError('No se pudieron sincronizar los turnos del período seleccionado')
+                }
             }
         }
 
@@ -900,6 +958,12 @@ export function AgendaView({
             return t
         }))
         turnosCacheRef.current.clear()
+        localDb.turnos.update(turnoId, {
+            fecha_inicio: newStart.toISOString(),
+            fecha_fin: newEnd.toISOString(),
+            profesional_id: targetProfId,
+            updated_at: new Date().toISOString()
+        }).catch(() => {})
         
         startTransition(async () => {
             const res = await moverTurno(turnoId, newStart.toISOString(), newEnd.toISOString(), targetProfId)
@@ -958,6 +1022,7 @@ export function AgendaView({
         // Optimistic status update
         setTurnos(prev => prev.map(t => t.id === turnoId ? { ...t, estado: nuevoEstado } : t))
         turnosCacheRef.current.clear()
+        localDb.turnos.update(turnoId, { estado: nuevoEstado, updated_at: new Date().toISOString() }).catch(() => {})
         
         startTransition(async () => {
             const result = await cambiarEstadoTurno(turnoId, nuevoEstado)
@@ -1025,6 +1090,7 @@ export function AgendaView({
         // Optimistic delete: remove card immediately from local UI
         setTurnos(prev => prev.filter(t => t.id !== targetId))
         turnosCacheRef.current.clear()
+        localDb.turnos.delete(targetId).catch(() => {})
         
         startTransition(async () => {
             const res = await eliminarTurno(targetId)
@@ -2375,6 +2441,35 @@ export function AgendaView({
                         } : null
                     }
                     turnosCacheRef.current.clear()
+
+                    // Guardado en IndexedDB local a 0ms
+                    try {
+                        localDb.turnos.put({
+                            id: turnoCompleto.id,
+                            tenant_id: turnoCompleto.tenant_id,
+                            paciente_id: turnoCompleto.paciente_id,
+                            profesional_id: turnoCompleto.profesional_id,
+                            tipo_tratamiento_id: turnoCompleto.tipo_tratamiento_id,
+                            fecha_inicio: turnoCompleto.fecha_inicio,
+                            fecha_fin: turnoCompleto.fecha_fin,
+                            estado: turnoCompleto.estado,
+                            prioridad_override: turnoCompleto.prioridad_override,
+                            notas: turnoCompleto.notas,
+                            origen: turnoCompleto.origen,
+                            es_sobreturno: turnoCompleto.es_sobreturno,
+                            numero_pieza: turnoCompleto.numero_pieza,
+                            created_at: turnoCompleto.created_at,
+                            updated_at: new Date().toISOString(),
+                            paciente_nombre: turnoCompleto.paciente?.nombre,
+                            paciente_apellido: turnoCompleto.paciente?.apellido,
+                            paciente_dni: turnoCompleto.paciente?.dni,
+                            paciente_telefono: turnoCompleto.paciente?.telefono,
+                            profesional_nombre: turnoCompleto.profesional?.nombre,
+                            profesional_apellido: turnoCompleto.profesional?.apellido,
+                            tipo_tratamiento_nombre: turnoCompleto.tipo_tratamiento?.nombre,
+                            tipo_tratamiento_color: turnoCompleto.tipo_tratamiento?.color
+                        }).catch(() => {})
+                    } catch {}
 
                     if (isEdit) {
                         setTurnos(prev => prev.map(t => t.id === turnoRaw.id ? turnoCompleto : t))

@@ -80,21 +80,51 @@ export async function guardarPacienteLocal(
 
 /**
  * Obtiene los turnos para la vista de agenda en el rango solicitado (0ms).
+ * Normaliza las relaciones de paciente, profesional y tratamiento para que la UI
+ * los consuma directamente como si vinieran de Supabase.
  */
 export async function getTurnosAgendaLocal(
     desdeIso: string,
     hastaIso: string,
     profesionalId?: string | null
-): Promise<LocalTurno[]> {
-    let collection = localDb.turnos
-        .where('fecha_inicio')
-        .between(desdeIso, hastaIso, true, true)
+): Promise<any[]> {
+    try {
+        const desdeTime = new Date(desdeIso).getTime()
+        const hastaTime = new Date(hastaIso).getTime()
 
-    if (profesionalId && profesionalId !== 'todos') {
-        return collection.filter(t => t.profesional_id === profesionalId).toArray()
+        const all = await localDb.turnos.toArray()
+        const filtered = all.filter(t => {
+            if (!t.fecha_inicio) return false
+            const tTime = new Date(t.fecha_inicio).getTime()
+            if (tTime < desdeTime || tTime > hastaTime) return false
+            if (profesionalId && profesionalId !== 'todos' && t.profesional_id !== profesionalId) return false
+            return true
+        })
+
+        return filtered.map(t => ({
+            ...t,
+            paciente: (t as any).paciente || (t.paciente_nombre || t.paciente_apellido ? {
+                id: t.paciente_id,
+                nombre: t.paciente_nombre || '',
+                apellido: t.paciente_apellido || '',
+                dni: t.paciente_dni || '',
+                telefono: t.paciente_telefono || '',
+            } : null),
+            profesional: (t as any).profesional || (t.profesional_nombre ? {
+                id: t.profesional_id,
+                nombre: t.profesional_nombre || '',
+                apellido: t.profesional_apellido || '',
+            } : null),
+            tipo_tratamiento: (t as any).tipo_tratamiento || (t.tipo_tratamiento_nombre ? {
+                id: t.tipo_tratamiento_id,
+                nombre: t.tipo_tratamiento_nombre || '',
+                color: t.tipo_tratamiento_color || '#3b82f6',
+            } : null),
+        }))
+    } catch (err) {
+        console.warn('[LOCAL DB] Error consultando turnos locales:', err)
+        return []
     }
-
-    return collection.toArray()
 }
 
 /**
