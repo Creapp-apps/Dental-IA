@@ -6,6 +6,7 @@ import {
     fetchIncrementalPullAction,
     pushOutboxChangesAction
 } from '@/lib/actions/offline-sync'
+import { esElegible, filtrarBloqueados, ordenarCola, siguienteEstadoTrasFallo } from './outbox-policy'
 
 export type NetworkQuality = 'excelente' | 'buena' | 'debil' | 'desconectado'
 
@@ -16,6 +17,8 @@ export interface SyncStatus {
     isSyncing: boolean
     lastSyncedAt: string | null
     pendingOutboxCount: number
+    atascadosCount: number
+    authError: boolean
     totalPacientesLocales: number
     totalTurnosLocales: number
     error: string | null
@@ -36,6 +39,8 @@ class OfflineSyncManager {
         isSyncing: false,
         lastSyncedAt: null,
         pendingOutboxCount: 0,
+        atascadosCount: 0,
+        authError: false,
         totalPacientesLocales: 0,
         totalTurnosLocales: 0,
         error: null
@@ -45,8 +50,16 @@ class OfflineSyncManager {
         if (typeof window !== 'undefined') {
             window.addEventListener('online', () => {
                 this.updateStatus({ isOnline: true })
-                this.checkConnectionQuality().then(res => {
+                this.checkConnectionQuality().then(async res => {
                     if (res.quality !== 'desconectado') {
+                        // La escalera esperaba por una condición que acaba de
+                        // cambiar. Se conserva `attempts` para que reconectar
+                        // varias veces no vuelva la escalera infinita, y es la
+                        // válvula de escape si el reloj del equipo está mal.
+                        await localDb.sync_outbox
+                            .where('status').equals('PENDIENTE')
+                            .modify({ next_attempt_at: null })
+
                         // Intento automático de push/pull al recuperar internet
                         this.synchronize()
                     }
@@ -109,8 +122,9 @@ class OfflineSyncManager {
 
     public async refreshLocalMetrics() {
         try {
-            const [pendingCount, pacientesCount, turnosCount, lastSyncMeta] = await Promise.all([
+            const [pendingCount, atascadosCount, pacientesCount, turnosCount, lastSyncMeta] = await Promise.all([
                 localDb.sync_outbox.where('status').equals('PENDIENTE').count(),
+                localDb.sync_outbox.where('status').equals('ATASCADO').count(),
                 localDb.pacientes.count(),
                 localDb.turnos.count(),
                 localDb.sync_meta.get('last_synced_at')
@@ -118,6 +132,7 @@ class OfflineSyncManager {
 
             this.updateStatus({
                 pendingOutboxCount: pendingCount,
+                atascadosCount,
                 totalPacientesLocales: pacientesCount,
                 totalTurnosLocales: turnosCount,
                 lastSyncedAt: lastSyncMeta?.value || null
@@ -305,25 +320,46 @@ class OfflineSyncManager {
 
         try {
             // ── 1. PASO PUSH: Subir cola local ──
-            const pendingItems = await localDb.sync_outbox
-                .where('status')
-                .equals('PENDIENTE')
-                .toArray()
+            const ahora = new Date()
 
-            if (pendingItems.length > 0) {
-                console.log(`[SYNC MANAGER] Subiendo ${pendingItems.length} cambios pendientes a Supabase...`)
-                const pushResults = await pushOutboxChangesAction(pendingItems)
+            const [todosPendientes, atascados] = await Promise.all([
+                localDb.sync_outbox.where('status').equals('PENDIENTE').toArray(),
+                localDb.sync_outbox.where('status').equals('ATASCADO').toArray()
+            ])
+
+            const elegibles = filtrarBloqueados(
+                ordenarCola(todosPendientes.filter(i => esElegible(i, ahora))),
+                atascados
+            )
+
+            if (elegibles.length > 0) {
+                console.log(`[SYNC MANAGER] Subiendo ${elegibles.length} cambios pendientes a Supabase...`)
+                const pushResults = await pushOutboxChangesAction(elegibles)
+
+                // Lista de entrada no vacía y respuesta vacía significa que el
+                // servidor no pudo resolver el tenant: la sesión venció. Sin
+                // esto los items se quedan pendientes para siempre en silencio.
+                if (pushResults.length === 0) {
+                    this.updateStatus({ isSyncing: false, authError: true })
+                    return { success: false, pushed: 0, pulled: 0, error: 'La sesión venció. Volvé a iniciar sesión.' }
+                }
+
+                this.updateStatus({ authError: false })
 
                 for (const r of pushResults) {
                     if (r.success) {
                         await localDb.sync_outbox.delete(r.outbox_id)
                         pushedCount++
-                    } else {
-                        await localDb.sync_outbox.update(r.outbox_id, {
-                            status: 'ATASCADO',
-                            error_message: r.error
-                        })
+                        continue
                     }
+
+                    const item = elegibles.find(i => i.id === r.outbox_id)
+                    // El spread es para Dexie: su UpdateSpec sólo acepta un
+                    // objeto literal, no un tipo nombrado como CambioDeEstado.
+                    await localDb.sync_outbox.update(
+                        r.outbox_id,
+                        { ...siguienteEstadoTrasFallo(item?.attempts ?? 0, r.retriable, r.error_code, r.error, new Date()) }
+                    )
                 }
             }
 

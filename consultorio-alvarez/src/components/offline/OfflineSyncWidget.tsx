@@ -40,6 +40,8 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
         isSyncing: false,
         lastSyncedAt: null,
         pendingOutboxCount: 0,
+        atascadosCount: 0,
+        authError: false,
         totalPacientesLocales: 0,
         totalTurnosLocales: 0,
         error: null

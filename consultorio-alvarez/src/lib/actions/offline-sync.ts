@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
 import { LocalPaciente, LocalTurno, LocalProfesional, LocalTratamiento, LocalObraSocial, SyncOutboxItem } from '@/lib/offline/db'
+import { esReintentable } from '@/lib/offline/outbox-errors'
 
 export interface FullSnapshotResult {
     success: boolean
@@ -27,6 +28,10 @@ export interface PushResultItem {
     outbox_id: number
     success: boolean
     error?: string
+    /** Código de Postgres, cuando lo hubo. */
+    error_code?: string
+    /** Decidido acá: el cliente no interpreta mensajes de error. */
+    retriable: boolean
 }
 
 /**
@@ -296,6 +301,22 @@ function sanitizeEvolucionPayload(payload: any) {
 }
 
 /**
+ * Arma el resultado de una operación a partir del error de Supabase, dejando
+ * decidido del lado del servidor si vale la pena reintentarla.
+ */
+function resultado(outboxId: number, error: { code?: string; message?: string } | null): PushResultItem {
+    if (!error) return { outbox_id: outboxId, success: true, retriable: false }
+
+    return {
+        outbox_id: outboxId,
+        success: false,
+        error: error.message,
+        error_code: error.code,
+        retriable: esReintentable(error.code),
+    }
+}
+
+/**
  * Recibe y aplica las operaciones acumuladas en la cola local (sync_outbox) en Supabase.
  */
 export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<PushResultItem[]> {
@@ -310,7 +331,8 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
             results.push({
                 outbox_id: item.id || 0,
                 success: false,
-                error: 'Discrepancia de tenant'
+                error: 'Discrepancia de tenant',
+                retriable: false,
             })
             continue
         }
@@ -323,8 +345,11 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         tenant_id: tenantId,
                         updated_at: new Date().toISOString()
                     }
-                    const { error } = await admin.from('turnos').insert(payload)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    // upsert y no insert: si la respuesta de un push anterior se
+                    // perdió, el reintento no puede fallar por clave duplicada y
+                    // marcar como atascado un dato que ya está en la nube.
+                    const { error } = await admin.from('turnos').upsert(payload)
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'UPDATE') {
                     const { error } = await admin
                         .from('turnos')
@@ -334,14 +359,14 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         })
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'DELETE') {
                     const { error } = await admin
                         .from('turnos')
                         .delete()
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 }
             } else if (item.entity === 'pacientes') {
                 if (item.operation === 'INSERT') {
@@ -350,8 +375,11 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         tenant_id: tenantId,
                         updated_at: new Date().toISOString()
                     }
-                    const { error } = await admin.from('pacientes').insert(payload)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    // upsert y no insert: si la respuesta de un push anterior se
+                    // perdió, el reintento no puede fallar por clave duplicada y
+                    // marcar como atascado un dato que ya está en la nube.
+                    const { error } = await admin.from('pacientes').upsert(payload)
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'UPDATE') {
                     const { error } = await admin
                         .from('pacientes')
@@ -361,7 +389,7 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         })
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 }
             } else if (item.entity === 'evoluciones') {
                 if (item.operation === 'INSERT') {
@@ -375,7 +403,7 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                     // reintento sobre una fila que ya subió no debe fallar por
                     // clave duplicada y dejar el item trabado en la cola.
                     const { error } = await admin.from('historial_clinico').upsert(payload)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'UPDATE') {
                     const { error } = await admin
                         .from('historial_clinico')
@@ -385,14 +413,14 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         })
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'DELETE') {
                     const { error } = await admin
                         .from('historial_clinico')
                         .delete()
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 }
             }
         } catch (opErr: any) {
@@ -400,7 +428,8 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
             results.push({
                 outbox_id: item.id || 0,
                 success: false,
-                error: opErr.message || 'Excepción al sincronizar operación'
+                error: opErr.message || 'Excepción al sincronizar operación',
+                retriable: true,
             })
         }
     }
