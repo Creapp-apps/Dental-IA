@@ -58,6 +58,11 @@ export interface ItemDeEntidad {
     entity_id: string
 }
 
+/** Identifica la fila sobre la que opera un item. */
+function clave(i: ItemDeEntidad): string {
+    return `${i.entity}::${i.entity_id}`
+}
+
 export interface CambioDeEstado {
     status: EstadoOutbox
     attempts: number
@@ -80,22 +85,49 @@ export function ordenarCola<T extends { id?: number }>(items: T[]): T[] {
 }
 
 /**
- * Saca de la tanda los items de una fila que ya tiene algo atascado.
+ * Saca de la tanda los items de una fila que ya tiene algo sin aplicar.
  *
  * Aplicar una modificación encima de una creación que nunca entró deja la base
  * inconsistente. El bloqueo es por par entity + entity_id: dos tablas distintas
  * no se bloquean entre sí aunque compartan el identificador.
+ *
+ * `bloqueadores` no son sólo los atascados: un pendiente que está esperando su
+ * turno en la escalera también es una operación sin aplicar sobre su fila, y
+ * tiene que frenar a las que vienen después.
  */
 export function filtrarBloqueados<T extends ItemDeEntidad>(
     elegibles: T[],
-    atascados: ItemDeEntidad[]
+    bloqueadores: ItemDeEntidad[]
 ): T[] {
-    if (atascados.length === 0) return elegibles
+    if (bloqueadores.length === 0) return elegibles
 
-    const clave = (i: ItemDeEntidad) => `${i.entity}::${i.entity_id}`
-    const bloqueadas = new Set(atascados.map(clave))
+    const bloqueadas = new Set(bloqueadores.map(clave))
 
     return elegibles.filter(i => !bloqueadas.has(clave(i)))
+}
+
+/**
+ * Deja a lo sumo una operación por fila en cada tanda: la primera de la lista.
+ *
+ * Dos operaciones de la misma fila en una sola tanda se aplican en orden, pero
+ * el servidor no corta cuando la primera falla. Un UPDATE que corre sobre una
+ * fila que nunca se creó no afecta ninguna fila, y eso para Postgres no es un
+ * error: el cliente lo leería como éxito y lo borraría de la cola sin haberse
+ * aplicado nunca. Las que quedan afuera entran en el ciclo siguiente, cuando la
+ * primera ya no esté en la cola o ya esté bloqueando como corresponde.
+ *
+ * Espera la lista ya ordenada con `ordenarCola`, así la que sobrevive es la más
+ * vieja.
+ */
+export function unaOperacionPorEntidad<T extends ItemDeEntidad>(items: T[]): T[] {
+    const vistas = new Set<string>()
+
+    return items.filter(i => {
+        const k = clave(i)
+        if (vistas.has(k)) return false
+        vistas.add(k)
+        return true
+    })
 }
 
 /**

@@ -6,7 +6,13 @@ import {
     fetchIncrementalPullAction,
     pushOutboxChangesAction
 } from '@/lib/actions/offline-sync'
-import { esElegible, filtrarBloqueados, ordenarCola, siguienteEstadoTrasFallo } from './outbox-policy'
+import {
+    esElegible,
+    filtrarBloqueados,
+    ordenarCola,
+    siguienteEstadoTrasFallo,
+    unaOperacionPorEntidad
+} from './outbox-policy'
 
 export type NetworkQuality = 'excelente' | 'buena' | 'debil' | 'desconectado'
 
@@ -52,18 +58,25 @@ class OfflineSyncManager {
                 this.updateStatus({ isOnline: true })
                 this.checkConnectionQuality().then(async res => {
                     if (res.quality !== 'desconectado') {
-                        // La escalera esperaba por una condición que acaba de
-                        // cambiar. Se conserva `attempts` para que reconectar
-                        // varias veces no vuelva la escalera infinita, y es la
-                        // válvula de escape si el reloj del equipo está mal.
-                        await localDb.sync_outbox
-                            .where('status').equals('PENDIENTE')
-                            .modify({ next_attempt_at: null })
+                        try {
+                            // La escalera esperaba por una condición que acaba de
+                            // cambiar. Se conserva `attempts` para que reconectar
+                            // varias veces no vuelva la escalera infinita, y es la
+                            // válvula de escape si el reloj del equipo está mal.
+                            await localDb.sync_outbox
+                                .where('status').equals('PENDIENTE')
+                                .modify({ next_attempt_at: null })
+                        } catch (e) {
+                            // Adelantar la escalera es una mejora, no un requisito:
+                            // si Dexie rechaza, el push de reconexión tiene que
+                            // salir igual.
+                            console.warn('[SYNC MANAGER] No se pudo limpiar la espera al reconectar:', e)
+                        }
 
                         // Intento automático de push/pull al recuperar internet
                         this.synchronize()
                     }
-                })
+                }).catch(console.warn)
             })
             window.addEventListener('offline', () => {
                 this.updateStatus({
@@ -327,9 +340,18 @@ class OfflineSyncManager {
                 localDb.sync_outbox.where('status').equals('ATASCADO').toArray()
             ])
 
-            const elegibles = filtrarBloqueados(
-                ordenarCola(todosPendientes.filter(i => esElegible(i, ahora))),
-                atascados
+            // Un pendiente que todavía espera su turno en la escalera es una
+            // operación sin aplicar sobre su fila, así que bloquea igual que un
+            // atascado. Si no, la operación posterior se sube sola, no encuentra
+            // la fila, Postgres no lo considera un error y el cambio se borra de
+            // la cola sin haberse aplicado nunca.
+            const enEspera = todosPendientes.filter(i => !esElegible(i, ahora))
+
+            const elegibles = unaOperacionPorEntidad(
+                filtrarBloqueados(
+                    ordenarCola(todosPendientes.filter(i => esElegible(i, ahora))),
+                    [...atascados, ...enEspera]
+                )
             )
 
             if (elegibles.length > 0) {
@@ -371,6 +393,9 @@ class OfflineSyncManager {
             if (!sinceDate || !fullSnapshotV2 || this.status.totalPacientesLocales <= 1000) {
                 // Si nunca sincronizó o tiene la versión truncada (<=1000), hacer snapshot completo
                 const snapRes = await this.downloadFullSnapshot()
+                // Este camino también sale por éxito, así que tiene que apagar
+                // el aviso de sesión vencida igual que el otro.
+                if (snapRes.success) this.updateStatus({ authError: false })
                 return { success: snapRes.success, pushed: pushedCount, pulled: this.status.totalTurnosLocales, error: snapRes.error }
             }
 
@@ -397,6 +422,10 @@ class OfflineSyncManager {
             this.updateStatus({
                 isSyncing: false,
                 lastSyncedAt: pullRes.server_time || new Date().toISOString(),
+                // Una sincronización que terminó bien desmiente el aviso de
+                // sesión vencida: sin esto la bandera queda prendida para
+                // siempre si después no hay items elegibles que la limpien.
+                authError: false,
                 error: null
             })
 

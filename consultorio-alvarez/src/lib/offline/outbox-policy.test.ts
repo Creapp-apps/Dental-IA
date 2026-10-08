@@ -5,6 +5,7 @@ import {
     ordenarCola,
     filtrarBloqueados,
     siguienteEstadoTrasFallo,
+    unaOperacionPorEntidad,
 } from './outbox-policy'
 
 const AHORA = new Date('2026-10-08T12:00:00.000Z')
@@ -108,6 +109,75 @@ describe('filtrarBloqueados', () => {
         const elegibles = [{ entity: 'turnos', entity_id: 't1' }]
         const atascados = [{ entity: 'turnos', entity_id: 't1' }]
         expect(filtrarBloqueados(elegibles, atascados)).toEqual([])
+    })
+
+    // Critical 1 de la revisión: un pendiente que espera la escalera también
+    // bloquea, no sólo los atascados
+    it('bloquea por un pendiente que todavía está esperando su turno', () => {
+        const elegibles = [{ entity: 'pacientes', entity_id: 'p1', id: 2 }]
+        const enEspera = [{ entity: 'pacientes', entity_id: 'p1', id: 1 }]
+
+        expect(filtrarBloqueados(elegibles, enEspera)).toEqual([])
+    })
+})
+
+describe('unaOperacionPorEntidad', () => {
+    // Critical 1 de la revisión, ventana angosta: dos operaciones de la misma
+    // fila en una sola tanda. El servidor no corta cuando la primera falla, y
+    // la segunda se aplicaría sobre una fila inexistente reportando éxito.
+    it('deja sólo la primera operación de cada fila', () => {
+        const items = [
+            { entity: 'pacientes', entity_id: 'p1', id: 1 },
+            { entity: 'pacientes', entity_id: 'p1', id: 2 },
+            { entity: 'pacientes', entity_id: 'p1', id: 3 },
+        ]
+
+        expect(unaOperacionPorEntidad(items).map(i => i.id)).toEqual([1])
+    })
+
+    it('alimentado con ordenarCola se queda con la más vieja', () => {
+        const items = [
+            { entity: 'turnos', entity_id: 't1', id: 9 },
+            { entity: 'turnos', entity_id: 't1', id: 4 },
+        ]
+
+        expect(unaOperacionPorEntidad(ordenarCola(items)).map(i => i.id)).toEqual([4])
+    })
+
+    it('no colapsa filas distintas ni entidades que comparten el id', () => {
+        const items = [
+            { entity: 'pacientes', entity_id: 'p1', id: 1 },
+            { entity: 'pacientes', entity_id: 'p2', id: 2 },
+            { entity: 'turnos', entity_id: 'p1', id: 3 },
+        ]
+
+        expect(unaOperacionPorEntidad(items).map(i => i.id)).toEqual([1, 2, 3])
+    })
+
+    // Sin inanición: lo que quedó afuera entra en el ciclo siguiente, cuando el
+    // anterior ya salió de la cola
+    it('en el ciclo siguiente pasa la que había quedado afuera', () => {
+        const items = [
+            { entity: 'pacientes', entity_id: 'p1', id: 1 },
+            { entity: 'pacientes', entity_id: 'p1', id: 2 },
+        ]
+
+        const primeraTanda = unaOperacionPorEntidad(ordenarCola(items))
+        expect(primeraTanda.map(i => i.id)).toEqual([1])
+
+        const restantes = items.filter(i => i.id !== 1)
+        expect(unaOperacionPorEntidad(ordenarCola(restantes)).map(i => i.id)).toEqual([2])
+    })
+
+    it('no toca una lista sin repetidos ni muta el original', () => {
+        const items = [
+            { entity: 'turnos', entity_id: 't1', id: 1 },
+            { entity: 'turnos', entity_id: 't2', id: 2 },
+        ]
+
+        expect(unaOperacionPorEntidad(items)).toEqual(items)
+        expect(unaOperacionPorEntidad([])).toEqual([])
+        expect(items.map(i => i.id)).toEqual([1, 2])
     })
 })
 
