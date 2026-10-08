@@ -338,6 +338,8 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
         }
 
         try {
+            const resultadosAntes = results.length
+
             if (item.entity === 'turnos') {
                 if (item.operation === 'INSERT') {
                     const payload = {
@@ -422,6 +424,20 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         .eq('tenant_id', tenantId)
                     results.push(resultado(item.id || 0, error))
                 }
+            }
+
+            // Toda combinación sin rama tiene que devolver un resultado igual:
+            // el cliente infiere "sesión vencida" de una respuesta vacía, y un
+            // item que no produce resultado rompería esa inferencia en silencio.
+            // Se chequea acá, y no con un else por entity, para cubrir de una
+            // sola vez la entity desconocida y la operación sin rama.
+            if (results.length === resultadosAntes) {
+                results.push({
+                    outbox_id: item.id || 0,
+                    success: false,
+                    error: `Operación no soportada: ${item.entity}/${item.operation}`,
+                    retriable: false,
+                })
             }
         } catch (opErr: any) {
             console.error(`[OFFLINE SYNC] Error ejecutando operación ${item.operation} en ${item.entity}:`, opErr)
