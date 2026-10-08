@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { format, parseISO } from 'date-fns'
+import { format, isValid, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -31,13 +31,23 @@ async function etiquetaDeItem(item: SyncOutboxItem): Promise<string> {
 
     if (item.entity === 'turnos') {
         const t = await localDb.turnos.get(item.entity_id)
-        const fecha = t?.fecha_inicio ?? item.payload?.fecha_inicio
-        return fecha ? `del ${format(new Date(fecha), 'dd/MM')}` : 'sin fecha'
+        return diaMes(t?.fecha_inicio ?? item.payload?.fecha_inicio, false)
     }
 
     const e = await localDb.evoluciones.get(item.entity_id)
-    const fecha = e?.fecha ?? item.payload?.fecha
-    return fecha ? `del ${format(parseISO(fecha), 'dd/MM')}` : 'sin fecha'
+    return diaMes(e?.fecha ?? item.payload?.fecha, true)
+}
+
+/** "del dd/MM", o "sin fecha" si el valor falta o no es una fecha válida (una fila atascada suele traer datos raros). */
+function diaMes(valor: unknown, esIso: boolean): string {
+    if (!valor) return 'sin fecha'
+    const d = esIso ? parseISO(String(valor)) : new Date(valor as string)
+    return isValid(d) ? `del ${format(d, 'dd/MM')}` : 'sin fecha'
+}
+
+function fechaCreacion(iso: string): string | null {
+    const d = new Date(iso)
+    return isValid(d) ? format(d, "d 'de' MMMM, HH:mm 'hs'", { locale: es }) : null
 }
 
 export function CambiosAtascados({ cantidad }: { cantidad: number }) {
@@ -144,9 +154,11 @@ export function CambiosAtascados({ cantidad }: { cantidad: number }) {
                             <p className="text-xs font-semibold text-foreground">
                                 {describirItem(item, etiqueta)}
                             </p>
-                            <p className="text-[11px] text-muted-foreground">
-                                {format(new Date(item.created_at), "d 'de' MMMM, HH:mm 'hs'", { locale: es })}
-                            </p>
+                            {fechaCreacion(item.created_at) && (
+                                <p className="text-[11px] text-muted-foreground">
+                                    {fechaCreacion(item.created_at)}
+                                </p>
+                            )}
                             {esTecnico ? (
                                 <>
                                     <p className="text-[11px] text-red-700 dark:text-red-300 leading-relaxed">
@@ -185,7 +197,7 @@ export function CambiosAtascados({ cantidad }: { cantidad: number }) {
                 onOpenChange={abierto => { if (!abierto) setADescartar(null) }}
                 title="Descartar este cambio"
                 description={aDescartar
-                    ? `${describirItem(aDescartar.item, aDescartar.etiqueta)}. Este cambio no se va a guardar en la nube. Si hay otros cambios en cola sobre el mismo registro, se descartan también, porque no se pueden subir sin este. La copia que está en esta computadora se queda solo acá hasta que se descargue la base de nuevo. Si necesitás el contenido, copialo antes de continuar.`
+                    ? `${describirItem(aDescartar.item, aDescartar.etiqueta)}. Este cambio no se va a guardar en la nube. Si hay otros cambios en cola sobre el mismo registro, se descartan también, porque no se pueden subir sin este. Lo que quedó guardado en esta computadora puede desaparecer en cuanto el sistema se sincronice, así que no cuentes con recuperarlo después. Si necesitás el contenido, copialo antes de continuar.`
                     : ''}
                 confirmText="Descartar"
                 onConfirm={() => descartar(aDescartar?.item.id)}

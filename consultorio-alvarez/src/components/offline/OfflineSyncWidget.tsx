@@ -110,11 +110,11 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
         toast.success(`Frecuencia de sincronización: ${val === 0 ? 'Solo manual' : `cada ${val} min`}`)
     }
 
-    const formatLastSync = (iso: string | null) => {
+    const formatLastSync = (iso: string | null, alDia = true) => {
         if (!iso) return 'Sin sincronizar todavía'
         try {
             const date = new Date(iso)
-            return 'Al día · Sync: ' + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs'
+            return (alDia ? 'Al día · Sync: ' : 'Último sync: ') + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs'
         } catch {
             return 'Sincronizado recientemente'
         }
@@ -137,6 +137,7 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
     const getWidgetSubtitle = () => {
         if (status.isSyncing) return 'Actualizando con la nube...'
         if (!status.isOnline || status.networkQuality === 'desconectado') {
+            if (status.atascadosCount > 0) return 'Hay cambios con problema sin subir'
             return status.pendingOutboxCount > 0 
                 ? `Guardando en PC (${status.pendingOutboxCount} pendientes)` 
                 : 'Operando seguro en esta PC'
@@ -256,7 +257,7 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                 <button
                     type="button"
                     onClick={handleSync}
-                    disabled={status.isSyncing || !status.isOnline}
+                    disabled={status.isSyncing || !status.isOnline || status.authError}
                     className={cn(
                         'ml-2 p-1.5 rounded-lg border hover:scale-105 active:scale-95 transition-all shrink-0 cursor-pointer shadow-xs',
                         status.pendingOutboxCount > 0
@@ -330,6 +331,18 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                             </p>
                         </div>
 
+                        {status.authError && (
+                            <div className="p-3 rounded-xl border border-red-500/40 bg-red-500/15 space-y-1.5">
+                                <div className="flex items-center gap-2 text-red-800 dark:text-red-200">
+                                    <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                                    <span className="text-xs font-bold">La sesión venció</span>
+                                </div>
+                                <p className="text-[11px] text-red-900/80 dark:text-red-200/80 leading-relaxed">
+                                    Mientras no vuelvas a iniciar sesión no se sube nada a la nube. Tus cambios siguen guardados en esta computadora. Cerrá sesión y volvé a entrar para que se sincronicen.
+                                </p>
+                            </div>
+                        )}
+
                         <CambiosAtascados cantidad={status.atascadosCount} />
 
                         {/* Alerta de Cambios Pendientes (si los hay) */}
@@ -375,9 +388,11 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                                 <div className="p-2 rounded-lg bg-background border border-border/60">
                                     <span className={cn(
                                         "block text-base font-extrabold",
-                                        status.pendingOutboxCount > 0 ? "text-amber-600" : "text-emerald-600"
+                                        status.atascadosCount > 0
+                                            ? "text-red-600"
+                                            : status.pendingOutboxCount > 0 ? "text-amber-600" : "text-emerald-600"
                                     )}>
-                                        {status.pendingOutboxCount}
+                                        {status.pendingOutboxCount + status.atascadosCount}
                                     </span>
                                     <span className="text-[10px] text-muted-foreground">Por subir</span>
                                 </div>
@@ -385,7 +400,7 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
 
                             <p className="text-[10px] text-muted-foreground pt-1 flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                <span>Última sincronización con la nube: <strong>{formatLastSync(status.lastSyncedAt)}</strong></span>
+                                <span>Última sincronización con la nube: <strong>{formatLastSync(status.lastSyncedAt, status.pendingOutboxCount + status.atascadosCount === 0 && !status.authError)}</strong></span>
                             </p>
                         </div>
 
@@ -412,7 +427,7 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                         <div className="space-y-2 pt-2">
                             <button
                                 onClick={() => handleSync()}
-                                disabled={status.isSyncing || !status.isOnline}
+                                disabled={status.isSyncing || !status.isOnline || status.authError}
                                 className={cn(
                                     "w-full py-2.5 px-4 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50",
                                     status.pendingOutboxCount > 0
@@ -424,7 +439,9 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                                 <span>
                                     {status.isSyncing 
                                         ? 'Sincronizando con la nube...' 
-                                        : status.pendingOutboxCount > 0 
+                                        : status.authError
+                                            ? 'Iniciá sesión de nuevo para sincronizar'
+                                            : status.pendingOutboxCount > 0 
                                             ? `Subir ${status.pendingOutboxCount} cambios pendientes ahora` 
                                             : 'Sincronizar Novedades Ahora'}
                                 </span>
