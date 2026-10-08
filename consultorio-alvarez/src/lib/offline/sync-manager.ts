@@ -476,10 +476,11 @@ class OfflineSyncManager {
     }
 
     /**
-     * Devuelve un item a la cola desde cero. El usuario decidió que vale la
-     * pena probar de nuevo, así que la escalera arranca limpia.
+     * Devuelve un item a PENDIENTE desde cero, sin sincronizar ni refrescar
+     * métricas. El usuario decidió que vale la pena probar de nuevo, así que
+     * la escalera arranca limpia.
      */
-    public async reintentarItem(outboxId: number): Promise<void> {
+    private async resetearItem(outboxId: number): Promise<void> {
         await localDb.sync_outbox.update(outboxId, {
             status: 'PENDIENTE',
             attempts: 0,
@@ -487,7 +488,10 @@ class OfflineSyncManager {
             error_message: undefined,
             last_error_code: undefined
         })
+    }
 
+    public async reintentarItem(outboxId: number): Promise<void> {
+        await this.resetearItem(outboxId)
         await this.refreshLocalMetrics()
 
         if (navigator.onLine && !this.status.isSyncing) {
@@ -497,20 +501,47 @@ class OfflineSyncManager {
 
     public async reintentarTodos(): Promise<void> {
         const atascados = await this.listarAtascados()
+        // Se resetean todos antes de sincronizar: el sync toma su snapshot de
+        // PENDIENTE al arrancar y tiene que verlos a todos.
         for (const item of atascados) {
-            if (item.id !== undefined) await this.reintentarItem(item.id)
+            if (item.id !== undefined) await this.resetearItem(item.id)
+        }
+
+        await this.refreshLocalMetrics()
+
+        if (atascados.length > 0 && navigator.onLine && !this.status.isSyncing) {
+            this.synchronize().catch(console.warn)
         }
     }
 
     /**
-     * Saca el cambio de la cola. La fila sigue en IndexedDB, pero como ya no
-     * queda nada pendiente para ella, la próxima sincronización la va a borrar
-     * del equipo. Descartar es perder el cambio, no dejarlo acá: quien llama
-     * tiene que habérselo dicho al usuario antes.
+     * Saca de la cola un cambio atascado y todo lo que la cola tiene para esa
+     * misma fila (mismo entity y entity_id): una edición no se puede aplicar
+     * sobre una creación que nunca entró, así que descartar la creación
+     * implica descartar lo que venía encima.
+     *
+     * Devuelve cuántos items se descartaron. Devuelve 0, sin borrar nada, si
+     * el item no existe o ya no está ATASCADO (por ejemplo, volvió a PENDIENTE
+     * por un reintento): quien llama tiene que tratarlo como "no se hizo".
+     *
+     * Descartar es perder el cambio, no dejarlo acá: no se guarda en la nube.
+     * La copia local de la fila no se toca en este momento y queda hasta la
+     * próxima descarga completa de la base (un pull incremental no la quita);
+     * las evoluciones locales sin pendientes se borran en la reconciliación.
+     * Quien llama tiene que habérselo dicho al usuario antes.
      */
-    public async descartarItem(outboxId: number): Promise<void> {
-        await localDb.sync_outbox.delete(outboxId)
+    public async descartarItem(outboxId: number): Promise<number> {
+        const descartados = await localDb.transaction('rw', localDb.sync_outbox, async () => {
+            const item = await localDb.sync_outbox.get(outboxId)
+            if (!item || item.status !== 'ATASCADO') return 0
+
+            return localDb.sync_outbox
+                .filter(i => i.entity === item.entity && i.entity_id === item.entity_id)
+                .delete()
+        })
+
         await this.refreshLocalMetrics()
+        return descartados
     }
 }
 
