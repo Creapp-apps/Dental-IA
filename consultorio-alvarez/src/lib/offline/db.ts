@@ -174,6 +174,12 @@ export class DentalIaLocalDatabase extends Dexie {
         // computadoras del consultorio sin reintentarse ni verse. Con la
         // escalera nueva se recuperan y, si el fallo era permanente, terminan
         // en 'ATASCADO' y por fin quedan a la vista.
+        // `next_attempt_at` queda declarado por compatibilidad con las bases ya
+        // migradas (sacarlo exigiría otra versión de Dexie), pero NO se usa ni
+        // se debe usar para seleccionar: IndexedDB no indexa null ni undefined,
+        // así que una consulta por rango se saltearía justo los items que
+        // vencieron y los que nunca esperaron. La elegibilidad se evalúa en
+        // memoria con `esElegible`.
         this.version(4).stores({
             sync_outbox: '++id, tenant_id, entity, entity_id, status, created_at, next_attempt_at'
         }).upgrade(async tx => {

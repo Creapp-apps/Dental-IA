@@ -269,6 +269,25 @@ class OfflineSyncManager {
                 return { success: false, error: res.error }
             }
 
+            // Una operación en la cola es un cambio que todavía no está en la
+            // nube: si el snapshot limpia la tabla, la única copia del dato
+            // desaparece del equipo. Se rescatan las filas con cola pendiente
+            // antes de borrar y se reponen después, el mismo criterio que
+            // reconciliarEvolucionesLocal aplica a las evoluciones.
+            const enCola = await localDb.sync_outbox
+                .where('entity').anyOf('pacientes', 'turnos').toArray()
+
+            const idsEnCola = (entity: 'pacientes' | 'turnos') =>
+                [...new Set(enCola.filter(i => i.entity === entity).map(i => i.entity_id))]
+
+            const [pacientesACuidar, turnosACuidar] = await Promise.all([
+                localDb.pacientes.bulkGet(idsEnCola('pacientes')),
+                localDb.turnos.bulkGet(idsEnCola('turnos'))
+            ])
+
+            const pacientesPreservados = pacientesACuidar.filter((p): p is LocalPaciente => !!p)
+            const turnosPreservados = turnosACuidar.filter((t): t is LocalTurno => !!t)
+
             // Transacción local: Limpiar tablas y repoblar
             await localDb.transaction('rw', [
                 localDb.pacientes,
@@ -289,6 +308,21 @@ class OfflineSyncManager {
                 if (res.profesionales.length > 0) await localDb.profesionales.bulkPut(res.profesionales)
                 if (res.tipos_tratamiento.length > 0) await localDb.tipos_tratamiento.bulkPut(res.tipos_tratamiento)
                 if (res.obras_sociales.length > 0) await localDb.obras_sociales.bulkPut(res.obras_sociales)
+
+                // Después del bulkPut a propósito: la copia local con cambios
+                // sin subir le gana a la del server, que todavía no los tiene.
+                if (pacientesPreservados.length > 0) await localDb.pacientes.bulkPut(pacientesPreservados)
+                if (turnosPreservados.length > 0) await localDb.turnos.bulkPut(turnosPreservados)
+
+                // El tenant se cachea para que un alta hecha sin conexión pueda
+                // encolarse con el consultorio correcto en lugar de con vacío.
+                if (res.tenant_id) {
+                    await localDb.sync_meta.put({
+                        key: 'tenant_id',
+                        value: res.tenant_id,
+                        updated_at: new Date().toISOString()
+                    })
+                }
 
                 await localDb.sync_meta.put({
                     key: 'last_synced_at',
@@ -333,28 +367,39 @@ class OfflineSyncManager {
 
         try {
             // ── 1. PASO PUSH: Subir cola local ──
-            const ahora = new Date()
+            // El push va en pasadas porque `unaOperacionPorEntidad` deja a lo
+            // sumo una operación por fila en cada tanda. Con una sola pasada,
+            // una fila con dos operaciones en cola sube la primera y la segunda
+            // espera el ciclo siguiente (hasta 15 minutos, o un clic más en
+            // "Solo Manual"), y el pull de esta misma sincronización pisa la
+            // copia local con la versión vieja del server hasta que la segunda
+            // entre. El tope es por las dudas: el bucle corta solo.
+            const MAX_PASADAS_PUSH = 5
 
-            const [todosPendientes, atascados] = await Promise.all([
-                localDb.sync_outbox.where('status').equals('PENDIENTE').toArray(),
-                localDb.sync_outbox.where('status').equals('ATASCADO').toArray()
-            ])
+            for (let pasada = 0; pasada < MAX_PASADAS_PUSH; pasada++) {
+                const ahora = new Date()
 
-            // Un pendiente que todavía espera su turno en la escalera es una
-            // operación sin aplicar sobre su fila, así que bloquea igual que un
-            // atascado. Si no, la operación posterior se sube sola, no encuentra
-            // la fila, Postgres no lo considera un error y el cambio se borra de
-            // la cola sin haberse aplicado nunca.
-            const enEspera = todosPendientes.filter(i => !esElegible(i, ahora))
+                const [todosPendientes, atascados] = await Promise.all([
+                    localDb.sync_outbox.where('status').equals('PENDIENTE').toArray(),
+                    localDb.sync_outbox.where('status').equals('ATASCADO').toArray()
+                ])
 
-            const elegibles = unaOperacionPorEntidad(
-                filtrarBloqueados(
+                // Un pendiente que todavía espera su turno en la escalera es una
+                // operación sin aplicar sobre su fila, así que bloquea igual que un
+                // atascado. Si no, la operación posterior se sube sola, no encuentra
+                // la fila, Postgres no lo considera un error y el cambio se borra de
+                // la cola sin haberse aplicado nunca.
+                const enEspera = todosPendientes.filter(i => !esElegible(i, ahora))
+
+                const desbloqueados = filtrarBloqueados(
                     ordenarCola(todosPendientes.filter(i => esElegible(i, ahora))),
                     [...atascados, ...enEspera]
                 )
-            )
 
-            if (elegibles.length > 0) {
+                const elegibles = unaOperacionPorEntidad(desbloqueados)
+
+                if (elegibles.length === 0) break
+
                 console.log(`[SYNC MANAGER] Subiendo ${elegibles.length} cambios pendientes a Supabase...`)
                 const pushResults = await pushOutboxChangesAction(elegibles)
 
@@ -362,11 +407,14 @@ class OfflineSyncManager {
                 // servidor no pudo resolver el tenant: la sesión venció. Sin
                 // esto los items se quedan pendientes para siempre en silencio.
                 if (pushResults.length === 0) {
+                    await this.refreshLocalMetrics()
                     this.updateStatus({ isSyncing: false, authError: true })
-                    return { success: false, pushed: 0, pulled: 0, error: 'La sesión venció. Volvé a iniciar sesión.' }
+                    return { success: false, pushed: pushedCount, pulled: 0, error: 'La sesión venció. Volvé a iniciar sesión.' }
                 }
 
                 this.updateStatus({ authError: false })
+
+                let huboFallos = false
 
                 for (const r of pushResults) {
                     if (r.success) {
@@ -375,6 +423,7 @@ class OfflineSyncManager {
                         continue
                     }
 
+                    huboFallos = true
                     const item = elegibles.find(i => i.id === r.outbox_id)
                     // El spread es para Dexie: su UpdateSpec sólo acepta un
                     // objeto literal, no un tipo nombrado como CambioDeEstado.
@@ -383,6 +432,14 @@ class OfflineSyncManager {
                         { ...siguienteEstadoTrasFallo(item?.attempts ?? 0, r.retriable, r.error_code, r.error, new Date()) }
                     )
                 }
+
+                // Otra pasada sólo si la tanda salió limpia y el dedupe dejó algo
+                // afuera. Con fallos no tiene sentido: lo que quedó afuera ahora
+                // está bloqueado por la fila que acaba de fallar. Y como cada
+                // pasada que continúa borró de la cola todo lo que subió, el
+                // bucle no puede girar en falso.
+                const quedoAfuera = desbloqueados.length > elegibles.length
+                if (huboFallos || !quedoAfuera) break
             }
 
             // ── 2. PASO PULL: Bajar novedades de la nube ──
@@ -400,23 +457,32 @@ class OfflineSyncManager {
             }
 
             const pullRes = await fetchIncrementalPullAction(sinceDate)
-            if (pullRes.success) {
-                await localDb.transaction('rw', [localDb.pacientes, localDb.turnos, localDb.sync_meta], async () => {
-                    if (pullRes.pacientes.length > 0) {
-                        await localDb.pacientes.bulkPut(pullRes.pacientes)
-                        pulledCount += pullRes.pacientes.length
-                    }
-                    if (pullRes.turnos.length > 0) {
-                        await localDb.turnos.bulkPut(pullRes.turnos)
-                        pulledCount += pullRes.turnos.length
-                    }
-                    await localDb.sync_meta.put({
-                        key: 'last_synced_at',
-                        value: pullRes.server_time,
-                        updated_at: new Date().toISOString()
-                    })
-                })
+
+            // Un pull que falló no puede devolver éxito ni apagar el aviso de
+            // sesión vencida: sin este corte el error queda invisible y el
+            // widget se declara al día con la nube sin haberla leído.
+            if (!pullRes.success) {
+                const motivo = pullRes.error || 'No se pudieron descargar las novedades de la nube'
+                await this.refreshLocalMetrics()
+                this.updateStatus({ isSyncing: false, error: motivo })
+                return { success: false, pushed: pushedCount, pulled: 0, error: motivo }
             }
+
+            await localDb.transaction('rw', [localDb.pacientes, localDb.turnos, localDb.sync_meta], async () => {
+                if (pullRes.pacientes.length > 0) {
+                    await localDb.pacientes.bulkPut(pullRes.pacientes)
+                    pulledCount += pullRes.pacientes.length
+                }
+                if (pullRes.turnos.length > 0) {
+                    await localDb.turnos.bulkPut(pullRes.turnos)
+                    pulledCount += pullRes.turnos.length
+                }
+                await localDb.sync_meta.put({
+                    key: 'last_synced_at',
+                    value: pullRes.server_time,
+                    updated_at: new Date().toISOString()
+                })
+            })
 
             await this.refreshLocalMetrics()
             this.updateStatus({
@@ -432,8 +498,33 @@ class OfflineSyncManager {
             return { success: true, pushed: pushedCount, pulled: pulledCount }
         } catch (err: any) {
             console.error('[SYNC MANAGER] Error durante synchronize:', err)
+            // El push puede haber dejado items en ATASCADO antes de que el pull
+            // tirara: sin refrescar, los contadores quedan viejos y el widget
+            // muestra ámbar en lugar de rojo hasta el ciclo siguiente.
+            await this.refreshLocalMetrics()
             this.updateStatus({ isSyncing: false, error: err.message || 'Error en sincronización' })
             return { success: false, pushed: pushedCount, pulled: pulledCount, error: err.message }
+        }
+    }
+
+    /**
+     * Tenant del consultorio, cacheado al bajar la copia completa de la nube.
+     *
+     * Lo necesita un alta hecha sin conexión: la fila nueva no existe en la
+     * nube, así que no hay de dónde leerlo en el momento. Si el cache todavía
+     * no está, se cae a cualquier paciente local, que lo trae. Devuelve null
+     * sólo en un equipo que nunca sincronizó nada.
+     */
+    public async obtenerTenantId(): Promise<string | null> {
+        try {
+            const meta = await localDb.sync_meta.get('tenant_id')
+            if (meta && typeof meta.value === 'string' && meta.value) return meta.value
+
+            const alguno = await localDb.pacientes.toCollection().first()
+            return alguno?.tenant_id || null
+        } catch (e) {
+            console.warn('[SYNC MANAGER] No se pudo resolver el tenant local:', e)
+            return null
         }
     }
 

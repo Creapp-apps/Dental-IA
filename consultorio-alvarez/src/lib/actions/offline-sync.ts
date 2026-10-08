@@ -13,6 +13,11 @@ export interface FullSnapshotResult {
     tipos_tratamiento: LocalTratamiento[]
     obras_sociales: LocalObraSocial[]
     server_time: string
+    /**
+     * Tenant del consultorio. El cliente lo cachea para poder encolar un alta
+     * hecha sin conexión, que todavía no tiene fila en la nube de donde sacarlo.
+     */
+    tenant_id: string
     error?: string
 }
 
@@ -75,6 +80,7 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
             tipos_tratamiento: [],
             obras_sociales: [],
             server_time: new Date().toISOString(),
+            tenant_id: '',
             error: 'No autorizado'
         }
     }
@@ -175,7 +181,8 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
             profesionales: (profesionalesData as LocalProfesional[]) || [],
             tipos_tratamiento: (tratamientosData as LocalTratamiento[]) || [],
             obras_sociales: (obrasData as LocalObraSocial[]) || [],
-            server_time
+            server_time,
+            tenant_id: tenantId
         }
     } catch (err: any) {
         console.error('[OFFLINE SYNC] Error al generar full snapshot:', err)
@@ -187,6 +194,7 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
             tipos_tratamiento: [],
             obras_sociales: [],
             server_time,
+            tenant_id: '',
             error: err.message || 'Error de base de datos'
         }
     }
@@ -327,7 +335,13 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
     const results: PushResultItem[] = []
 
     for (const item of items) {
-        if (item.tenant_id !== tenantId) {
+        // Tenant vacío significa "adoptá el del servidor": un paciente creado
+        // sin conexión todavía no tiene tenant del lado del cliente. El payload
+        // se reescribe con `tenant_id: tenantId` en el upsert, así que la
+        // operación entra en el consultorio correcto. Una discrepancia real
+        // —tenant presente y distinto— sigue siendo un rechazo permanente,
+        // que es para lo que existe esta guarda.
+        if (item.tenant_id && item.tenant_id !== tenantId) {
             results.push({
                 outbox_id: item.id || 0,
                 success: false,

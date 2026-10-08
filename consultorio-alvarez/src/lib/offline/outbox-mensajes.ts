@@ -6,7 +6,11 @@ import type { SyncOutboxItem } from './db'
  */
 const MENSAJES: Record<string, string> = {
     '23505': 'Ya existe otro registro con ese dato, por ejemplo el mismo DNI o número de historia clínica.',
-    '23503': 'El paciente al que pertenece este cambio ya no existe en la nube.',
+    // Sin leer el nombre de la constraint no se sabe qué referencia falló: en
+    // historial_clinico suele ser profesional_id o turno_id, y en turnos
+    // profesional_id o tipo_tratamiento_id. Nombrar al paciente acá haría que
+    // el odontólogo lo recree o descarte una evolución por un motivo falso.
+    '23503': 'Este cambio depende de un registro que ya no existe en la nube.',
     '23502': 'Falta completar un dato obligatorio.',
     '23514': 'Alguno de los datos no cumple con las reglas del sistema.',
     '22P02': 'Alguno de los datos tiene un formato inválido.',
