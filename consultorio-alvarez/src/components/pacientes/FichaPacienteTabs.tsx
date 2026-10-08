@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
 import { TabAdjuntos } from '@/components/pacientes/TabAdjuntos'
 import { TabEscaneos3D } from '@/components/pacientes/TabEscaneos3D'
+import { TabEvoluciones } from '@/components/pacientes/TabEvoluciones'
 import { ModalCrearPresupuesto } from '@/components/pacientes/ModalCrearPresupuesto'
 import { type EstadoTurno } from '@/types'
 import { localDb, type LocalFichaReciente } from '@/lib/offline/db'
@@ -28,6 +29,7 @@ type TabId = typeof TABS[number]['id']
 
 interface FichaPacienteTabsProps {
     pacienteId: string
+    tenantId: string
     turnos: any[]
     historial: any[]
     odontograma: any[]
@@ -41,6 +43,7 @@ interface FichaPacienteTabsProps {
 
 export function FichaPacienteTabs({
     pacienteId,
+    tenantId,
     turnos,
     historial,
     odontograma,
@@ -136,7 +139,15 @@ export function FichaPacienteTabs({
                 >
                     {tab === 'consulta' && <TabConsulta motivoConsulta={motivoConsulta} />}
                     {tab === 'turnos' && <TabTurnos turnos={effectiveTurnos} />}
-                    {tab === 'evoluciones' && <TabEvoluciones historial={effectiveHistorial} />}
+                    {tab === 'evoluciones' && (
+                        <TabEvoluciones
+                            pacienteId={pacienteId}
+                            tenantId={tenantId}
+                            historial={effectiveHistorial}
+                            profesionales={profesionales}
+                            turnos={effectiveTurnos}
+                        />
+                    )}
                     {tab === 'odontograma' && (
                         <OdontogramaInteractivo pacienteId={pacienteId} piezasData={effectiveOdontograma} />
                     )}
@@ -208,47 +219,6 @@ function TabTurnos({ turnos }: { turnos: any[] }) {
                                 </p>
                             </div>
                             <StatusBadge status={t.estado as EstadoTurno} className="shrink-0" />
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    )
-}
-
-/* ──────────── Tab: Evoluciones ──────────── */
-function TabEvoluciones({ historial }: { historial: any[] }) {
-    return (
-        <div className="glass rounded-2xl shadow-glass p-5">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                <FileText className="h-4 w-4 text-muted-foreground" />
-                Evoluciones ({historial.length})
-            </h3>
-            {historial.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Sin evoluciones registradas</p>
-            ) : (
-                <div className="space-y-1">
-                    {historial.map((h: any) => (
-                        <div key={h.id} className="py-2.5 px-3 rounded-xl hover:bg-muted/30 transition-colors">
-                            <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0 flex-1">
-                                    {h.procedimiento_realizado && (
-                                        <p className="text-sm font-medium text-foreground">{h.procedimiento_realizado}</p>
-                                    )}
-                                    <p className="text-xs text-muted-foreground">
-                                        {format(new Date(h.fecha), "d MMM yyyy", { locale: es })}
-                                        {' · Dr. '}{h.profesional?.nombre} {h.profesional?.apellido}
-                                    </p>
-                                </div>
-                                {h.presupuesto && (
-                                    <span className="text-xs font-semibold text-foreground shrink-0">
-                                        ${Number(h.presupuesto).toLocaleString('es-AR')}
-                                    </span>
-                                )}
-                            </div>
-                            {h.observaciones && (
-                                <p className="text-xs text-muted-foreground mt-1 leading-relaxed line-clamp-2">{h.observaciones}</p>
-                            )}
                         </div>
                     ))}
                 </div>

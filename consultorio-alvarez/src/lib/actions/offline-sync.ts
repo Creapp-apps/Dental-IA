@@ -279,6 +279,23 @@ export async function fetchIncrementalPullAction(sinceIsoDate: string): Promise<
 }
 
 /**
+ * Deja sólo las columnas reales de historial_clinico. La copia local de una
+ * evolución arrastra el nombre del profesional cacheado para pintarlo a 0ms,
+ * y esas claves no existen en la tabla: si viajan, Postgres rechaza el insert.
+ */
+function sanitizeEvolucionPayload(payload: any) {
+    return {
+        paciente_id: payload.paciente_id,
+        profesional_id: payload.profesional_id,
+        turno_id: payload.turno_id || null,
+        fecha: payload.fecha,
+        procedimiento_realizado: payload.procedimiento_realizado ?? null,
+        observaciones: payload.observaciones ?? null,
+        presupuesto: payload.presupuesto ?? null
+    }
+}
+
+/**
  * Recibe y aplica las operaciones acumuladas en la cola local (sync_outbox) en Supabase.
  */
 export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<PushResultItem[]> {
@@ -342,6 +359,37 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                             ...item.payload,
                             updated_at: new Date().toISOString()
                         })
+                        .eq('id', item.entity_id)
+                        .eq('tenant_id', tenantId)
+                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                }
+            } else if (item.entity === 'evoluciones') {
+                if (item.operation === 'INSERT') {
+                    const payload = {
+                        ...sanitizeEvolucionPayload(item.payload),
+                        id: item.entity_id,
+                        tenant_id: tenantId,
+                        updated_at: new Date().toISOString()
+                    }
+                    // upsert y no insert: el id lo genera el cliente, así que un
+                    // reintento sobre una fila que ya subió no debe fallar por
+                    // clave duplicada y dejar el item trabado en la cola.
+                    const { error } = await admin.from('historial_clinico').upsert(payload)
+                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                } else if (item.operation === 'UPDATE') {
+                    const { error } = await admin
+                        .from('historial_clinico')
+                        .update({
+                            ...sanitizeEvolucionPayload(item.payload),
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', item.entity_id)
+                        .eq('tenant_id', tenantId)
+                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                } else if (item.operation === 'DELETE') {
+                    const { error } = await admin
+                        .from('historial_clinico')
+                        .delete()
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
                     results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })

@@ -378,7 +378,7 @@ class OfflineSyncManager {
      */
     public async enqueueMutation(
         tenantId: string,
-        entity: 'turnos' | 'pacientes',
+        entity: 'turnos' | 'pacientes' | 'evoluciones',
         entityId: string,
         operation: 'INSERT' | 'UPDATE' | 'DELETE',
         payload: any

@@ -88,6 +88,7 @@ export default async function FichaPacientePage({
                 {/* ── Right: Tabbed content ── */}
                 <FichaPacienteTabs
                     pacienteId={p.id}
+                    tenantId={p.tenant_id}
                     turnos={turnos}
                     historial={historial}
                     odontograma={odontograma}

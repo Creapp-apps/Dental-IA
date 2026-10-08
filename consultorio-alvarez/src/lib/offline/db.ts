@@ -82,10 +82,27 @@ export interface LocalObraSocial {
     activo: boolean
 }
 
+export interface LocalEvolucion {
+    id: string
+    tenant_id: string
+    paciente_id: string
+    profesional_id: string
+    turno_id?: string | null
+    fecha: string
+    procedimiento_realizado?: string | null
+    observaciones?: string | null
+    presupuesto?: number | null
+    created_at?: string
+    updated_at?: string
+    // Relación cacheada para mostrar el autor sin consultar otra tabla
+    profesional_nombre?: string
+    profesional_apellido?: string
+}
+
 export interface SyncOutboxItem {
     id?: number
     tenant_id: string
-    entity: 'turnos' | 'pacientes'
+    entity: 'turnos' | 'pacientes' | 'evoluciones'
     entity_id: string
     operation: 'INSERT' | 'UPDATE' | 'DELETE'
     payload: any
@@ -121,6 +138,7 @@ export class DentalIaLocalDatabase extends Dexie {
     sync_outbox!: EntityTable<SyncOutboxItem, 'id'>
     sync_meta!: EntityTable<SyncMetaItem, 'key'>
     fichas_recientes!: EntityTable<LocalFichaReciente, 'paciente_id'>
+    evoluciones!: EntityTable<LocalEvolucion, 'id'>
 
     constructor() {
         super('DentalIa_OfflineDB')
@@ -137,6 +155,13 @@ export class DentalIaLocalDatabase extends Dexie {
 
         this.version(2).stores({
             fichas_recientes: 'paciente_id, cached_at'
+        })
+
+        // Evoluciones (historial_clinico): se cargan por paciente al abrir la
+        // ficha, no vienen en el snapshot completo. La tabla crece sin techo y
+        // bajar todas las de todos los pacientes infla IndexedDB sin necesidad.
+        this.version(3).stores({
+            evoluciones: 'id, tenant_id, paciente_id, fecha, updated_at'
         })
     }
 }

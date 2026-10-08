@@ -1,4 +1,4 @@
-import { localDb, LocalPaciente, LocalTurno } from './db'
+import { localDb, LocalPaciente, LocalTurno, LocalEvolucion } from './db'
 import { syncManager } from './sync-manager'
 
 /**
@@ -167,4 +167,162 @@ export async function actualizarEstadoTurnoLocal(
         'UPDATE',
         { estado: nuevoEstado }
     )
+}
+
+/* ──────────── Evoluciones (historial clínico) ──────────── */
+
+/**
+ * Evoluciones de un paciente desde IndexedDB (0ms), de la más nueva a la más vieja.
+ */
+export async function getEvolucionesLocal(pacienteId: string): Promise<LocalEvolucion[]> {
+    try {
+        const rows = await localDb.evoluciones
+            .where('paciente_id')
+            .equals(pacienteId)
+            .toArray()
+
+        return rows.sort((a, b) => {
+            const porFecha = (b.fecha || '').localeCompare(a.fecha || '')
+            if (porFecha !== 0) return porFecha
+            // Dos evoluciones del mismo día: la cargada después va primero.
+            return (b.created_at || '').localeCompare(a.created_at || '')
+        })
+    } catch (err) {
+        console.warn('[LOCAL DB] Error consultando evoluciones locales:', err)
+        return []
+    }
+}
+
+/**
+ * Guarda o actualiza una evolución de forma Local-First (0ms).
+ * Escribe en IndexedDB y encola la operación para subirla a Supabase.
+ */
+export async function guardarEvolucionLocal(
+    evolucion: Partial<LocalEvolucion> & { id: string; tenant_id: string; paciente_id: string },
+    isNew: boolean = false
+): Promise<LocalEvolucion> {
+    const existing = await localDb.evoluciones.get(evolucion.id)
+    const ahora = new Date().toISOString()
+
+    const updated: LocalEvolucion = {
+        ...(existing || {}),
+        ...evolucion,
+        created_at: existing?.created_at || evolucion.created_at || ahora,
+        updated_at: ahora
+    } as LocalEvolucion
+
+    await localDb.evoluciones.put(updated)
+
+    await syncManager.enqueueMutation(
+        updated.tenant_id,
+        'evoluciones',
+        updated.id,
+        isNew && !existing ? 'INSERT' : 'UPDATE',
+        updated
+    )
+
+    return updated
+}
+
+/**
+ * Elimina una evolución localmente (0ms) y encola el borrado en la nube.
+ */
+export async function eliminarEvolucionLocal(tenantId: string, evolucionId: string): Promise<void> {
+    await localDb.evoluciones.delete(evolucionId)
+
+    // Operaciones encoladas de esta misma evolución que todavía no subieron.
+    const encoladas = await localDb.sync_outbox
+        .where('entity_id')
+        .equals(evolucionId)
+        .toArray()
+
+    const nuncaLlegoALaNube = encoladas.some(op => op.operation === 'INSERT')
+
+    if (encoladas.length > 0) {
+        await localDb.sync_outbox.bulkDelete(
+            encoladas.map(op => op.id).filter((id): id is number => id !== undefined)
+        )
+    }
+
+    // Si el INSERT nunca se ejecutó, la fila no existe en Supabase y no hay nada
+    // que borrar. Encolar el DELETE sería peor: si llegara a correr antes que el
+    // INSERT, el upsert posterior recrearía la evolución ya eliminada.
+    if (nuncaLlegoALaNube) {
+        await syncManager.refreshLocalMetrics()
+        return
+    }
+
+    await syncManager.enqueueMutation(
+        tenantId,
+        'evoluciones',
+        evolucionId,
+        'DELETE',
+        {}
+    )
+}
+
+/**
+ * Espera a que la evolución salga de la cola de salida.
+ *
+ * `enqueueMutation` ya dispara el push en segundo plano, así que acá sólo
+ * miramos la cola: 'ok' cuando el item desapareció (subió), 'error' cuando el
+ * push lo marcó fallido, 'pendiente' si se agotó la espera.
+ */
+export async function esperarPushEvolucion(
+    evolucionId: string,
+    timeoutMs: number = 5000
+): Promise<'ok' | 'error' | 'pendiente'> {
+    const limite = Date.now() + timeoutMs
+
+    while (Date.now() < limite) {
+        const pendiente = await localDb.sync_outbox
+            .where('entity_id')
+            .equals(evolucionId)
+            .first()
+
+        if (!pendiente) return 'ok'
+        if (pendiente.status === 'ERROR') return 'error'
+
+        await new Promise(resolve => setTimeout(resolve, 150))
+    }
+
+    return 'pendiente'
+}
+
+/**
+ * Vuelca en IndexedDB las evoluciones que trajo el server para un paciente.
+ *
+ * Borra las locales que el server ya no tiene (las eliminó otro puesto), pero
+ * nunca una que tenga una operación pendiente en el outbox: esa todavía no
+ * subió, así que su ausencia en el server es esperable y borrarla perdería
+ * lo que el odontólogo acaba de escribir.
+ */
+export async function reconciliarEvolucionesLocal(
+    pacienteId: string,
+    serverRows: LocalEvolucion[]
+): Promise<void> {
+    try {
+        const idsServer = new Set(serverRows.map(r => r.id))
+
+        const [locales, pendientes] = await Promise.all([
+            localDb.evoluciones.where('paciente_id').equals(pacienteId).toArray(),
+            localDb.sync_outbox.where('entity').equals('evoluciones').toArray()
+        ])
+
+        const idsPendientes = new Set(pendientes.map(p => p.entity_id))
+
+        const aBorrar = locales
+            .filter(l => !idsServer.has(l.id) && !idsPendientes.has(l.id))
+            .map(l => l.id)
+
+        await localDb.transaction('rw', localDb.evoluciones, async () => {
+            if (aBorrar.length > 0) await localDb.evoluciones.bulkDelete(aBorrar)
+            // Tampoco pisamos con la versión del server una fila con cambios
+            // locales sin subir: el push todavía no corrió, el server está viejo.
+            const aEscribir = serverRows.filter(r => !idsPendientes.has(r.id))
+            if (aEscribir.length > 0) await localDb.evoluciones.bulkPut(aEscribir)
+        })
+    } catch (err) {
+        console.warn('[LOCAL DB] Error reconciliando evoluciones:', err)
+    }
 }
