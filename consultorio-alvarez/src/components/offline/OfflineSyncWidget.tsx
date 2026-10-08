@@ -27,6 +27,7 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog'
 import { CambiosAtascados } from '@/components/offline/CambiosAtascados'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 
 interface OfflineSyncWidgetProps {
     themeColor?: string
@@ -50,6 +51,10 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
     const [isOpen, setIsOpen] = useState(false)
     const [isCheckingPing, setIsCheckingPing] = useState(false)
     const [selectedInterval, setSelectedInterval] = useState<number>(15)
+    const [confirmarDescargaFull, setConfirmarDescargaFull] = useState(false)
+
+    // Lo que todavía no llegó a la nube, pendiente o atascado
+    const cambiosSinSubir = status.pendingOutboxCount + status.atascadosCount
 
     useEffect(() => {
         const unsubscribe = syncManager.subscribe(newStatus => {
@@ -448,8 +453,17 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                             </button>
 
                             <button
-                                onClick={handleDownloadFull}
-                                disabled={status.isSyncing || !status.isOnline}
+                                onClick={() => {
+                                    // Esto borra pacientes y turnos locales para
+                                    // rebajarlos de cero. Habiendo cola sin subir
+                                    // el usuario tiene que saberlo antes.
+                                    if (cambiosSinSubir > 0) {
+                                        setConfirmarDescargaFull(true)
+                                        return
+                                    }
+                                    handleDownloadFull()
+                                }}
+                                disabled={status.isSyncing || !status.isOnline || status.authError}
                                 className="w-full py-2 px-4 rounded-xl border border-border bg-background hover:bg-muted text-foreground font-medium text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                             >
                                 <Download className="h-3.5 w-3.5 text-muted-foreground" />
@@ -459,6 +473,19 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <ConfirmModal
+                open={confirmarDescargaFull}
+                onOpenChange={abierto => { if (!abierto) setConfirmarDescargaFull(false) }}
+                title="Descargar todo de nuevo"
+                description={`Se borra la copia local de pacientes y turnos y se vuelve a bajar todo desde la nube. Tenés ${cambiosSinSubir} ${cambiosSinSubir === 1 ? 'cambio' : 'cambios'} sin subir: la copia local de esos registros se conserva y siguen en la cola, pero lo más seguro es sincronizar primero. ¿Querés descargar igual?`}
+                confirmText="Descargar igual"
+                cancelText="Mejor no"
+                onConfirm={() => {
+                    setConfirmarDescargaFull(false)
+                    handleDownloadFull()
+                }}
+            />
         </>
     )
 }

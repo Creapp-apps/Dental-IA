@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { AlertTriangle } from 'lucide-react'
 import { GlassDialog, GlassDialogContent, GlassDialogHeader, GlassDialogTitle, GlassDialogDescription, GlassDialogFooter } from './glass-dialog'
 import { GlassButton } from './glass-button'
@@ -12,6 +13,13 @@ interface ConfirmModalProps {
     confirmText?: string
     cancelText?: string
     isPending?: boolean
+    /**
+     * Bloque opcional entre la descripción y los botones, para cuando decidir
+     * exige leer algo que no entra en una línea de texto: por ejemplo el
+     * contenido del cambio que se va a tirar, que hay que poder copiar. Es
+     * opcional para que el resto de los usos del modal no cambien.
+     */
+    extra?: ReactNode
 }
 
 export function ConfirmModal({
@@ -23,7 +31,8 @@ export function ConfirmModal({
     isDestructive = true,
     confirmText = 'Confirmar',
     cancelText = 'Cancelar',
-    isPending = false
+    isPending = false,
+    extra
 }: ConfirmModalProps) {
     return (
         <GlassDialog open={open} onOpenChange={onOpenChange}>
@@ -41,7 +50,9 @@ export function ConfirmModal({
                         </div>
                     </div>
                 </GlassDialogHeader>
-                
+
+                {extra && <div className="mt-4">{extra}</div>}
+
                 <GlassDialogFooter className="mt-6">
                     <GlassButton 
                         variant="ghost" 
