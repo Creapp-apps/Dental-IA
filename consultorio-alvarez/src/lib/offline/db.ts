@@ -1,4 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie'
+import type { EstadoOutbox } from './outbox-policy'
 
 export interface LocalPaciente {
     id: string
@@ -108,7 +109,11 @@ export interface SyncOutboxItem {
     payload: any
     created_at: string
     attempts: number
-    status: 'PENDIENTE' | 'ERROR' | 'EN_PROCESO'
+    status: EstadoOutbox
+    /** Momento a partir del cual el item vuelve a ser elegible. */
+    next_attempt_at?: string | null
+    /** Código de Postgres del último fallo, para clasificar y para mostrar. */
+    last_error_code?: string
     error_message?: string
 }
 
@@ -162,6 +167,23 @@ export class DentalIaLocalDatabase extends Dexie {
         // bajar todas las de todos los pacientes infla IndexedDB sin necesidad.
         this.version(3).stores({
             evoluciones: 'id, tenant_id, paciente_id, fecha, updated_at'
+        })
+
+        // Reintentos del outbox. Los items que quedaron en 'ERROR' vuelven a
+        // 'PENDIENTE' con el contador en cero: hoy están varados en las
+        // computadoras del consultorio sin reintentarse ni verse. Con la
+        // escalera nueva se recuperan y, si el fallo era permanente, terminan
+        // en 'ATASCADO' y por fin quedan a la vista.
+        this.version(4).stores({
+            sync_outbox: '++id, tenant_id, entity, entity_id, status, created_at, next_attempt_at'
+        }).upgrade(async tx => {
+            await tx.table('sync_outbox').toCollection().modify(item => {
+                if (item.status === 'ERROR' || item.status === 'EN_PROCESO') {
+                    item.status = 'PENDIENTE'
+                    item.attempts = 0
+                    item.next_attempt_at = null
+                }
+            })
         })
     }
 }

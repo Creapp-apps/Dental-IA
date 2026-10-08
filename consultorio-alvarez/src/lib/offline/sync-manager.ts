@@ -320,7 +320,7 @@ class OfflineSyncManager {
                         pushedCount++
                     } else {
                         await localDb.sync_outbox.update(r.outbox_id, {
-                            status: 'ERROR',
+                            status: 'ATASCADO',
                             error_message: r.error
                         })
                     }
