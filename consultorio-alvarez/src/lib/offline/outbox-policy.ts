@@ -52,3 +52,72 @@ export function esElegible(item: ItemElegible, ahora: Date): boolean {
 
     return momento <= ahora.getTime()
 }
+
+export interface ItemDeEntidad {
+    entity: string
+    entity_id: string
+}
+
+export interface CambioDeEstado {
+    status: EstadoOutbox
+    attempts: number
+    next_attempt_at: string | null
+    last_error_code?: string
+    error_message?: string
+}
+
+/**
+ * La cola se sube en el orden en que el odontólogo hizo los cambios. El índice
+ * de Dexie no garantiza ese orden, y dos operaciones sobre la misma fila
+ * aplicadas al revés dejan la base inconsistente.
+ */
+export function ordenarCola<T extends { id?: number }>(items: T[]): T[] {
+    return [...items].sort((a, b) => {
+        if (a.id === undefined) return 1
+        if (b.id === undefined) return -1
+        return a.id - b.id
+    })
+}
+
+/**
+ * Saca de la tanda los items de una fila que ya tiene algo atascado.
+ *
+ * Aplicar una modificación encima de una creación que nunca entró deja la base
+ * inconsistente. El bloqueo es por par entity + entity_id: dos tablas distintas
+ * no se bloquean entre sí aunque compartan el identificador.
+ */
+export function filtrarBloqueados<T extends ItemDeEntidad>(
+    elegibles: T[],
+    atascados: ItemDeEntidad[]
+): T[] {
+    if (atascados.length === 0) return elegibles
+
+    const clave = (i: ItemDeEntidad) => `${i.entity}::${i.entity_id}`
+    const bloqueadas = new Set(atascados.map(clave))
+
+    return elegibles.filter(i => !bloqueadas.has(clave(i)))
+}
+
+/**
+ * Estado del item después de un fallo de subida.
+ * `attemptsActuales` es el contador ANTES de contar este fallo.
+ */
+export function siguienteEstadoTrasFallo(
+    attemptsActuales: number,
+    retriable: boolean,
+    errorCode: string | undefined,
+    errorMessage: string | undefined,
+    ahora: Date
+): CambioDeEstado {
+    const attempts = (Number.isInteger(attemptsActuales) ? attemptsActuales : 0) + 1
+
+    const next_attempt_at = retriable ? calcularProximoIntento(attempts, ahora) : null
+
+    return {
+        status: next_attempt_at ? 'PENDIENTE' : 'ATASCADO',
+        attempts,
+        next_attempt_at,
+        last_error_code: errorCode,
+        error_message: errorMessage,
+    }
+}
