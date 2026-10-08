@@ -466,6 +466,52 @@ class OfflineSyncManager {
             this.synchronize().catch(console.warn)
         }
     }
+
+    /**
+     * Los cambios que no van a subir solos, del más viejo al más nuevo.
+     */
+    public async listarAtascados(): Promise<SyncOutboxItem[]> {
+        const items = await localDb.sync_outbox.where('status').equals('ATASCADO').toArray()
+        return items.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
+    }
+
+    /**
+     * Devuelve un item a la cola desde cero. El usuario decidió que vale la
+     * pena probar de nuevo, así que la escalera arranca limpia.
+     */
+    public async reintentarItem(outboxId: number): Promise<void> {
+        await localDb.sync_outbox.update(outboxId, {
+            status: 'PENDIENTE',
+            attempts: 0,
+            next_attempt_at: null,
+            error_message: undefined,
+            last_error_code: undefined
+        })
+
+        await this.refreshLocalMetrics()
+
+        if (navigator.onLine && !this.status.isSyncing) {
+            this.synchronize().catch(console.warn)
+        }
+    }
+
+    public async reintentarTodos(): Promise<void> {
+        const atascados = await this.listarAtascados()
+        for (const item of atascados) {
+            if (item.id !== undefined) await this.reintentarItem(item.id)
+        }
+    }
+
+    /**
+     * Saca el cambio de la cola. La fila sigue en IndexedDB, pero como ya no
+     * queda nada pendiente para ella, la próxima sincronización la va a borrar
+     * del equipo. Descartar es perder el cambio, no dejarlo acá: quien llama
+     * tiene que habérselo dicho al usuario antes.
+     */
+    public async descartarItem(outboxId: number): Promise<void> {
+        await localDb.sync_outbox.delete(outboxId)
+        await this.refreshLocalMetrics()
+    }
 }
 
 export const syncManager = new OfflineSyncManager()
