@@ -26,6 +26,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import { CambiosAtascados } from '@/components/offline/CambiosAtascados'
 
 interface OfflineSyncWidgetProps {
     themeColor?: string
@@ -123,6 +124,10 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
     const getWidgetTitle = () => {
         if (status.isSyncing) return 'Sincronizando...'
         if (!status.isOnline || status.networkQuality === 'desconectado') return 'Sin Internet'
+        if (status.authError) return 'La sesión venció'
+        if (status.atascadosCount > 0) {
+            return `${status.atascadosCount} ${status.atascadosCount === 1 ? 'cambio con problema' : 'cambios con problema'}`
+        }
         if (status.pendingOutboxCount > 0) {
             return `${status.pendingOutboxCount} ${status.pendingOutboxCount === 1 ? 'cambio sin subir' : 'cambios sin subir'}`
         }
@@ -136,6 +141,8 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                 ? `Guardando en PC (${status.pendingOutboxCount} pendientes)` 
                 : 'Operando seguro en esta PC'
         }
+        if (status.authError) return 'Volvé a iniciar sesión para sincronizar'
+        if (status.atascadosCount > 0) return 'Tocá acá para revisarlos'
         if (status.pendingOutboxCount > 0) {
             return 'Tocá acá para subir a la nube'
         }
@@ -161,7 +168,9 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                         ? 'bg-primary/10 border-primary/40 text-primary'
                         : !status.isOnline || status.networkQuality === 'desconectado'
                             ? 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300'
-                            : status.pendingOutboxCount > 0
+                            : status.atascadosCount > 0 || status.authError
+                                ? 'bg-red-500/15 border-red-500/40 text-red-700 dark:text-red-300 shadow-xs'
+                                : status.pendingOutboxCount > 0
                                 ? 'bg-amber-500/15 border-amber-500/50 text-amber-900 dark:text-amber-200 shadow-xs'
                                 : 'bg-sidebar-accent/30 border-sidebar-border/40 hover:bg-sidebar-accent/60 text-sidebar-foreground'
                 )}
@@ -175,6 +184,10 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                         ) : !status.isOnline || status.networkQuality === 'desconectado' ? (
                             <div className="h-7 w-7 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400">
                                 <WifiOff className="h-3.5 w-3.5" />
+                            </div>
+                        ) : status.atascadosCount > 0 || status.authError ? (
+                            <div className="h-7 w-7 rounded-full bg-red-500/20 flex items-center justify-center text-red-600 dark:text-red-400">
+                                <AlertTriangle className="h-3.5 w-3.5" />
                             </div>
                         ) : status.pendingOutboxCount > 0 ? (
                             <div className="h-7 w-7 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 animate-pulse">
@@ -192,7 +205,9 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                         <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={cn(
                                 "text-[11px] font-bold tracking-tight truncate",
-                                status.pendingOutboxCount > 0 && "text-amber-700 dark:text-amber-300"
+                                (status.atascadosCount > 0 || status.authError)
+                                    ? "text-red-700 dark:text-red-300"
+                                    : status.pendingOutboxCount > 0 && "text-amber-700 dark:text-amber-300"
                             )}>
                                 {getWidgetTitle()}
                             </span>
@@ -226,7 +241,9 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
 
                         <p className={cn(
                             "text-[9.5px] truncate font-medium mt-0.5",
-                            status.pendingOutboxCount > 0 
+                            (status.atascadosCount > 0 || status.authError)
+                                ? "text-red-800/90 dark:text-red-200/90 font-semibold"
+                            : status.pendingOutboxCount > 0 
                                 ? "text-amber-800/90 dark:text-amber-200/90 font-semibold" 
                                 : "text-muted-foreground"
                         )}>
@@ -312,6 +329,8 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                                 )}
                             </p>
                         </div>
+
+                        <CambiosAtascados cantidad={status.atascadosCount} />
 
                         {/* Alerta de Cambios Pendientes (si los hay) */}
                         {status.pendingOutboxCount > 0 && (
