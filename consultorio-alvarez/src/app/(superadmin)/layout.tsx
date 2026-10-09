@@ -2,6 +2,10 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { SuperadminHeader } from '@/components/superadmin/SuperadminHeader'
 
+export const metadata = {
+    title: 'Superadmin | Dental-IA',
+}
+
 export default async function SuperadminLayout({
     children,
 }: {

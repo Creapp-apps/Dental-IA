@@ -38,7 +38,9 @@ const spaceGrotesk = Space_Grotesk({
 })
 
 export const metadata: Metadata = {
-  title: 'Consultorio Alvarez - Clinica Virtual',
+  // Título neutro de plataforma: cada consultorio lo reemplaza desde su propio
+  // layout (panel, portal) o desde su generateMetadata (landing, login).
+  title: 'Dental-IA - Gestión para consultorios odontológicos',
   description: 'Plataforma integral de gestión para consultorios odontológicos',
   icons: {
     icon: [

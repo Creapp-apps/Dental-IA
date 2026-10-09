@@ -5,7 +5,7 @@ import { ChatInboxView } from '@/components/mensajes/ChatInboxView'
 import { createAdminClient } from '@/lib/supabase/admin'
 
 export const metadata = {
-    title: 'Mensajes WhatsApp — Consultorio Álvarez',
+    title: 'Mensajes WhatsApp',
     description: 'Bandeja multiatención de WhatsApp y Guardia Odontológica 24hs'
 }
 

@@ -90,6 +90,21 @@ export const getCurrentUsuario = cache(async () => {
     return data ?? null
 })
 
+// Datos del consultorio al que pertenece el usuario logueado (para títulos, branding, etc.)
+export const getCurrentTenant = cache(async () => {
+    const tenantId = await getTenantId()
+    if (!tenantId) return null
+
+    const admin = getAdmin()
+    const { data } = await admin
+        .from('tenants')
+        .select('id, slug, nombre, logo_url')
+        .eq('id', tenantId)
+        .maybeSingle()
+
+    return data ?? null
+})
+
 // ---- PROFESIONALES ----
 
 export async function getProfesionales(onlyActive: boolean = true) {
