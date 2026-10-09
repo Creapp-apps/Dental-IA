@@ -62,6 +62,16 @@ async function migrarAdjuntos() {
     }
 }
 
+// Storage no tiene exists(): se lista la carpeta del objeto y se busca el nombre.
+async function existe(bucket: string, ruta: string) {
+    const i = ruta.lastIndexOf('/')
+    const carpeta = i === -1 ? '' : ruta.slice(0, i)
+    const nombre = ruta.slice(i + 1)
+    const { data, error } = await db.storage.from(bucket).list(carpeta, { search: nombre, limit: 100 })
+    if (error) throw new Error(`listar ${bucket}/${carpeta}: ${error.message}`)
+    return (data ?? []).some(o => o.name === nombre && o.id !== null)
+}
+
 async function migrarWaMedia() {
     console.log('whatsapp_mensajes.metadata.media_url (bucket paciente_adjuntos)')
     const { data, error: errLectura } = await db
@@ -89,8 +99,15 @@ async function migrarWaMedia() {
         console.log(`  fila ${m.id}: ${valor} -> ${hacia}`)
         if (SECO) continue
 
-        const { error: errMove } = await db.storage.from('paciente_adjuntos').move(ruta, hacia)
-        if (errMove) throw new Error(`move paciente_adjuntos/${ruta} (fila ${m.id}): ${errMove.message}`)
+        // Si una corrida anterior cortó entre el move y el update, el objeto ya está en el destino.
+        if (await existe('paciente_adjuntos', ruta)) {
+            const { error: errMove } = await db.storage.from('paciente_adjuntos').move(ruta, hacia)
+            if (errMove) throw new Error(`move paciente_adjuntos/${ruta} (fila ${m.id}): ${errMove.message}`)
+        } else if (await existe('paciente_adjuntos', hacia)) {
+            console.log(`    el objeto ya estaba en el destino, solo se actualiza la fila`)
+        } else {
+            throw new Error(`fila ${m.id}: el objeto no está ni en ${ruta} ni en ${hacia}, irrecuperable`)
+        }
 
         // Se preserva el resto del JSON (en particular raw): solo cambia media_url.
         const { error } = await db
