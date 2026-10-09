@@ -118,27 +118,20 @@ export function ModalSubirEscaneo3D({
                         throw new Error(`Error subiendo ${item.file.name}: ${fallbackRes.error.message}`)
                     }
 
-                    const { data: publicUrlData } = supabase.storage
-                        .from('paciente_adjuntos')
-                        .getPublicUrl(fallbackPath)
-
                     archivosSubidos.push({
                         id: crypto.randomUUID(),
                         nombre: item.file.name,
-                        url: publicUrlData.publicUrl,
+                        // Se guarda la ruta: los buckets son privados y se firma al abrir el archivo.
+                        url: fallbackPath,
                         tipo: item.tipo,
                         formato: item.formato,
                         size_bytes: item.file.size,
                     })
                 } else {
-                    const { data: publicUrlData } = supabase.storage
-                        .from('escaneos_3d')
-                        .getPublicUrl(path)
-
                     archivosSubidos.push({
                         id: crypto.randomUUID(),
                         nombre: item.file.name,
-                        url: publicUrlData.publicUrl,
+                        url: path,
                         tipo: item.tipo,
                         formato: item.formato,
                         size_bytes: item.file.size,

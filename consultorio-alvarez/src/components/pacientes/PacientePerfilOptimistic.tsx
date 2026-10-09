@@ -6,6 +6,7 @@ import { Phone, Mail, MapPin, CreditCard, AlertCircle, Cloud, CheckCircle2, Cloc
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
 import { localDb, LocalPaciente } from '@/lib/offline/db'
 import { syncManager } from '@/lib/offline/sync-manager'
+import { useUrlFirmada } from '@/lib/storage/url-firmada'
 
 const GENERO_LABEL: Record<string, string> = { M: 'Masculino', F: 'Femenino', X: 'No binario' }
 
@@ -95,6 +96,8 @@ export function PacientePerfilOptimistic({ initialPaciente }: PacientePerfilOpti
     }, [initialPaciente])
 
     const p = paciente
+    // foto_url guarda una ruta (o una URL vieja hasta migrar): se firma para mostrarla.
+    const fotoUrl = useUrlFirmada('avatars', p.foto_url)
     const iniciales = `${p.nombre?.charAt(0) || ''}${p.apellido?.charAt(0) || ''}`
     const edad = p.fecha_nacimiento
         ? Math.floor((Date.now() - new Date(p.fecha_nacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
@@ -136,9 +139,9 @@ export function PacientePerfilOptimistic({ initialPaciente }: PacientePerfilOpti
             <div className="glass rounded-2xl shadow-glass p-5">
                 <div className="flex flex-col items-center text-center mb-4">
                     <div className="h-20 w-20 rounded-full bg-primary/10 flex items-center justify-center mb-3 ring-4 ring-primary/20 overflow-hidden relative">
-                        {p.foto_url ? (
+                        {fotoUrl ? (
                             /* eslint-disable-next-line @next/next/no-img-element */
-                            <img src={p.foto_url} alt={`${p.nombre} ${p.apellido}`} className="h-full w-full object-cover" />
+                            <img src={fotoUrl} alt={`${p.nombre} ${p.apellido}`} className="h-full w-full object-cover" />
                         ) : (
                             <span className="text-2xl font-bold text-primary">{iniciales}</span>
                         )}

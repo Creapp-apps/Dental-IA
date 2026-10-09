@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { rutaTenant } from '@/lib/storage/rutas'
+import { extraerRuta, rutaTenant } from '@/lib/storage/rutas'
 
 async function getTenantId(): Promise<string | null> {
     const supabase = await createClient()
@@ -55,17 +55,14 @@ export async function uploadPacienteAdjunto(formData: FormData): Promise<{ succe
             return { error: 'Error del servidor al guardar el archivo.' }
         }
 
-        const { data: { publicUrl } } = supabase.storage
-            .from('paciente_adjuntos')
-            .getPublicUrl(filePath)
-
         // Insertar registro en paciente_adjuntos
         const { error: dbError } = await supabase
             .from('paciente_adjuntos')
             .insert({
                 paciente_id: pacienteId,
                 nombre_archivo: file.name,
-                url_archivo: publicUrl,
+                // Se guarda la ruta, no una URL: el bucket es privado y se firma al mostrar.
+                url_archivo: filePath,
                 tipo_archivo: file.type || 'application/octet-stream',
                 size_bytes: file.size,
                 observaciones: observaciones || null,
@@ -94,6 +91,10 @@ export async function deletePacienteAdjunto(id: string, urlArchivo: string): Pro
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { error: 'No autenticado' }
 
+        // Se resuelve antes del delete: si el valor no es interpretable, la fila igual se borra,
+        // pero el archivo queda registrado en el log en vez de perderse en silencio.
+        const ruta = extraerRuta(urlArchivo, 'paciente_adjuntos')
+
         // 1. Delete from DB (The RLS policy ensures users can only delete their tenant's attachments)
         const { error: dbError } = await supabase
             .from('paciente_adjuntos')
@@ -105,23 +106,18 @@ export async function deletePacienteAdjunto(id: string, urlArchivo: string): Pro
             return { error: 'No se pudo eliminar el registro.' }
         }
 
-        // 2. Extract filePath from URL to delete from Storage
-        // The public URL looks like: https://[project].supabase.co/storage/v1/object/public/paciente_adjuntos/tenantId/pacienteId/filename
-        const urlObj = new URL(urlArchivo)
-        const pathSegments = urlObj.pathname.split('/')
-        // Find 'paciente_adjuntos' in path and get everything after it
-        const bucketIndex = pathSegments.indexOf('paciente_adjuntos')
-        if (bucketIndex !== -1 && pathSegments.length > bucketIndex + 1) {
-            const filePath = pathSegments.slice(bucketIndex + 1).join('/')
-            
+        // 2. Borrar el archivo de Storage. `ruta` cubre ruta plana, URL pública vieja y URL firmada.
+        if (ruta) {
             const { error: storageError } = await supabase.storage
                 .from('paciente_adjuntos')
-                .remove([filePath])
-                
+                .remove([ruta])
+
             if (storageError) {
                 console.error('Error eliminando archivo de storage:', storageError)
-                // We don't fail the whole operation if DB delete succeeded, but good to log
+                // No falla la operación: la fila ya se borró, pero queda el log
             }
+        } else {
+            console.warn('[STORAGE] Adjunto borrado de la base pero el objeto quedó huérfano, no se pudo resolver la ruta:', urlArchivo)
         }
 
         return { success: true }

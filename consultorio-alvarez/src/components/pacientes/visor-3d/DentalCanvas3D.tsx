@@ -6,6 +6,12 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js'
 import { Loader2 } from 'lucide-react'
 
+/**
+ * ¿Apunta a un .stl? Una URL firmada termina en `?token=...`, así que no alcanza con
+ * endsWith: se mira la extensión antes de la query.
+ */
+const esUrlStl = (url: string) => /\.stl(\?|$)/.test(url)
+
 export type ModoMaterial3D = 'esmalte' | 'yeso' | 'wireframe'
 
 export interface DentalCanvas3DProps {
@@ -156,7 +162,7 @@ export const DentalCanvas3D = forwardRef<DentalCanvas3DRef, DentalCanvas3DProps>
                 let upperCargado = false
                 let lowerCargado = false
 
-                if (stlUpperUrl && stlUpperUrl.endsWith('.stl')) {
+                if (stlUpperUrl && esUrlStl(stlUpperUrl)) {
                     try {
                         const geom = await loader.loadAsync(stlUpperUrl)
                         geom.center()
@@ -172,7 +178,7 @@ export const DentalCanvas3D = forwardRef<DentalCanvas3DRef, DentalCanvas3DProps>
                     }
                 }
 
-                if (stlLowerUrl && stlLowerUrl.endsWith('.stl')) {
+                if (stlLowerUrl && esUrlStl(stlLowerUrl)) {
                     try {
                         const geom = await loader.loadAsync(stlLowerUrl)
                         geom.center()

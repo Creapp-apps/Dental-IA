@@ -34,6 +34,10 @@ import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
+import { urlFirmada, useUrlFirmada } from '@/lib/storage/url-firmada'
+
+// Los archivos 3D están en `escaneos_3d` o en `paciente_adjuntos` según si la subida primaria funcionó.
+const BUCKETS_ESCANEOS = ['escaneos_3d', 'paciente_adjuntos']
 
 interface Visor3DModalProps {
     open: boolean
@@ -52,15 +56,29 @@ export function Visor3DModal({ open, onOpenChange, escaneo }: Visor3DModalProps)
     const [autoRotar, setAutoRotar] = useState(false)
     const [mostrarInfoPanel, setMostrarInfoPanel] = useState(true)
 
-    if (!escaneo) return null
-
-    // Encontrar URLs de STL superior e inferior si existen
-    const archivoUpper = escaneo.archivos.find(
+    // Encontrar STL superior e inferior si existen. Va antes del return temprano porque
+    // las URLs firmadas son hooks y no pueden quedar después de una salida condicional.
+    const archivoUpper = escaneo?.archivos.find(
         (a) => a.tipo === 'maxilar_superior' || a.nombre.toLowerCase().includes('maxil') || a.nombre.toLowerCase().includes('upper')
     )
-    const archivoLower = escaneo.archivos.find(
+    const archivoLower = escaneo?.archivos.find(
         (a) => a.tipo === 'maxilar_inferior' || a.nombre.toLowerCase().includes('mandib') || a.nombre.toLowerCase().includes('lower')
     )
+
+    // Lo guardado es una ruta: el canvas necesita la URL firmada para poder bajar el STL.
+    const stlUpperUrl = useUrlFirmada(BUCKETS_ESCANEOS, archivoUpper?.url)
+    const stlLowerUrl = useUrlFirmada(BUCKETS_ESCANEOS, archivoLower?.url)
+
+    if (!escaneo) return null
+
+    const abrirArchivo = async (valor: string) => {
+        const u = await urlFirmada(BUCKETS_ESCANEOS, valor)
+        if (!u) {
+            toast.error('No se pudo abrir el archivo')
+            return
+        }
+        window.open(u, '_blank', 'noopener')
+    }
 
     const handleTomarCaptura = () => {
         const dataUrl = canvasRef.current?.tomarCaptura()
@@ -127,8 +145,8 @@ export function Visor3DModal({ open, onOpenChange, escaneo }: Visor3DModalProps)
                     <div className="flex-1 h-full relative">
                         <DentalCanvas3D
                             ref={canvasRef}
-                            stlUpperUrl={archivoUpper?.url}
-                            stlLowerUrl={archivoLower?.url}
+                            stlUpperUrl={stlUpperUrl}
+                            stlLowerUrl={stlLowerUrl}
                             mostrarSuperior={mostrarSuperior}
                             mostrarInferior={mostrarInferior}
                             posicionOclusion={posicionOclusion}
@@ -379,17 +397,15 @@ export function Visor3DModal({ open, onOpenChange, escaneo }: Visor3DModalProps)
                                                     {archivo.tipo.replace('_', ' ')} • {(archivo.size_bytes / (1024 * 1024)).toFixed(1)} MB
                                                 </div>
                                             </div>
-                                            {archivo.url && archivo.url.startsWith('http') && (
-                                                <a
-                                                    href={archivo.url}
-                                                    download={archivo.nombre}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
+                                            {archivo.url && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => abrirArchivo(archivo.url)}
                                                     className="p-1.5 rounded-lg hover:bg-white/10 text-primary transition-colors shrink-0"
                                                     title="Descargar archivo"
                                                 >
                                                     <Download className="h-3.5 w-3.5" />
-                                                </a>
+                                                </button>
                                             )}
                                         </div>
                                     ))}

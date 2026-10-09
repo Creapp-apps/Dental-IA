@@ -12,6 +12,7 @@ import {
     getMensajes
 } from '@/lib/actions/whatsapp-chat'
 import { createClient } from '@/lib/supabase/client'
+import { useUrlFirmada } from '@/lib/storage/url-firmada'
 import { 
     Search, 
     Send, 
@@ -70,6 +71,38 @@ const RESPUESTAS_RAPIDAS = [
         texto: 'El odontólogo se encuentra en este momento en quirófano/atención. Ni bien se libere te responderá personalmente. ¡Gracias por tu paciencia!'
     }
 ]
+
+/**
+ * Burbuja de media entrante (foto o nota de voz). Vive aparte porque firmar la URL es un hook
+ * y no se puede llamar dentro del .map de mensajes. Mientras firma no muestra nada.
+ */
+function MediaMensaje({ tipo, mediaUrl }: { tipo: string, mediaUrl: string }) {
+    const url = useUrlFirmada('paciente_adjuntos', mediaUrl)
+    if (!url) return null
+
+    if (tipo === 'imagen') {
+        return (
+            <div className="mb-2.5 rounded-xl overflow-hidden border border-border/40 max-w-xs">
+                <a href={url} target="_blank" rel="noopener noreferrer" className="block relative group">
+                    <img 
+                        src={url} 
+                        alt="Foto enviada por el paciente" 
+                        className="w-full max-h-72 object-cover rounded-xl hover:opacity-95 transition-opacity"
+                    />
+                    <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md backdrop-blur-sm">
+                        🔍 Ver en grande
+                    </span>
+                </a>
+            </div>
+        )
+    }
+
+    return (
+        <div className="mb-2">
+            <audio controls src={url} className="w-full max-w-xs h-9 rounded-lg" />
+        </div>
+    )
+}
 
 export function ChatInboxView({
     initialConversaciones,
@@ -658,27 +691,9 @@ export function ChatInboxView({
                                                 isAgente && 'bg-primary text-primary-foreground rounded-tr-sm font-medium'
                                             )}
                                         >
-                                            {/* Imagen adjunta si existe */}
-                                            {msg.tipo === 'imagen' && msg.metadata?.media_url && (
-                                                <div className="mb-2.5 rounded-xl overflow-hidden border border-border/40 max-w-xs">
-                                                    <a href={msg.metadata.media_url} target="_blank" rel="noopener noreferrer" className="block relative group">
-                                                        <img 
-                                                            src={msg.metadata.media_url} 
-                                                            alt="Foto enviada por el paciente" 
-                                                            className="w-full max-h-72 object-cover rounded-xl hover:opacity-95 transition-opacity"
-                                                        />
-                                                        <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md backdrop-blur-sm">
-                                                            🔍 Ver en grande
-                                                        </span>
-                                                    </a>
-                                                </div>
-                                            )}
-
-                                            {/* Audio / Nota de voz si existe */}
-                                            {msg.tipo === 'audio' && msg.metadata?.media_url && (
-                                                <div className="mb-2">
-                                                    <audio controls src={msg.metadata.media_url} className="w-full max-w-xs h-9 rounded-lg" />
-                                                </div>
+                                            {/* Imagen o audio adjunto si existe */}
+                                            {(msg.tipo === 'imagen' || msg.tipo === 'audio') && msg.metadata?.media_url && (
+                                                <MediaMensaje tipo={msg.tipo} mediaUrl={msg.metadata.media_url} />
                                             )}
 
                                             <div>{msg.contenido}</div>

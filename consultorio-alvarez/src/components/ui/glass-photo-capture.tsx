@@ -10,6 +10,7 @@ import { glassAlert } from '@/components/ui/glass-alert'
 import { cn } from '@/lib/utils'
 import { syncManager } from '@/lib/offline/sync-manager'
 import { rutaTenant } from '@/lib/storage/rutas'
+import { useUrlFirmada } from '@/lib/storage/url-firmada'
 
 interface GlassPhotoCaptureProps {
     value?: string
@@ -23,6 +24,8 @@ export function GlassPhotoCapture({ value, onChange, className }: GlassPhotoCapt
     const [stream, setStream] = useState<MediaStream | null>(null)
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [mounted, setMounted] = useState(false)
+    // `value` es la ruta persistida; para mostrarla hay que firmarla.
+    const fotoUrl = useUrlFirmada('avatars', value)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -127,9 +130,8 @@ export function GlassPhotoCapture({ value, onChange, className }: GlassPhotoCapt
 
             if (error) throw error
 
-            const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(filename)
-
-            onChange(publicUrlData.publicUrl)
+            // Se persiste la ruta, no una URL: el bucket es privado y la firma se resuelve al mostrar.
+            onChange(filename)
 
             glassAlert.success({
                 title: 'Foto guardada',
@@ -160,8 +162,8 @@ export function GlassPhotoCapture({ value, onChange, className }: GlassPhotoCapt
                     }}
                     className="relative group h-24 w-24 rounded-full bg-sidebar border border-border shadow-sm flex items-center justify-center overflow-hidden transition-all hover:ring-4 hover:ring-primary/20"
                 >
-                    {value ? (
-                        <img src={value} alt="Profile" className="h-full w-full object-cover" />
+                    {fotoUrl ? (
+                        <img src={fotoUrl} alt="Profile" className="h-full w-full object-cover" />
                     ) : (
                         <Camera className="h-8 w-8 text-muted-foreground group-hover:text-primary transition-colors" strokeWidth={1.5} />
                     )}
