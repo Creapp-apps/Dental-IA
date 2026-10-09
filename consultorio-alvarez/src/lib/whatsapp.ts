@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { rutaTenant } from '@/lib/storage/rutas'
 
 export interface WhatsAppTenantCredentials {
     accessToken: string
@@ -109,6 +110,7 @@ export async function resolveTenantByPhoneNumberId(incomingPhoneNumberId: string
 /**
  * Descarga un archivo multimedia (imagen, audio, video) desde Meta Graph API
  * y lo persiste en el bucket 'paciente_adjuntos' de Supabase Storage para acceso permanente.
+ * Devuelve la ruta del objeto (no una URL): el bucket es privado y quien lo muestre la firma.
  */
 export async function descargarYGuardarMediaWhatsApp(
     mediaId: string,
@@ -166,7 +168,7 @@ export async function descargarYGuardarMediaWhatsApp(
         const buffer = Buffer.from(arrayBuffer)
 
         // 3. Subir a Supabase Storage en paciente_adjuntos
-        const filePath = `wa-media/${tenantId}/${Date.now()}_${mediaId}.${ext}`
+        const filePath = rutaTenant(tenantId, 'wa-media', `${Date.now()}_${mediaId}.${ext}`)
         const { error: uploadError } = await admin.storage
             .from('paciente_adjuntos')
             .upload(filePath, buffer, {
@@ -179,12 +181,8 @@ export async function descargarYGuardarMediaWhatsApp(
             return null
         }
 
-        // 4. Retornar URL pública
-        const { data: publicData } = admin.storage
-            .from('paciente_adjuntos')
-            .getPublicUrl(filePath)
-
-        return publicData?.publicUrl || null
+        // 4. Retornar la ruta (no una URL): se persiste en la base y el chat la firma al mostrarla
+        return filePath
     } catch (err) {
         console.error('[WA MEDIA] Excepción al procesar media de WhatsApp:', err)
         return null

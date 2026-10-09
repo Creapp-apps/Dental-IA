@@ -11,6 +11,8 @@ import { glassAlert } from '@/components/ui/glass-alert'
 import { uploadPacienteAdjunto, deletePacienteAdjunto } from '@/lib/actions/adjuntos'
 import { useRouter } from 'next/navigation'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
+import { urlFirmada, useUrlFirmada } from '@/lib/storage/url-firmada'
+import { BUCKETS_ADJUNTOS } from '@/lib/storage/rutas'
 
 interface Adjunto {
     id: string
@@ -51,6 +53,8 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
     const [mounted, setMounted] = useState(false)
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteCandidate, setDeleteCandidate] = useState<{ id: string, url: string } | null>(null)
+    // Solo hay un preview a la vez, así que se firma uno solo (no uno por tarjeta).
+    const { url: previewUrl, cargando: firmandoPreview } = useUrlFirmada(BUCKETS_ADJUNTOS, previewAdjunto?.url_archivo)
 
     useEffect(() => {
         setMounted(true)
@@ -107,6 +111,17 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
         } finally {
             setIsUploading(false)
         }
+    }
+
+    // La lista no firma al renderizar: se firma recién cuando el usuario pide abrir el archivo.
+    const abrirAdjunto = async (valor: string, nombre: string) => {
+        const u = await urlFirmada(BUCKETS_ADJUNTOS, valor, undefined, { descarga: nombre })
+        if (!u) {
+            glassAlert.error({ title: 'No se pudo abrir el archivo', description: 'Puede que ya no esté disponible.' })
+            return
+        }
+        // Navegar a una URL de descarga baja el archivo sin salir de la página y sin popup.
+        window.location.assign(u)
     }
 
     const handleDelete = async (id: string, url: string) => {
@@ -314,14 +329,12 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
                                     >
                                         <Eye className="h-3 w-3" /> Ver
                                     </button>
-                                    <a 
-                                        href={adj.url_archivo} 
-                                        target="_blank" 
-                                        rel="noreferrer"
+                                    <button 
+                                        onClick={() => abrirAdjunto(adj.url_archivo, adj.nombre_archivo)}
                                         className="flex-1 glass h-8 rounded-lg text-xs font-medium hover:bg-primary/10 hover:text-primary transition-colors flex items-center justify-center gap-1.5"
                                     >
                                         <Download className="h-3 w-3" /> Descargar
-                                    </a>
+                                    </button>
                                     <button 
                                         onClick={() => handleDelete(adj.id, adj.url_archivo)}
                                         className="h-8 w-8 shrink-0 glass rounded-lg text-muted-foreground hover:bg-red-500/10 hover:text-red-500 transition-colors flex items-center justify-center"
@@ -379,16 +392,24 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
                                 className="relative max-w-full max-h-full flex items-center justify-center"
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                {previewAdjunto.tipo_archivo.startsWith('image/') ? (
+                                {firmandoPreview ? (
+                                    <Loader2 className="h-8 w-8 animate-spin text-white/70" />
+                                ) : !previewUrl ? (
+                                    <div className="text-center p-8 bg-white/5 backdrop-blur-xl rounded-2xl max-w-md w-full border border-white/10 shadow-2xl">
+                                        <File className="h-16 w-16 text-white/50 mx-auto mb-4" />
+                                        <p className="text-lg font-medium text-white">No se pudo abrir el archivo</p>
+                                        <p className="text-sm text-white/60 mt-2">Puede que ya no esté disponible.</p>
+                                    </div>
+                                ) : previewAdjunto.tipo_archivo.startsWith('image/') ? (
                                     /* eslint-disable-next-line @next/next/no-img-element */
                                     <img 
-                                        src={previewAdjunto.url_archivo} 
+                                        src={previewUrl} 
                                         alt={previewAdjunto.nombre_archivo} 
                                         className="max-w-full max-h-[85vh] object-contain rounded-md shadow-[0_0_40px_rgba(0,0,0,0.5)] ring-1 ring-white/10"
                                     />
                                 ) : previewAdjunto.tipo_archivo === 'application/pdf' ? (
                                     <iframe 
-                                        src={`${previewAdjunto.url_archivo}#toolbar=0`} 
+                                        src={`${previewUrl}#toolbar=0`} 
                                         className="w-[90vw] max-w-5xl h-[85vh] rounded-xl shadow-[0_0_40px_rgba(0,0,0,0.5)] bg-white ring-1 ring-white/10"
                                         title={previewAdjunto.nombre_archivo}
                                     />
@@ -398,7 +419,7 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
                                         <p className="text-lg font-medium text-white">Vista previa no disponible</p>
                                         <p className="text-sm text-white/60 mt-2 mb-6">Este tipo de archivo debe ser descargado para visualizarse.</p>
                                         <a 
-                                            href={previewAdjunto.url_archivo} 
+                                            href={previewUrl} 
                                             target="_blank" 
                                             rel="noreferrer"
                                             className="inline-flex items-center justify-center gap-2 w-full bg-white text-black h-11 rounded-xl text-sm font-semibold hover:bg-white/90 transition-all"

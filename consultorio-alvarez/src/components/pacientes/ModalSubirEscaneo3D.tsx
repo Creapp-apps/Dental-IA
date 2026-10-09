@@ -14,6 +14,8 @@ import { crearEscaneo3DAction, type Archivo3D } from '@/lib/actions/escaneos-3d'
 import { UploadCloud, Box, X, Loader2, CheckCircle2, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
+import { syncManager } from '@/lib/offline/sync-manager'
+import { rutaTenant } from '@/lib/storage/rutas'
 
 interface ModalSubirEscaneo3DProps {
     open: boolean
@@ -85,9 +87,16 @@ export function ModalSubirEscaneo3D({
             const supabase = createClient()
             const archivosSubidos: Archivo3D[] = []
 
+            // Sin consultorio no hay carpeta donde guardar: se corta y el catch avisa al usuario
+            const tenantId = await syncManager.obtenerTenantId()
+            if (!tenantId) {
+                throw new Error('No se pudo determinar el consultorio. Sincronizá y volvé a intentar.')
+            }
+
             for (const item of archivosCola) {
                 const cleanName = item.file.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-                const path = `${pacienteId}/${Date.now()}_${cleanName}`
+                const path = rutaTenant(tenantId, pacienteId, `${Date.now()}_${cleanName}`)
+                const fallbackPath = rutaTenant(tenantId, '3d', pacienteId, `${Date.now()}_${cleanName}`)
 
                 const { data, error } = await supabase.storage
                     .from('escaneos_3d')
@@ -100,7 +109,7 @@ export function ModalSubirEscaneo3D({
                     // Fallback al bucket paciente_adjuntos si escaneos_3d tuviera restricción
                     const fallbackRes = await supabase.storage
                         .from('paciente_adjuntos')
-                        .upload(`3d/${path}`, item.file, {
+                        .upload(fallbackPath, item.file, {
                             cacheControl: '3600',
                             upsert: true,
                         })
@@ -109,27 +118,20 @@ export function ModalSubirEscaneo3D({
                         throw new Error(`Error subiendo ${item.file.name}: ${fallbackRes.error.message}`)
                     }
 
-                    const { data: publicUrlData } = supabase.storage
-                        .from('paciente_adjuntos')
-                        .getPublicUrl(`3d/${path}`)
-
                     archivosSubidos.push({
                         id: crypto.randomUUID(),
                         nombre: item.file.name,
-                        url: publicUrlData.publicUrl,
+                        // Se guarda la ruta: los buckets son privados y se firma al abrir el archivo.
+                        url: fallbackPath,
                         tipo: item.tipo,
                         formato: item.formato,
                         size_bytes: item.file.size,
                     })
                 } else {
-                    const { data: publicUrlData } = supabase.storage
-                        .from('escaneos_3d')
-                        .getPublicUrl(path)
-
                     archivosSubidos.push({
                         id: crypto.randomUUID(),
                         nombre: item.file.name,
-                        url: publicUrlData.publicUrl,
+                        url: path,
                         tipo: item.tipo,
                         formato: item.formato,
                         size_bytes: item.file.size,

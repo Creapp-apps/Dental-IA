@@ -22,6 +22,7 @@ import { TabMiWeb } from '@/components/config/TabMiWeb'
 import { TabIntegraciones } from '@/components/config/TabIntegraciones'
 import type { LandingConfig } from '@/lib/types/landing'
 import { createClient } from '@/lib/supabase/client'
+import { rutaTenant } from '@/lib/storage/rutas'
 import { AvatarCropperModal } from '@/components/ui/avatar-cropper'
 
 type TabId = 
@@ -712,18 +713,19 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
 
         try {
             const supabase = createClient()
-            const fileName = `profesionales/${Date.now()}.jpg`
+            // La ruta ya incluye el tenant como primer segmento
+            const fileName = rutaTenant(tenantId, 'profesionales', `${Date.now()}.jpg`)
 
             // Bloqueamos hasta subirla pero el UI ya muesra la vista previa
             const { data, error } = await supabase.storage
                 .from('tenant_assets')
-                .upload(`${tenantId}/${fileName}`, blob, { upsert: true, contentType: 'image/jpeg' })
+                .upload(fileName, blob, { upsert: true, contentType: 'image/jpeg' })
 
             if (error) throw error
 
             const { data: publicUrlData } = supabase.storage
                 .from('tenant_assets')
-                .getPublicUrl(`${tenantId}/${fileName}`)
+                .getPublicUrl(fileName)
 
             setForm(f => ({ ...f, avatar_url: publicUrlData.publicUrl }))
         } catch (e: any) {
