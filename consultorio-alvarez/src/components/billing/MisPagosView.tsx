@@ -18,6 +18,7 @@ import {
     ArrowRight
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { esEmailSuperadmin } from '@/lib/auth/superadmins'
 import { GlassCard, GlassCardHeader, GlassCardTitle, GlassCardDescription, GlassCardContent } from '@/components/ui/glass-card'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
@@ -45,12 +46,7 @@ export function MisPagosView({
     userRole
 }: MisPagosViewProps) {
     // Acceso exclusivo: Rol 'superadmin' en base de datos, emails del desarrollador y soporte oficial
-    const isSuperadmin = 
-        userRole === 'superadmin' || 
-        userEmail === 'creapp.ar@gmail.com' ||
-        userEmail === 'mazasebastian@hotmail.com' || 
-        userEmail.endsWith('@creapp.com') || 
-        userEmail.endsWith('@dental-ia.com')
+    const isSuperadmin = userRole === 'superadmin' || esEmailSuperadmin(userEmail)
 
     const showSuperadmin = isSuperadmin
 

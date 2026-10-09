@@ -8,6 +8,7 @@ import { TurnoCardGlass } from '@/components/dashboard/TurnoCardGlass'
 import { TurnosSinConfirmarSection } from '@/components/dashboard/TurnosSinConfirmarSection'
 import { DashboardLiveAlerts } from '@/components/dashboard/DashboardLiveAlerts'
 import { getBillingConfig } from '@/lib/actions/billing'
+import { esEmailSuperadmin } from '@/lib/auth/superadmins'
 
 export default async function DashboardPage(props: {
     searchParams?: Promise<{ slug?: string; impersonate?: string }>
@@ -22,12 +23,7 @@ export default async function DashboardPage(props: {
         getTurnosSinConfirmar(),
     ])
 
-    const isSuperadmin = 
-        usuario?.rol === 'superadmin' || 
-        usuario?.email === 'creapp.ar@gmail.com' ||
-        usuario?.email === 'mazasebastian@hotmail.com' ||
-        usuario?.email?.endsWith('@creapp.com') ||
-        usuario?.email?.endsWith('@dental-ia.com')
+    const isSuperadmin = usuario?.rol === 'superadmin' || esEmailSuperadmin(usuario?.email)
 
     // Si el usuario es Superadmin y no está impersonando un consultorio puntual, su panel natural es /superadmin
     if (isSuperadmin && !params?.slug && !params?.impersonate) {

@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
+import { requireAdmin } from '@/lib/auth/actor'
 
 async function getTenantId() {
     return await getAuthenticatedTenantId()
@@ -94,7 +95,9 @@ export async function getPresupuestosPaciente(pacienteId: string) {
 }
 
 // ============================================================
-// COBROS
+// COBROS — sólo admin.
+// El profesional no ve ni registra cobros (diseño §4 y §7). Hasta que RLS
+// lo haga cumplir (migración 021), el freno está acá.
 // ============================================================
 
 export async function crearCobro(formData: {
@@ -105,9 +108,10 @@ export async function crearCobro(formData: {
     metodo_pago: string
     obra_social_id?: string
 }) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
     const supabase = await createClient()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const tenantId = actor.tenantId
 
     const estado = formData.monto_pagado >= formData.monto_total
         ? 'PAGADO'
@@ -137,9 +141,10 @@ export async function crearCobro(formData: {
 }
 
 export async function registrarPago(cobroId: string, montoPago: number) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
     const supabase = await createClient()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const tenantId = actor.tenantId
 
     const { data: cobro } = await supabase.from('cobros').select('monto_total, monto_pagado').eq('id', cobroId).eq('tenant_id', tenantId).single()
     if (!cobro) return { error: 'Cobro no encontrado' }
@@ -165,9 +170,10 @@ export async function registrarPago(cobroId: string, montoPago: number) {
 }
 
 export async function getCobros(filtro?: 'PENDIENTE' | 'PARCIAL' | 'PAGADO' | 'todos') {
+    const { ok, actor } = await requireAdmin()
+    if (!ok) return []
     const supabase = await createClient()
-    const tenantId = await getTenantId()
-    if (!tenantId) return []
+    const tenantId = actor.tenantId
 
     let query = supabase
         .from('cobros')

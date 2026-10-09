@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
+import { requireAdmin } from '@/lib/auth/actor'
 import type { LandingConfig } from '@/lib/types/landing'
 import { DEFAULT_LANDING_CONFIG } from '@/lib/types/landing'
 
@@ -167,17 +168,25 @@ export async function guardarLandingConfig(
     updates: Partial<Omit<LandingConfig, 'id' | 'tenant_id' | 'domain_verified' | 'custom_domain'>>,
     tenantSlug?: string
 ) {
+    // La web pública es configuración del consultorio: sólo admin. Y el slug
+    // explícito, que permite escribir sobre otro consultorio, es sólo del
+    // superadmin. Diseño: §12
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+
     const supabase = createAdminClient()
 
     let tenantId: string | null = null
     if (tenantSlug) {
         const { data: t } = await supabase.from('tenants').select('id').eq('slug', tenantSlug).single()
         tenantId = t?.id ?? null
+        if (tenantId && tenantId !== actor.tenantId && !actor.esSuperadmin) {
+            return { error: 'Acceso denegado. No podés configurar la web de otro consultorio.' }
+        }
     }
 
     if (!tenantId) {
-        const { getAuthenticatedTenantId } = await import('@/lib/supabase/queries')
-        tenantId = await getAuthenticatedTenantId()
+        tenantId = actor.tenantId
     }
 
     if (!tenantId) return { error: 'Tenant no encontrado' }

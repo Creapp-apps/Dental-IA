@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { SuperadminHeader } from '@/components/superadmin/SuperadminHeader'
+import { esEmailSuperadmin } from '@/lib/auth/superadmins'
 
 export const metadata = {
     title: 'Superadmin | Dental-IA',
@@ -26,12 +27,7 @@ export default async function SuperadminLayout({
         .maybeSingle()
 
     const userEmail = user.email || ''
-    const isSuperadmin = 
-        profile?.rol === 'superadmin' || 
-        userEmail === 'creapp.ar@gmail.com' ||
-        userEmail === 'mazasebastian@hotmail.com' || 
-        userEmail.endsWith('@creapp.com') || 
-        userEmail.endsWith('@dental-ia.com')
+    const isSuperadmin = profile?.rol === 'superadmin' || esEmailSuperadmin(userEmail)
 
     if (!isSuperadmin) {
         // Redirigir a usuarios normales a su backoffice del consultorio

@@ -621,10 +621,7 @@ export async function crearReservaPublica(data: {
         const pushTitle = '🌟 Nueva Solicitud de Turno'
         const pushBody = `${data.nombre} ${data.apellido} solicitó un turno el ${data.fecha} a las ${data.hora}.`
         
-        await Promise.all([
-            sendPushToRole('admin', tenant.id, pushTitle, pushBody, '/agenda'),
-            sendPushToRole('secretaria', tenant.id, pushTitle, pushBody, '/agenda')
-        ])
+        await sendPushToRole('admin', tenant.id, pushTitle, pushBody, '/agenda')
     } catch (pushErr) {
         console.error('Error al enviar push a administradores en crearReservaPublica:', pushErr)
     }

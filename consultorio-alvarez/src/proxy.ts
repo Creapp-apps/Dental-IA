@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { esEmailSuperadmin } from '@/lib/auth/superadmins'
 
 const ADMIN_PREFIXES = ['/admin', '/agenda', '/pacientes', '/cobros', '/configuracion', '/mis-pagos', '/mensajes', '/superadmin']
 
@@ -177,12 +178,7 @@ export async function proxy(request: NextRequest) {
     if (user && isAdminLogin) {
         const explicitSlug = request.nextUrl.searchParams.get('slug')
         if (!explicitSlug) {
-            const userEmail = user.email || ''
-            const isSuperadmin = 
-                userEmail === 'creapp.ar@gmail.com' ||
-                userEmail === 'mazasebastian@hotmail.com' || 
-                userEmail.endsWith('@creapp.com') || 
-                userEmail.endsWith('@dental-ia.com')
+            const isSuperadmin = esEmailSuperadmin(user.email)
 
             const url = request.nextUrl.clone()
             url.pathname = isSuperadmin ? '/superadmin' : '/admin'
@@ -192,12 +188,7 @@ export async function proxy(request: NextRequest) {
 
     if (user && (pathname === '/admin' || pathname === '/admin/')) {
         const explicitSlug = request.nextUrl.searchParams.get('slug')
-        const userEmail = user.email || ''
-        const isSuperadmin = 
-            userEmail === 'creapp.ar@gmail.com' ||
-            userEmail === 'mazasebastian@hotmail.com' || 
-            userEmail.endsWith('@creapp.com') || 
-            userEmail.endsWith('@dental-ia.com')
+        const isSuperadmin = esEmailSuperadmin(user.email)
 
         if (isSuperadmin && !explicitSlug) {
             const url = request.nextUrl.clone()
