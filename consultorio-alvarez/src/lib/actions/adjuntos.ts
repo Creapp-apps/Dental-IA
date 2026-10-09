@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { rutaTenant } from '@/lib/storage/rutas'
 
 async function getTenantId(): Promise<string | null> {
     const supabase = await createClient()
@@ -39,7 +40,7 @@ export async function uploadPacienteAdjunto(formData: FormData): Promise<{ succe
         const timestamp = Date.now()
         // clean filename to avoid weird chars
         const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')
-        const filePath = `${tenantId}/${pacienteId}/${timestamp}_${safeName}`
+        const filePath = rutaTenant(tenantId, pacienteId, `${timestamp}_${safeName}`)
 
         // Subir al storage bucket 'paciente_adjuntos'
         const { error: uploadError } = await supabase.storage

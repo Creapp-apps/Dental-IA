@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
+import { rutaTenant } from '@/lib/storage/rutas'
 
 async function getTenantId(): Promise<string | null> {
     const supabase = await createClient()
@@ -31,7 +32,7 @@ export async function uploadTenantLogo(formData: FormData): Promise<{ url?: stri
         // Generar un nombre único usando timestamp para evitar problemas de caché, 
         // pero mantenemos la estructura dentro del folder del tenant.
         const fileExt = file.name.split('.').pop()
-        const fileName = `${tenantId}/logos/logo_${Date.now()}.${fileExt}`
+        const fileName = rutaTenant(tenantId, 'logos', `logo_${Date.now()}.${fileExt}`)
 
         const { data, error } = await supabase.storage
             .from('tenant_assets')

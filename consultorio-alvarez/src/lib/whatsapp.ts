@@ -1,4 +1,5 @@
 import { createAdminClient } from '@/lib/supabase/admin'
+import { rutaTenant } from '@/lib/storage/rutas'
 
 export interface WhatsAppTenantCredentials {
     accessToken: string
@@ -166,7 +167,7 @@ export async function descargarYGuardarMediaWhatsApp(
         const buffer = Buffer.from(arrayBuffer)
 
         // 3. Subir a Supabase Storage en paciente_adjuntos
-        const filePath = `wa-media/${tenantId}/${Date.now()}_${mediaId}.${ext}`
+        const filePath = rutaTenant(tenantId, 'wa-media', `${Date.now()}_${mediaId}.${ext}`)
         const { error: uploadError } = await admin.storage
             .from('paciente_adjuntos')
             .upload(filePath, buffer, {

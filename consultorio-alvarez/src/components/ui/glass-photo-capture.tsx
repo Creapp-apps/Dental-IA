@@ -8,6 +8,8 @@ import { createClient } from '@/lib/supabase/client'
 import { GlassButton } from '@/components/ui/glass-button'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { cn } from '@/lib/utils'
+import { syncManager } from '@/lib/offline/sync-manager'
+import { rutaTenant } from '@/lib/storage/rutas'
 
 interface GlassPhotoCaptureProps {
     value?: string
@@ -112,7 +114,12 @@ export function GlassPhotoCapture({ value, onChange, className }: GlassPhotoCapt
             const file = new File([blob], `patient-photo-${Date.now()}.jpg`, { type: 'image/jpeg' })
 
             const supabase = createClient()
-            const filename = `${crypto.randomUUID()}-${file.name}`
+            // Sin consultorio no hay carpeta donde guardar: se corta y el catch avisa al usuario
+            const tenantId = await syncManager.obtenerTenantId()
+            if (!tenantId) {
+                throw new Error('No se pudo determinar el consultorio. Sincronizá y volvé a intentar.')
+            }
+            const filename = rutaTenant(tenantId, 'pacientes', `${crypto.randomUUID()}-${file.name}`)
 
             const { data, error } = await supabase.storage
                 .from('avatars')
