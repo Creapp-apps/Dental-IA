@@ -1,16 +1,21 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
 import { requireAdmin } from '@/lib/auth/actor'
 import { revalidatePath } from 'next/cache'
 
-// Estas acciones usan el cliente admin (service_role) y saltean RLS, así que
-// el permiso lo hace cumplir requireAdmin() acá adentro: configurar el
-// consultorio, su equipo y sus credenciales es sólo de admin.
-// Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §12
-// Además cada operación por id se acota al consultorio del actor, para que un
-// id de otro consultorio no sea alcanzable aunque se invoque a mano.
+// Configurar el consultorio es sólo de admin, y cada operación por id se acota
+// al consultorio del actor, para que un id ajeno no sea alcanzable aunque se
+// invoque a mano.
+// Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §7 y §12
+//
+// Obras sociales, tipos de tratamiento y los datos del consultorio pasan al
+// cliente con sesión: ahí las políticas de la migración 021 se evalúan de
+// verdad y requireAdmin() queda como segunda línea, la que da el error claro.
+// El alta y la baja de profesionales siguen con el cliente admin porque tocan
+// la API de auth (crear y borrar credenciales), que exige service_role.
 
 function getAdmin() {
     return createAdminClient()
@@ -32,7 +37,7 @@ export async function getTenantConfig(explicitTenantId?: string) {
 export async function actualizarTenant(updates: Record<string, any>) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }
-    const supabase = getAdmin()
+    const supabase = await createClient()
     const tenantId = actor.tenantId
 
     const { error } = await supabase.from('tenants').update(updates).eq('id', tenantId)
@@ -241,7 +246,7 @@ export async function eliminarProfesional(id: string) {
 export async function crearObraSocial(data: { nombre: string; codigo?: string; planes?: string }) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }
-    const supabase = getAdmin()
+    const supabase = await createClient()
     const tenantId = actor.tenantId
 
     const { error } = await supabase.from('obras_sociales').insert({ tenant_id: tenantId, ...data })
@@ -253,7 +258,7 @@ export async function crearObraSocial(data: { nombre: string; codigo?: string; p
 export async function toggleObraSocial(id: string, activo: boolean) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }
-    const supabase = getAdmin()
+    const supabase = await createClient()
     const { error } = await supabase.from('obras_sociales').update({ activo }).eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
@@ -263,7 +268,7 @@ export async function toggleObraSocial(id: string, activo: boolean) {
 export async function actualizarObraSocial(id: string, data: { nombre?: string; codigo?: string; planes?: string }) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }
-    const supabase = getAdmin()
+    const supabase = await createClient()
     const { error } = await supabase.from('obras_sociales').update(data).eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
@@ -273,7 +278,7 @@ export async function actualizarObraSocial(id: string, data: { nombre?: string; 
 export async function eliminarObraSocial(id: string) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }
-    const supabase = getAdmin()
+    const supabase = await createClient()
     const { error } = await supabase.from('obras_sociales').delete().eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
@@ -286,7 +291,7 @@ export async function crearTipoTratamiento(data: {
 }) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }
-    const supabase = getAdmin()
+    const supabase = await createClient()
     const tenantId = actor.tenantId
 
     const { error } = await supabase.from('tipos_tratamiento').insert({
@@ -302,7 +307,7 @@ export async function crearTipoTratamiento(data: {
 export async function toggleTipoTratamiento(id: string, activo: boolean) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }
-    const supabase = getAdmin()
+    const supabase = await createClient()
     const { error } = await supabase.from('tipos_tratamiento').update({ activo }).eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
@@ -315,7 +320,7 @@ export async function actualizarTipoTratamiento(id: string, data: {
 }) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }
-    const supabase = getAdmin()
+    const supabase = await createClient()
     const { error } = await supabase.from('tipos_tratamiento').update(data).eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
@@ -325,7 +330,7 @@ export async function actualizarTipoTratamiento(id: string, data: {
 export async function eliminarTipoTratamiento(id: string) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }
-    const supabase = getAdmin()
+    const supabase = await createClient()
     const { error } = await supabase.from('tipos_tratamiento').delete().eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
