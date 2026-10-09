@@ -53,7 +53,7 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteCandidate, setDeleteCandidate] = useState<{ id: string, url: string } | null>(null)
     // Solo hay un preview a la vez, así que se firma uno solo (no uno por tarjeta).
-    const previewUrl = useUrlFirmada('paciente_adjuntos', previewAdjunto?.url_archivo)
+    const { url: previewUrl, cargando: firmandoPreview } = useUrlFirmada('paciente_adjuntos', previewAdjunto?.url_archivo)
 
     useEffect(() => {
         setMounted(true)
@@ -114,12 +114,13 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
 
     // La lista no firma al renderizar: se firma recién cuando el usuario pide abrir el archivo.
     const abrirAdjunto = async (valor: string) => {
-        const u = await urlFirmada('paciente_adjuntos', valor)
+        const u = await urlFirmada('paciente_adjuntos', valor, undefined, { descarga: true })
         if (!u) {
             glassAlert.error({ title: 'No se pudo abrir el archivo', description: 'Puede que ya no esté disponible.' })
             return
         }
-        window.open(u, '_blank', 'noopener')
+        // Navegar a una URL de descarga baja el archivo sin salir de la página y sin popup.
+        window.location.assign(u)
     }
 
     const handleDelete = async (id: string, url: string) => {
@@ -390,8 +391,14 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
                                 className="relative max-w-full max-h-full flex items-center justify-center"
                                 onClick={(e) => e.stopPropagation()}
                             >
-                                {!previewUrl ? (
+                                {firmandoPreview ? (
                                     <Loader2 className="h-8 w-8 animate-spin text-white/70" />
+                                ) : !previewUrl ? (
+                                    <div className="text-center p-8 bg-white/5 backdrop-blur-xl rounded-2xl max-w-md w-full border border-white/10 shadow-2xl">
+                                        <File className="h-16 w-16 text-white/50 mx-auto mb-4" />
+                                        <p className="text-lg font-medium text-white">No se pudo abrir el archivo</p>
+                                        <p className="text-sm text-white/60 mt-2">Puede que ya no esté disponible.</p>
+                                    </div>
                                 ) : previewAdjunto.tipo_archivo.startsWith('image/') ? (
                                     /* eslint-disable-next-line @next/next/no-img-element */
                                     <img 

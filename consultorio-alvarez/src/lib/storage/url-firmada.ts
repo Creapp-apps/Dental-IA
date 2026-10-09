@@ -17,11 +17,17 @@ const VIGENCIA_POR_DEFECTO = 60 * 60
  * `buckets` puede ser más de uno: los archivos de escaneos 3D viven en `escaneos_3d` o en
  * `paciente_adjuntos` según si la subida primaria funcionó, y la ruta guardada no dice en
  * cuál. Se prueban en orden y gana el primero que firma.
+ *
+ * `descarga: true` firma la URL para que Supabase la sirva como adjunto
+ * (Content-Disposition: attachment). Sirve para botones "Descargar": navegar a esa URL baja
+ * el archivo sin abrir una pestaña, y `window.open` después de un await lo bloquea el
+ * navegador por popup.
  */
 export async function urlFirmada(
     buckets: string | string[],
     valor: string | null | undefined,
-    segundos: number = VIGENCIA_POR_DEFECTO
+    segundos: number = VIGENCIA_POR_DEFECTO,
+    opciones: { descarga?: boolean } = {}
 ): Promise<string | null> {
     if (!valor) return null
 
@@ -38,7 +44,10 @@ export async function urlFirmada(
             const ruta = extraerRuta(valor, bucket)
             if (!ruta) continue
 
-            const { data, error } = await supabase.storage.from(bucket).createSignedUrl(ruta, segundos)
+            const storage = supabase.storage.from(bucket)
+            const { data, error } = opciones.descarga
+                ? await storage.createSignedUrl(ruta, segundos, { download: true })
+                : await storage.createSignedUrl(ruta, segundos)
             if (error) {
                 console.warn(`[STORAGE] No se pudo firmar ${bucket}/${ruta}:`, error.message)
                 continue
@@ -54,23 +63,30 @@ export async function urlFirmada(
 }
 
 /**
- * Resuelve la URL firmada en un efecto. Devuelve null mientras firma y si falla, así que
- * quien lo usa muestra su propio placeholder en los dos casos.
+ * Resuelve la URL firmada en un efecto. Distingue los tres estados: firmando
+ * (`cargando`), firmada (`url`) y falló (`!cargando && !url`), para que la pantalla no
+ * muestre un spinner eterno ante un objeto que ya no existe.
  */
+export interface UrlFirmadaEstado {
+    url: string | null
+    cargando: boolean
+}
+
 export function useUrlFirmada(
     buckets: string | string[],
     valor: string | null | undefined,
     segundos: number = VIGENCIA_POR_DEFECTO
-): string | null {
-    const [url, setUrl] = useState<string | null>(null)
+): UrlFirmadaEstado {
+    // Sin valor no hay nada que firmar, así que nace resuelto (vacío) y no cargando.
+    const [estado, setEstado] = useState<UrlFirmadaEstado>({ url: null, cargando: !!valor })
     const clave = Array.isArray(buckets) ? buckets.join(',') : buckets
 
     useEffect(() => {
         let vigente = true
-        setUrl(null)
+        setEstado({ url: null, cargando: !!valor })
 
         urlFirmada(buckets, valor, segundos).then(u => {
-            if (vigente) setUrl(u)
+            if (vigente) setEstado({ url: u, cargando: false })
         })
 
         return () => { vigente = false }
@@ -79,5 +95,5 @@ export function useUrlFirmada(
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [clave, valor, segundos])
 
-    return url
+    return estado
 }

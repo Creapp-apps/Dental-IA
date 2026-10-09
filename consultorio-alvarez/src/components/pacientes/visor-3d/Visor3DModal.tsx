@@ -29,6 +29,7 @@ import {
     Clock,
     X,
     Info,
+    Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format } from 'date-fns'
@@ -66,18 +67,22 @@ export function Visor3DModal({ open, onOpenChange, escaneo }: Visor3DModalProps)
     )
 
     // Lo guardado es una ruta: el canvas necesita la URL firmada para poder bajar el STL.
-    const stlUpperUrl = useUrlFirmada(BUCKETS_ESCANEOS, archivoUpper?.url)
-    const stlLowerUrl = useUrlFirmada(BUCKETS_ESCANEOS, archivoLower?.url)
+    const { url: stlUpperUrl, cargando: firmandoUpper } = useUrlFirmada(BUCKETS_ESCANEOS, archivoUpper?.url)
+    const { url: stlLowerUrl, cargando: firmandoLower } = useUrlFirmada(BUCKETS_ESCANEOS, archivoLower?.url)
+    // El canvas reconstruye la escena entera cuando cambia una URL, así que no se monta hasta
+    // tener las dos resueltas: evita bajar el STL dos veces y carreras con el overlay de carga.
+    const firmando = firmandoUpper || firmandoLower
 
     if (!escaneo) return null
 
     const abrirArchivo = async (valor: string) => {
-        const u = await urlFirmada(BUCKETS_ESCANEOS, valor)
+        const u = await urlFirmada(BUCKETS_ESCANEOS, valor, undefined, { descarga: true })
         if (!u) {
             toast.error('No se pudo abrir el archivo')
             return
         }
-        window.open(u, '_blank', 'noopener')
+        // Navegar a una URL de descarga baja el archivo sin salir de la página y sin popup.
+        window.location.assign(u)
     }
 
     const handleTomarCaptura = () => {
@@ -143,16 +148,22 @@ export function Visor3DModal({ open, onOpenChange, escaneo }: Visor3DModalProps)
                 <div className="flex-1 relative flex overflow-hidden">
                     {/* Lienzo 3D */}
                     <div className="flex-1 h-full relative">
-                        <DentalCanvas3D
-                            ref={canvasRef}
-                            stlUpperUrl={stlUpperUrl}
-                            stlLowerUrl={stlLowerUrl}
-                            mostrarSuperior={mostrarSuperior}
-                            mostrarInferior={mostrarInferior}
-                            posicionOclusion={posicionOclusion}
-                            modoMaterial={modoMaterial}
-                            autoRotar={autoRotar}
-                        />
+                        {firmando ? (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                            </div>
+                        ) : (
+                            <DentalCanvas3D
+                                ref={canvasRef}
+                                stlUpperUrl={stlUpperUrl}
+                                stlLowerUrl={stlLowerUrl}
+                                mostrarSuperior={mostrarSuperior}
+                                mostrarInferior={mostrarInferior}
+                                posicionOclusion={posicionOclusion}
+                                modoMaterial={modoMaterial}
+                                autoRotar={autoRotar}
+                            />
+                        )}
 
                         {/* Barra de Controles Flotante Inferior */}
                         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-1.5 p-1.5 rounded-2xl glass bg-background/80 border border-border/80 shadow-2xl backdrop-blur-md max-w-[95%] overflow-x-auto">

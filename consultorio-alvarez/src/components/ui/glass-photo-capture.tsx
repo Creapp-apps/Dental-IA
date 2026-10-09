@@ -25,7 +25,7 @@ export function GlassPhotoCapture({ value, onChange, className }: GlassPhotoCapt
     const [capturedImage, setCapturedImage] = useState<string | null>(null)
     const [mounted, setMounted] = useState(false)
     // `value` es la ruta persistida; para mostrarla hay que firmarla.
-    const fotoUrl = useUrlFirmada('avatars', value)
+    const { url: fotoUrl } = useUrlFirmada('avatars', value)
 
     const videoRef = useRef<HTMLVideoElement>(null)
     const canvasRef = useRef<HTMLCanvasElement>(null)

@@ -46,6 +46,13 @@ describe('urlFirmada', () => {
         expect(createSignedUrl).toHaveBeenCalledWith('pacientes/foto uno.jpg', 3600)
     })
 
+    it('con descarga pide la URL como adjunto', async () => {
+        createSignedUrl.mockResolvedValue({ data: { signedUrl: 'https://firmada/d' }, error: null })
+
+        expect(await urlFirmada('paciente_adjuntos', 't1/x.pdf', undefined, { descarga: true })).toBe('https://firmada/d')
+        expect(createSignedUrl).toHaveBeenCalledWith('t1/x.pdf', 3600, { download: true })
+    })
+
     it('con varios buckets prueba el siguiente si el primero falla', async () => {
         createSignedUrl
             .mockResolvedValueOnce({ data: null, error: { message: 'Object not found' } })

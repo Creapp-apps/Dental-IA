@@ -74,11 +74,20 @@ const RESPUESTAS_RAPIDAS = [
 
 /**
  * Burbuja de media entrante (foto o nota de voz). Vive aparte porque firmar la URL es un hook
- * y no se puede llamar dentro del .map de mensajes. Mientras firma no muestra nada.
+ * y no se puede llamar dentro del .map de mensajes. Mientras firma no muestra nada; si falla, lo avisa.
  */
 function MediaMensaje({ tipo, mediaUrl }: { tipo: string, mediaUrl: string }) {
-    const url = useUrlFirmada('paciente_adjuntos', mediaUrl)
-    if (!url) return null
+    const { url, cargando } = useUrlFirmada('paciente_adjuntos', mediaUrl)
+    if (cargando) return null
+
+    // Si no firmó, avisar que había un adjunto en vez de dejar la burbuja sin rastro.
+    if (!url) {
+        return (
+            <div className="mb-2 text-[11px] italic opacity-70">
+                {tipo === 'imagen' ? 'No se pudo cargar la foto adjunta.' : 'No se pudo cargar el audio adjunto.'}
+            </div>
+        )
+    }
 
     if (tipo === 'imagen') {
         return (

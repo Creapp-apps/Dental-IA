@@ -97,7 +97,7 @@ export function PacientePerfilOptimistic({ initialPaciente }: PacientePerfilOpti
 
     const p = paciente
     // foto_url guarda una ruta (o una URL vieja hasta migrar): se firma para mostrarla.
-    const fotoUrl = useUrlFirmada('avatars', p.foto_url)
+    const { url: fotoUrl } = useUrlFirmada('avatars', p.foto_url)
     const iniciales = `${p.nombre?.charAt(0) || ''}${p.apellido?.charAt(0) || ''}`
     const edad = p.fecha_nacimiento
         ? Math.floor((Date.now() - new Date(p.fecha_nacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
