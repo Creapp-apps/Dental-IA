@@ -68,14 +68,14 @@ CREATE POLICY "privado_select_mismo_tenant" ON storage.objects
 FOR SELECT TO authenticated
 USING (
     bucket_id IN ('avatars', 'paciente_adjuntos', 'escaneos_3d')
-    AND storage_tenant_de_objeto(name) = get_user_tenant_id()
+    AND public.storage_tenant_de_objeto(name) = get_user_tenant_id()
 );
 
 CREATE POLICY "privado_insert_mismo_tenant" ON storage.objects
 FOR INSERT TO authenticated
 WITH CHECK (
     bucket_id IN ('avatars', 'paciente_adjuntos', 'escaneos_3d')
-    AND storage_tenant_de_objeto(name) = get_user_tenant_id()
+    AND public.storage_tenant_de_objeto(name) = get_user_tenant_id()
 );
 
 -- WITH CHECK además de USING: sin él un UPDATE puede renombrar un objeto a la carpeta de
@@ -84,18 +84,18 @@ CREATE POLICY "privado_update_mismo_tenant" ON storage.objects
 FOR UPDATE TO authenticated
 USING (
     bucket_id IN ('avatars', 'paciente_adjuntos', 'escaneos_3d')
-    AND storage_tenant_de_objeto(name) = get_user_tenant_id()
+    AND public.storage_tenant_de_objeto(name) = get_user_tenant_id()
 )
 WITH CHECK (
     bucket_id IN ('avatars', 'paciente_adjuntos', 'escaneos_3d')
-    AND storage_tenant_de_objeto(name) = get_user_tenant_id()
+    AND public.storage_tenant_de_objeto(name) = get_user_tenant_id()
 );
 
 CREATE POLICY "privado_delete_mismo_tenant" ON storage.objects
 FOR DELETE TO authenticated
 USING (
     bucket_id IN ('avatars', 'paciente_adjuntos', 'escaneos_3d')
-    AND storage_tenant_de_objeto(name) = get_user_tenant_id()
+    AND public.storage_tenant_de_objeto(name) = get_user_tenant_id()
 );
 
 -- 5. tenant_assets: lectura pública, escritura acotada
@@ -108,25 +108,25 @@ CREATE POLICY "assets_escritura_mismo_tenant" ON storage.objects
 FOR INSERT TO authenticated
 WITH CHECK (
     bucket_id = 'tenant_assets'
-    AND storage_tenant_de_objeto(name) = get_user_tenant_id()
+    AND public.storage_tenant_de_objeto(name) = get_user_tenant_id()
 );
 
 CREATE POLICY "assets_update_mismo_tenant" ON storage.objects
 FOR UPDATE TO authenticated
 USING (
     bucket_id = 'tenant_assets'
-    AND storage_tenant_de_objeto(name) = get_user_tenant_id()
+    AND public.storage_tenant_de_objeto(name) = get_user_tenant_id()
 )
 WITH CHECK (
     bucket_id = 'tenant_assets'
-    AND storage_tenant_de_objeto(name) = get_user_tenant_id()
+    AND public.storage_tenant_de_objeto(name) = get_user_tenant_id()
 );
 
 CREATE POLICY "assets_delete_mismo_tenant" ON storage.objects
 FOR DELETE TO authenticated
 USING (
     bucket_id = 'tenant_assets'
-    AND storage_tenant_de_objeto(name) = get_user_tenant_id()
+    AND public.storage_tenant_de_objeto(name) = get_user_tenant_id()
 );
 
 COMMIT;

@@ -9,6 +9,10 @@
  * Se puede cortar y volver a correr: cada objeto se busca en el origen y en el
  * destino antes de moverlo, y cada columna solo se reescribe si difiere.
  * --seco no escribe nada, pero sí lee la base y Storage para decir qué haría.
+ *
+ * Ojo: si se vuelve a correr cuando ya existen escaneos 3D, tiene la misma ambigüedad de dos
+ * buckets que `BUCKETS_ADJUNTOS` (un adjunto puede apuntar a un objeto de `escaneos_3d`) y
+ * aborta en un adjunto cuyo objeto está en `escaneos_3d`.
  */
 import { createClient } from '@supabase/supabase-js'
 import { extraerRuta } from '../src/lib/storage/rutas'

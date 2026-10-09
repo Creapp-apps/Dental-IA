@@ -11,6 +11,9 @@ export const BUCKETS_PRIVADOS: ReadonlySet<string> = new Set([
     'escaneos_3d',
 ])
 
+/** Un adjunto puede estar en cualquiera de los dos: el escaneo 3D cae a paciente_adjuntos si falla la subida primaria. */
+export const BUCKETS_ADJUNTOS = ['paciente_adjuntos', 'escaneos_3d'] as const
+
 /**
  * Arma la ruta de un objeto. Tira si falta el tenant: escribir en la raíz del
  * bucket dejaría un archivo que ninguna política alcanza, ni para leerlo ni

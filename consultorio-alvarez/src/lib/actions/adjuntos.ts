@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { extraerRuta, rutaTenant } from '@/lib/storage/rutas'
+import { extraerRuta, rutaTenant, BUCKETS_ADJUNTOS } from '@/lib/storage/rutas'
 
 async function getTenantId(): Promise<string | null> {
     const supabase = await createClient()
@@ -107,14 +107,28 @@ export async function deletePacienteAdjunto(id: string, urlArchivo: string): Pro
         }
 
         // 2. Borrar el archivo de Storage. `ruta` cubre ruta plana, URL pública vieja y URL firmada.
+        // El adjunto puede estar en cualquiera de los dos buckets (el escaneo 3D cae a esta tabla
+        // si falla la subida primaria) y la ruta no dice en cuál. `remove` devuelve lo que
+        // realmente borró: vacío significa que no estaba ahí, así que se prueba el siguiente.
         if (ruta) {
-            const { error: storageError } = await supabase.storage
-                .from('paciente_adjuntos')
-                .remove([ruta])
+            let borrado = false
+            for (const bucket of BUCKETS_ADJUNTOS) {
+                const { data, error: storageError } = await supabase.storage
+                    .from(bucket)
+                    .remove([ruta])
 
-            if (storageError) {
-                console.error('Error eliminando archivo de storage:', storageError)
-                // No falla la operación: la fila ya se borró, pero queda el log
+                if (storageError) {
+                    console.error(`Error eliminando archivo de storage (${bucket}):`, storageError)
+                    // No falla la operación: la fila ya se borró, pero queda el log
+                    continue
+                }
+                if (data && data.length > 0) {
+                    borrado = true
+                    break
+                }
+            }
+            if (!borrado) {
+                console.warn('[STORAGE] Adjunto borrado de la base pero el objeto no se encontró en ningún bucket, puede haber quedado huérfano:', ruta)
             }
         } else {
             console.warn('[STORAGE] Adjunto borrado de la base pero el objeto quedó huérfano, no se pudo resolver la ruta:', urlArchivo)

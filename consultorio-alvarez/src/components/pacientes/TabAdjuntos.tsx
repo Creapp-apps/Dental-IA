@@ -12,6 +12,7 @@ import { uploadPacienteAdjunto, deletePacienteAdjunto } from '@/lib/actions/adju
 import { useRouter } from 'next/navigation'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 import { urlFirmada, useUrlFirmada } from '@/lib/storage/url-firmada'
+import { BUCKETS_ADJUNTOS } from '@/lib/storage/rutas'
 
 interface Adjunto {
     id: string
@@ -53,7 +54,7 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
     const [isDeleting, setIsDeleting] = useState(false)
     const [deleteCandidate, setDeleteCandidate] = useState<{ id: string, url: string } | null>(null)
     // Solo hay un preview a la vez, así que se firma uno solo (no uno por tarjeta).
-    const { url: previewUrl, cargando: firmandoPreview } = useUrlFirmada('paciente_adjuntos', previewAdjunto?.url_archivo)
+    const { url: previewUrl, cargando: firmandoPreview } = useUrlFirmada(BUCKETS_ADJUNTOS, previewAdjunto?.url_archivo)
 
     useEffect(() => {
         setMounted(true)
@@ -113,8 +114,8 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
     }
 
     // La lista no firma al renderizar: se firma recién cuando el usuario pide abrir el archivo.
-    const abrirAdjunto = async (valor: string) => {
-        const u = await urlFirmada('paciente_adjuntos', valor, undefined, { descarga: true })
+    const abrirAdjunto = async (valor: string, nombre: string) => {
+        const u = await urlFirmada(BUCKETS_ADJUNTOS, valor, undefined, { descarga: nombre })
         if (!u) {
             glassAlert.error({ title: 'No se pudo abrir el archivo', description: 'Puede que ya no esté disponible.' })
             return
@@ -329,7 +330,7 @@ export function TabAdjuntos({ pacienteId, adjuntos }: TabAdjuntosProps) {
                                         <Eye className="h-3 w-3" /> Ver
                                     </button>
                                     <button 
-                                        onClick={() => abrirAdjunto(adj.url_archivo)}
+                                        onClick={() => abrirAdjunto(adj.url_archivo, adj.nombre_archivo)}
                                         className="flex-1 glass h-8 rounded-lg text-xs font-medium hover:bg-primary/10 hover:text-primary transition-colors flex items-center justify-center gap-1.5"
                                     >
                                         <Download className="h-3 w-3" /> Descargar

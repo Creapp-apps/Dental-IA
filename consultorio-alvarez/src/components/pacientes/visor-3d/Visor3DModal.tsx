@@ -36,9 +36,11 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
 import { urlFirmada, useUrlFirmada } from '@/lib/storage/url-firmada'
+import { BUCKETS_ADJUNTOS } from '@/lib/storage/rutas'
 
-// Los archivos 3D están en `escaneos_3d` o en `paciente_adjuntos` según si la subida primaria funcionó.
-const BUCKETS_ESCANEOS = ['escaneos_3d', 'paciente_adjuntos']
+// Un STL casi siempre está en `escaneos_3d`: se prueba primero para no gastar una ida a la red
+// y un warn en cada apertura. El de adjuntos queda de respaldo (la subida primaria pudo fallar).
+const BUCKETS_ESCANEOS = [...BUCKETS_ADJUNTOS].reverse()
 
 interface Visor3DModalProps {
     open: boolean
@@ -75,8 +77,8 @@ export function Visor3DModal({ open, onOpenChange, escaneo }: Visor3DModalProps)
 
     if (!escaneo) return null
 
-    const abrirArchivo = async (valor: string) => {
-        const u = await urlFirmada(BUCKETS_ESCANEOS, valor, undefined, { descarga: true })
+    const abrirArchivo = async (valor: string, nombre: string) => {
+        const u = await urlFirmada(BUCKETS_ESCANEOS, valor, undefined, { descarga: nombre })
         if (!u) {
             toast.error('No se pudo abrir el archivo')
             return
@@ -411,7 +413,7 @@ export function Visor3DModal({ open, onOpenChange, escaneo }: Visor3DModalProps)
                                             {archivo.url && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => abrirArchivo(archivo.url)}
+                                                    onClick={() => abrirArchivo(archivo.url, archivo.nombre)}
                                                     className="p-1.5 rounded-lg hover:bg-white/10 text-primary transition-colors shrink-0"
                                                     title="Descargar archivo"
                                                 >

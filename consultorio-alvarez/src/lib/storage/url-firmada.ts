@@ -19,15 +19,16 @@ const VIGENCIA_POR_DEFECTO = 60 * 60
  * cuál. Se prueban en orden y gana el primero que firma.
  *
  * `descarga: true` firma la URL para que Supabase la sirva como adjunto
- * (Content-Disposition: attachment). Sirve para botones "Descargar": navegar a esa URL baja
+ * (Content-Disposition: attachment); con un string, además baja con ese nombre de archivo
+ * en vez del nombre del objeto en Storage. Sirve para botones "Descargar": navegar a esa URL baja
  * el archivo sin abrir una pestaña, y `window.open` después de un await lo bloquea el
  * navegador por popup.
  */
 export async function urlFirmada(
-    buckets: string | string[],
+    buckets: string | readonly string[],
     valor: string | null | undefined,
     segundos: number = VIGENCIA_POR_DEFECTO,
-    opciones: { descarga?: boolean } = {}
+    opciones: { descarga?: boolean | string } = {}
 ): Promise<string | null> {
     if (!valor) return null
 
@@ -35,7 +36,7 @@ export async function urlFirmada(
     // y no hay nada que firmar: se sirve tal cual.
     if (valor.startsWith('/')) return valor
 
-    const lista = Array.isArray(buckets) ? buckets : [buckets]
+    const lista: readonly string[] = typeof buckets === 'string' ? [buckets] : buckets
 
     try {
         const supabase = createClient()
@@ -46,7 +47,7 @@ export async function urlFirmada(
 
             const storage = supabase.storage.from(bucket)
             const { data, error } = opciones.descarga
-                ? await storage.createSignedUrl(ruta, segundos, { download: true })
+                ? await storage.createSignedUrl(ruta, segundos, { download: opciones.descarga })
                 : await storage.createSignedUrl(ruta, segundos)
             if (error) {
                 console.warn(`[STORAGE] No se pudo firmar ${bucket}/${ruta}:`, error.message)
@@ -73,27 +74,33 @@ export interface UrlFirmadaEstado {
 }
 
 export function useUrlFirmada(
-    buckets: string | string[],
+    buckets: string | readonly string[],
     valor: string | null | undefined,
     segundos: number = VIGENCIA_POR_DEFECTO
 ): UrlFirmadaEstado {
-    // Sin valor no hay nada que firmar, así que nace resuelto (vacío) y no cargando.
-    const [estado, setEstado] = useState<UrlFirmadaEstado>({ url: null, cargando: !!valor })
-    const clave = Array.isArray(buckets) ? buckets.join(',') : buckets
+    const clave = typeof buckets === 'string' ? buckets : buckets.join(',')
+    // Identifica las entradas para las que se resolvió `url`. Guardarla junto al resultado
+    // permite saber en el mismo render si el estado es de otro valor, sin esperar al efecto.
+    const entrada = `${clave}|${valor ?? ''}|${segundos}`
+    const [resuelto, setResuelto] = useState<{ entrada: string; url: string | null }>({ entrada: '', url: null })
 
     useEffect(() => {
+        if (!valor) return
         let vigente = true
-        setEstado({ url: null, cargando: !!valor })
 
         urlFirmada(buckets, valor, segundos).then(u => {
-            if (vigente) setEstado({ url: u, cargando: false })
+            if (vigente) setResuelto({ entrada, url: u })
         })
 
         return () => { vigente = false }
-        // `clave` serializa la lista de buckets: evita refirmar en cada render por una
+        // `entrada` serializa la lista de buckets: evita refirmar en cada render por una
         // referencia de array nueva.
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [clave, valor, segundos])
+    }, [entrada])
 
-    return estado
+    // Sin valor no hay nada que firmar: vacío y sin cargar. Con valor, mientras lo resuelto
+    // no sea de esta entrada se está firmando (también en el primer render con un valor nuevo).
+    if (!valor) return { url: null, cargando: false }
+    if (resuelto.entrada !== entrada) return { url: null, cargando: true }
+    return { url: resuelto.url, cargando: false }
 }
