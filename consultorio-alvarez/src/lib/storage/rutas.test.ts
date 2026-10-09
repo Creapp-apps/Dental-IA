@@ -38,6 +38,13 @@ describe('esRutaDeTenant', () => {
         expect(esRutaDeTenant('3d/paciente/archivo.stl', TENANT)).toBe(false)
         expect(esRutaDeTenant('foto.jpg', TENANT)).toBe(false)
     })
+
+    // Fix: con tenant vacío nunca hay pertenencia, ni con rutas que empiezan por '/'
+    it('rechaza cualquier ruta si el tenant está vacío', () => {
+        expect(esRutaDeTenant('/pacientes/foto.jpg', '')).toBe(false)
+        expect(esRutaDeTenant('pacientes/foto.jpg', '')).toBe(false)
+        expect(esRutaDeTenant('/', '')).toBe(false)
+    })
 })
 
 describe('extraerRuta', () => {
@@ -60,6 +67,23 @@ describe('extraerRuta', () => {
     it('devuelve null con un valor vacío o de otro bucket', () => {
         expect(extraerRuta('', 'avatars')).toBeNull()
         expect(extraerRuta('https://xyz.supabase.co/storage/v1/object/public/otro/foto.jpg', 'avatars')).toBeNull()
+    })
+
+    // Fix: Supabase percent-encodea el nombre en las URLs; la ruta tiene que salir decodificada
+    it('decodifica los espacios de una URL pública', () => {
+        const url = `https://xyz.supabase.co/storage/v1/object/public/avatars/${TENANT}/Mi%20foto.jpg`
+        expect(extraerRuta(url, 'avatars')).toBe(`${TENANT}/Mi foto.jpg`)
+    })
+
+    // Fix: una secuencia de escape inválida no puede tirar; se trata como irresoluble
+    it('devuelve null si la URL tiene una secuencia de escape inválida', () => {
+        const url = `https://xyz.supabase.co/storage/v1/object/public/avatars/${TENANT}/foto%ZZ.jpg`
+        expect(extraerRuta(url, 'avatars')).toBeNull()
+    })
+
+    // Fix: solo el esquema http(s):// marca una URL; 'httpdocs/' es una ruta
+    it('trata como ruta un valor que empieza con http pero no es URL', () => {
+        expect(extraerRuta('httpdocs/foto.jpg', 'avatars')).toBe('httpdocs/foto.jpg')
     })
 })
 

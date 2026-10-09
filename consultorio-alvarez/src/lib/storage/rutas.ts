@@ -29,6 +29,8 @@ export function rutaTenant(tenantId: string | null | undefined, ...segmentos: st
 }
 
 export function esRutaDeTenant(ruta: string, tenantId: string): boolean {
+    // Sin tenant nadie es dueño de nada: evita que el prefijo '/' matchee.
+    if (!tenantId) return false
     return ruta.startsWith(`${tenantId}/`)
 }
 
@@ -39,7 +41,7 @@ export function esRutaDeTenant(ruta: string, tenantId: string): boolean {
 export function extraerRuta(valor: string, bucket: string): string | null {
     if (!valor) return null
 
-    if (!valor.startsWith('http')) return valor
+    if (!/^https?:\/\//.test(valor)) return valor
 
     const marca = `/storage/v1/object/`
     const i = valor.indexOf(marca)
@@ -52,6 +54,11 @@ export function extraerRuta(valor: string, bucket: string): string | null {
     if (modo !== 'public' && modo !== 'sign') return null
     if (partes.shift() !== bucket) return null
 
-    const ruta = partes.join('/')
-    return ruta || null
+    // Supabase percent-encodea el nombre en la URL; sin decodificar apuntaría a un objeto inexistente.
+    try {
+        const ruta = decodeURIComponent(partes.join('/'))
+        return ruta || null
+    } catch {
+        return null
+    }
 }
