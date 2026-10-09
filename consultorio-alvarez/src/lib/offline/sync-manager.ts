@@ -6,6 +6,13 @@ import {
     fetchIncrementalPullAction,
     pushOutboxChangesAction
 } from '@/lib/actions/offline-sync'
+import {
+    esElegible,
+    filtrarBloqueados,
+    ordenarCola,
+    siguienteEstadoTrasFallo,
+    unaOperacionPorEntidad
+} from './outbox-policy'
 
 export type NetworkQuality = 'excelente' | 'buena' | 'debil' | 'desconectado'
 
@@ -16,6 +23,8 @@ export interface SyncStatus {
     isSyncing: boolean
     lastSyncedAt: string | null
     pendingOutboxCount: number
+    atascadosCount: number
+    authError: boolean
     totalPacientesLocales: number
     totalTurnosLocales: number
     error: string | null
@@ -36,6 +45,8 @@ class OfflineSyncManager {
         isSyncing: false,
         lastSyncedAt: null,
         pendingOutboxCount: 0,
+        atascadosCount: 0,
+        authError: false,
         totalPacientesLocales: 0,
         totalTurnosLocales: 0,
         error: null
@@ -45,12 +56,27 @@ class OfflineSyncManager {
         if (typeof window !== 'undefined') {
             window.addEventListener('online', () => {
                 this.updateStatus({ isOnline: true })
-                this.checkConnectionQuality().then(res => {
+                this.checkConnectionQuality().then(async res => {
                     if (res.quality !== 'desconectado') {
+                        try {
+                            // La escalera esperaba por una condición que acaba de
+                            // cambiar. Se conserva `attempts` para que reconectar
+                            // varias veces no vuelva la escalera infinita, y es la
+                            // válvula de escape si el reloj del equipo está mal.
+                            await localDb.sync_outbox
+                                .where('status').equals('PENDIENTE')
+                                .modify({ next_attempt_at: null })
+                        } catch (e) {
+                            // Adelantar la escalera es una mejora, no un requisito:
+                            // si Dexie rechaza, el push de reconexión tiene que
+                            // salir igual.
+                            console.warn('[SYNC MANAGER] No se pudo limpiar la espera al reconectar:', e)
+                        }
+
                         // Intento automático de push/pull al recuperar internet
                         this.synchronize()
                     }
-                })
+                }).catch(console.warn)
             })
             window.addEventListener('offline', () => {
                 this.updateStatus({
@@ -109,8 +135,9 @@ class OfflineSyncManager {
 
     public async refreshLocalMetrics() {
         try {
-            const [pendingCount, pacientesCount, turnosCount, lastSyncMeta] = await Promise.all([
+            const [pendingCount, atascadosCount, pacientesCount, turnosCount, lastSyncMeta] = await Promise.all([
                 localDb.sync_outbox.where('status').equals('PENDIENTE').count(),
+                localDb.sync_outbox.where('status').equals('ATASCADO').count(),
                 localDb.pacientes.count(),
                 localDb.turnos.count(),
                 localDb.sync_meta.get('last_synced_at')
@@ -118,6 +145,7 @@ class OfflineSyncManager {
 
             this.updateStatus({
                 pendingOutboxCount: pendingCount,
+                atascadosCount,
                 totalPacientesLocales: pacientesCount,
                 totalTurnosLocales: turnosCount,
                 lastSyncedAt: lastSyncMeta?.value || null
@@ -241,6 +269,25 @@ class OfflineSyncManager {
                 return { success: false, error: res.error }
             }
 
+            // Una operación en la cola es un cambio que todavía no está en la
+            // nube: si el snapshot limpia la tabla, la única copia del dato
+            // desaparece del equipo. Se rescatan las filas con cola pendiente
+            // antes de borrar y se reponen después, el mismo criterio que
+            // reconciliarEvolucionesLocal aplica a las evoluciones.
+            const enCola = await localDb.sync_outbox
+                .where('entity').anyOf('pacientes', 'turnos').toArray()
+
+            const idsEnCola = (entity: 'pacientes' | 'turnos') =>
+                [...new Set(enCola.filter(i => i.entity === entity).map(i => i.entity_id))]
+
+            const [pacientesACuidar, turnosACuidar] = await Promise.all([
+                localDb.pacientes.bulkGet(idsEnCola('pacientes')),
+                localDb.turnos.bulkGet(idsEnCola('turnos'))
+            ])
+
+            const pacientesPreservados = pacientesACuidar.filter((p): p is LocalPaciente => !!p)
+            const turnosPreservados = turnosACuidar.filter((t): t is LocalTurno => !!t)
+
             // Transacción local: Limpiar tablas y repoblar
             await localDb.transaction('rw', [
                 localDb.pacientes,
@@ -261,6 +308,21 @@ class OfflineSyncManager {
                 if (res.profesionales.length > 0) await localDb.profesionales.bulkPut(res.profesionales)
                 if (res.tipos_tratamiento.length > 0) await localDb.tipos_tratamiento.bulkPut(res.tipos_tratamiento)
                 if (res.obras_sociales.length > 0) await localDb.obras_sociales.bulkPut(res.obras_sociales)
+
+                // Después del bulkPut a propósito: la copia local con cambios
+                // sin subir le gana a la del server, que todavía no los tiene.
+                if (pacientesPreservados.length > 0) await localDb.pacientes.bulkPut(pacientesPreservados)
+                if (turnosPreservados.length > 0) await localDb.turnos.bulkPut(turnosPreservados)
+
+                // El tenant se cachea para que un alta hecha sin conexión pueda
+                // encolarse con el consultorio correcto en lugar de con vacío.
+                if (res.tenant_id) {
+                    await localDb.sync_meta.put({
+                        key: 'tenant_id',
+                        value: res.tenant_id,
+                        updated_at: new Date().toISOString()
+                    })
+                }
 
                 await localDb.sync_meta.put({
                     key: 'last_synced_at',
@@ -305,26 +367,79 @@ class OfflineSyncManager {
 
         try {
             // ── 1. PASO PUSH: Subir cola local ──
-            const pendingItems = await localDb.sync_outbox
-                .where('status')
-                .equals('PENDIENTE')
-                .toArray()
+            // El push va en pasadas porque `unaOperacionPorEntidad` deja a lo
+            // sumo una operación por fila en cada tanda. Con una sola pasada,
+            // una fila con dos operaciones en cola sube la primera y la segunda
+            // espera el ciclo siguiente (hasta 15 minutos, o un clic más en
+            // "Solo Manual"), y el pull de esta misma sincronización pisa la
+            // copia local con la versión vieja del server hasta que la segunda
+            // entre. El tope es por las dudas: el bucle corta solo.
+            const MAX_PASADAS_PUSH = 5
 
-            if (pendingItems.length > 0) {
-                console.log(`[SYNC MANAGER] Subiendo ${pendingItems.length} cambios pendientes a Supabase...`)
-                const pushResults = await pushOutboxChangesAction(pendingItems)
+            for (let pasada = 0; pasada < MAX_PASADAS_PUSH; pasada++) {
+                const ahora = new Date()
+
+                const [todosPendientes, atascados] = await Promise.all([
+                    localDb.sync_outbox.where('status').equals('PENDIENTE').toArray(),
+                    localDb.sync_outbox.where('status').equals('ATASCADO').toArray()
+                ])
+
+                // Un pendiente que todavía espera su turno en la escalera es una
+                // operación sin aplicar sobre su fila, así que bloquea igual que un
+                // atascado. Si no, la operación posterior se sube sola, no encuentra
+                // la fila, Postgres no lo considera un error y el cambio se borra de
+                // la cola sin haberse aplicado nunca.
+                const enEspera = todosPendientes.filter(i => !esElegible(i, ahora))
+
+                const desbloqueados = filtrarBloqueados(
+                    ordenarCola(todosPendientes.filter(i => esElegible(i, ahora))),
+                    [...atascados, ...enEspera]
+                )
+
+                const elegibles = unaOperacionPorEntidad(desbloqueados)
+
+                if (elegibles.length === 0) break
+
+                console.log(`[SYNC MANAGER] Subiendo ${elegibles.length} cambios pendientes a Supabase...`)
+                const pushResults = await pushOutboxChangesAction(elegibles)
+
+                // Lista de entrada no vacía y respuesta vacía significa que el
+                // servidor no pudo resolver el tenant: la sesión venció. Sin
+                // esto los items se quedan pendientes para siempre en silencio.
+                if (pushResults.length === 0) {
+                    await this.refreshLocalMetrics()
+                    this.updateStatus({ isSyncing: false, authError: true })
+                    return { success: false, pushed: pushedCount, pulled: 0, error: 'La sesión venció. Volvé a iniciar sesión.' }
+                }
+
+                this.updateStatus({ authError: false })
+
+                let huboFallos = false
 
                 for (const r of pushResults) {
                     if (r.success) {
                         await localDb.sync_outbox.delete(r.outbox_id)
                         pushedCount++
-                    } else {
-                        await localDb.sync_outbox.update(r.outbox_id, {
-                            status: 'ERROR',
-                            error_message: r.error
-                        })
+                        continue
                     }
+
+                    huboFallos = true
+                    const item = elegibles.find(i => i.id === r.outbox_id)
+                    // El spread es para Dexie: su UpdateSpec sólo acepta un
+                    // objeto literal, no un tipo nombrado como CambioDeEstado.
+                    await localDb.sync_outbox.update(
+                        r.outbox_id,
+                        { ...siguienteEstadoTrasFallo(item?.attempts ?? 0, r.retriable, r.error_code, r.error, new Date()) }
+                    )
                 }
+
+                // Otra pasada sólo si la tanda salió limpia y el dedupe dejó algo
+                // afuera. Con fallos no tiene sentido: lo que quedó afuera ahora
+                // está bloqueado por la fila que acaba de fallar. Y como cada
+                // pasada que continúa borró de la cola todo lo que subió, el
+                // bucle no puede girar en falso.
+                const quedoAfuera = desbloqueados.length > elegibles.length
+                if (huboFallos || !quedoAfuera) break
             }
 
             // ── 2. PASO PULL: Bajar novedades de la nube ──
@@ -335,40 +450,81 @@ class OfflineSyncManager {
             if (!sinceDate || !fullSnapshotV2 || this.status.totalPacientesLocales <= 1000) {
                 // Si nunca sincronizó o tiene la versión truncada (<=1000), hacer snapshot completo
                 const snapRes = await this.downloadFullSnapshot()
+                // Este camino también sale por éxito, así que tiene que apagar
+                // el aviso de sesión vencida igual que el otro.
+                if (snapRes.success) this.updateStatus({ authError: false })
                 return { success: snapRes.success, pushed: pushedCount, pulled: this.status.totalTurnosLocales, error: snapRes.error }
             }
 
             const pullRes = await fetchIncrementalPullAction(sinceDate)
-            if (pullRes.success) {
-                await localDb.transaction('rw', [localDb.pacientes, localDb.turnos, localDb.sync_meta], async () => {
-                    if (pullRes.pacientes.length > 0) {
-                        await localDb.pacientes.bulkPut(pullRes.pacientes)
-                        pulledCount += pullRes.pacientes.length
-                    }
-                    if (pullRes.turnos.length > 0) {
-                        await localDb.turnos.bulkPut(pullRes.turnos)
-                        pulledCount += pullRes.turnos.length
-                    }
-                    await localDb.sync_meta.put({
-                        key: 'last_synced_at',
-                        value: pullRes.server_time,
-                        updated_at: new Date().toISOString()
-                    })
-                })
+
+            // Un pull que falló no puede devolver éxito ni apagar el aviso de
+            // sesión vencida: sin este corte el error queda invisible y el
+            // widget se declara al día con la nube sin haberla leído.
+            if (!pullRes.success) {
+                const motivo = pullRes.error || 'No se pudieron descargar las novedades de la nube'
+                await this.refreshLocalMetrics()
+                this.updateStatus({ isSyncing: false, error: motivo })
+                return { success: false, pushed: pushedCount, pulled: 0, error: motivo }
             }
+
+            await localDb.transaction('rw', [localDb.pacientes, localDb.turnos, localDb.sync_meta], async () => {
+                if (pullRes.pacientes.length > 0) {
+                    await localDb.pacientes.bulkPut(pullRes.pacientes)
+                    pulledCount += pullRes.pacientes.length
+                }
+                if (pullRes.turnos.length > 0) {
+                    await localDb.turnos.bulkPut(pullRes.turnos)
+                    pulledCount += pullRes.turnos.length
+                }
+                await localDb.sync_meta.put({
+                    key: 'last_synced_at',
+                    value: pullRes.server_time,
+                    updated_at: new Date().toISOString()
+                })
+            })
 
             await this.refreshLocalMetrics()
             this.updateStatus({
                 isSyncing: false,
                 lastSyncedAt: pullRes.server_time || new Date().toISOString(),
+                // Una sincronización que terminó bien desmiente el aviso de
+                // sesión vencida: sin esto la bandera queda prendida para
+                // siempre si después no hay items elegibles que la limpien.
+                authError: false,
                 error: null
             })
 
             return { success: true, pushed: pushedCount, pulled: pulledCount }
         } catch (err: any) {
             console.error('[SYNC MANAGER] Error durante synchronize:', err)
+            // El push puede haber dejado items en ATASCADO antes de que el pull
+            // tirara: sin refrescar, los contadores quedan viejos y el widget
+            // muestra ámbar en lugar de rojo hasta el ciclo siguiente.
+            await this.refreshLocalMetrics()
             this.updateStatus({ isSyncing: false, error: err.message || 'Error en sincronización' })
             return { success: false, pushed: pushedCount, pulled: pulledCount, error: err.message }
+        }
+    }
+
+    /**
+     * Tenant del consultorio, cacheado al bajar la copia completa de la nube.
+     *
+     * Lo necesita un alta hecha sin conexión: la fila nueva no existe en la
+     * nube, así que no hay de dónde leerlo en el momento. Si el cache todavía
+     * no está, se cae a cualquier paciente local, que lo trae. Devuelve null
+     * sólo en un equipo que nunca sincronizó nada.
+     */
+    public async obtenerTenantId(): Promise<string | null> {
+        try {
+            const meta = await localDb.sync_meta.get('tenant_id')
+            if (meta && typeof meta.value === 'string' && meta.value) return meta.value
+
+            const alguno = await localDb.pacientes.toCollection().first()
+            return alguno?.tenant_id || null
+        } catch (e) {
+            console.warn('[SYNC MANAGER] No se pudo resolver el tenant local:', e)
+            return null
         }
     }
 
@@ -400,6 +556,83 @@ class OfflineSyncManager {
         if (navigator.onLine && !this.status.isSyncing) {
             this.synchronize().catch(console.warn)
         }
+    }
+
+    /**
+     * Los cambios que no van a subir solos, del más viejo al más nuevo.
+     */
+    public async listarAtascados(): Promise<SyncOutboxItem[]> {
+        const items = await localDb.sync_outbox.where('status').equals('ATASCADO').toArray()
+        return items.sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
+    }
+
+    /**
+     * Devuelve un item a PENDIENTE desde cero, sin sincronizar ni refrescar
+     * métricas. El usuario decidió que vale la pena probar de nuevo, así que
+     * la escalera arranca limpia.
+     */
+    private async resetearItem(outboxId: number): Promise<void> {
+        await localDb.sync_outbox.update(outboxId, {
+            status: 'PENDIENTE',
+            attempts: 0,
+            next_attempt_at: null,
+            error_message: undefined,
+            last_error_code: undefined
+        })
+    }
+
+    public async reintentarItem(outboxId: number): Promise<void> {
+        await this.resetearItem(outboxId)
+        await this.refreshLocalMetrics()
+
+        if (navigator.onLine && !this.status.isSyncing) {
+            this.synchronize().catch(console.warn)
+        }
+    }
+
+    public async reintentarTodos(): Promise<void> {
+        const atascados = await this.listarAtascados()
+        // Se resetean todos antes de sincronizar: el sync toma su snapshot de
+        // PENDIENTE al arrancar y tiene que verlos a todos.
+        for (const item of atascados) {
+            if (item.id !== undefined) await this.resetearItem(item.id)
+        }
+
+        await this.refreshLocalMetrics()
+
+        if (atascados.length > 0 && navigator.onLine && !this.status.isSyncing) {
+            this.synchronize().catch(console.warn)
+        }
+    }
+
+    /**
+     * Saca de la cola un cambio atascado y todo lo que la cola tiene para esa
+     * misma fila (mismo entity y entity_id): una edición no se puede aplicar
+     * sobre una creación que nunca entró, así que descartar la creación
+     * implica descartar lo que venía encima.
+     *
+     * Devuelve cuántos items se descartaron. Devuelve 0, sin borrar nada, si
+     * el item no existe o ya no está ATASCADO (por ejemplo, volvió a PENDIENTE
+     * por un reintento): quien llama tiene que tratarlo como "no se hizo".
+     *
+     * Descartar es perder el cambio, no dejarlo acá: no se guarda en la nube.
+     * La copia local de la fila no se toca en este momento y queda hasta la
+     * próxima descarga completa de la base (un pull incremental no la quita);
+     * las evoluciones locales sin pendientes se borran en la reconciliación.
+     * Quien llama tiene que habérselo dicho al usuario antes.
+     */
+    public async descartarItem(outboxId: number): Promise<number> {
+        const descartados = await localDb.transaction('rw', localDb.sync_outbox, async () => {
+            const item = await localDb.sync_outbox.get(outboxId)
+            if (!item || item.status !== 'ATASCADO') return 0
+
+            return localDb.sync_outbox
+                .filter(i => i.entity === item.entity && i.entity_id === item.entity_id)
+                .delete()
+        })
+
+        await this.refreshLocalMetrics()
+        return descartados
     }
 }
 

@@ -281,7 +281,7 @@ export async function esperarPushEvolucion(
             .first()
 
         if (!pendiente) return 'ok'
-        if (pendiente.status === 'ERROR') return 'error'
+        if (pendiente.status === 'ATASCADO') return 'error'
 
         await new Promise(resolve => setTimeout(resolve, 150))
     }

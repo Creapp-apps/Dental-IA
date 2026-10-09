@@ -1279,3 +1279,43 @@ Anotar el resultado de cada paso al final de este plan, marcando lo que pasó y 
 git add consultorio-alvarez/docs/plans/2026-10-08-reintentos-outbox-plan.md
 git commit -m "docs(sync): registro de verificacion manual de reintentos"
 ```
+
+---
+
+## Registro de verificación manual — 2026-10-08
+
+Ejecutada contra la base real del consultorio, con los datos de prueba borrados al final
+(Supabase y copia local). Entorno: rama `feat/reintentos-outbox`, dev server local.
+
+### Verificado
+
+| Qué | Resultado |
+|---|---|
+| Migración a Dexie v4 | IndexedDB en versión 40, índice `next_attempt_at` presente, tabla `evoluciones` intacta, ninguna fila perdida |
+| Fallo permanente | Un item sin rama en el servidor va directo a `ATASCADO` con `attempts: 1`, sin consumir la escalera |
+| Resultado por item (Ruling D) | El servidor devolvió "Operación no soportada: pacientes/DELETE" en vez de una respuesta vacía |
+| Indicador en rojo | Pasó de "1 cambio sin subir" (ámbar) a "1 cambio con problema" (rojo) |
+| Panel de atascados | Muestra descripción, fecha, mensaje en castellano y "Detalle técnico" separado |
+| Ruling H | El contador "Por subir" incluye el atascado; la línea de sincronización dice "Último sync", no "Al día" |
+| Reintentar | Vuelve a `PENDIENTE` con `attempts: 0`, reintenta, y queda en `attempts: 1` al fallar de nuevo |
+| Descartar | El modal muestra "ESTO ES LO QUE SE VA A TIRAR" con el contenido del cambio, avisa de la cadena y no promete plazos |
+| Vuelta a verde | Sólo con la cola realmente vacía |
+| **Critical 1, parte servidor** | Un `pacientes/INSERT` con `tenant_id` vacío (lo que producía el bug) **subió correctamente** y Supabase le adoptó el tenant del consultorio |
+| **Critical 1, parte cliente** | El `tenant_id` queda cacheado en `sync_meta` tras el snapshot, y el alta offline desde el formulario real encola con el tenant correcto, no vacío |
+
+### No verificado, y por qué
+
+- **La escalera de espera con un fallo transitorio real.** Forzar un error transitorio de Supabase
+  (timeout, pooler saturado) no es reproducible a voluntad sin romper algo. La lógica está cubierta
+  por tests unitarios; lo que falta es verla correr contra el servidor.
+- **El rescate de items en `ERROR` por la migración.** Esta máquina no tenía ninguno encolado.
+  Conviene mirarlo en la primera computadora del consultorio que abra la app con cola vieja.
+- **Bloqueo por entidad end-to-end en la app real.** Cubierto por tests unitarios; no se provocó
+  la secuencia completa en la interfaz.
+- **Sesión vencida.** No se forzó.
+
+### Encontrado durante la verificación
+
+- Cosmético: la línea del panel dice "Última sincronización con la nube: Último sync: HH:MM hs",
+  con la etiqueta duplicada. El prefijo externo debería salir, o `formatLastSync` no debería
+  repetirlo.

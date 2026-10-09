@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
 import { LocalPaciente, LocalTurno, LocalProfesional, LocalTratamiento, LocalObraSocial, SyncOutboxItem } from '@/lib/offline/db'
+import { esReintentable } from '@/lib/offline/outbox-errors'
 
 export interface FullSnapshotResult {
     success: boolean
@@ -12,6 +13,11 @@ export interface FullSnapshotResult {
     tipos_tratamiento: LocalTratamiento[]
     obras_sociales: LocalObraSocial[]
     server_time: string
+    /**
+     * Tenant del consultorio. El cliente lo cachea para poder encolar un alta
+     * hecha sin conexión, que todavía no tiene fila en la nube de donde sacarlo.
+     */
+    tenant_id: string
     error?: string
 }
 
@@ -27,6 +33,10 @@ export interface PushResultItem {
     outbox_id: number
     success: boolean
     error?: string
+    /** Código de Postgres, cuando lo hubo. */
+    error_code?: string
+    /** Decidido acá: el cliente no interpreta mensajes de error. */
+    retriable: boolean
 }
 
 /**
@@ -70,6 +80,7 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
             tipos_tratamiento: [],
             obras_sociales: [],
             server_time: new Date().toISOString(),
+            tenant_id: '',
             error: 'No autorizado'
         }
     }
@@ -170,7 +181,8 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
             profesionales: (profesionalesData as LocalProfesional[]) || [],
             tipos_tratamiento: (tratamientosData as LocalTratamiento[]) || [],
             obras_sociales: (obrasData as LocalObraSocial[]) || [],
-            server_time
+            server_time,
+            tenant_id: tenantId
         }
     } catch (err: any) {
         console.error('[OFFLINE SYNC] Error al generar full snapshot:', err)
@@ -182,6 +194,7 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
             tipos_tratamiento: [],
             obras_sociales: [],
             server_time,
+            tenant_id: '',
             error: err.message || 'Error de base de datos'
         }
     }
@@ -296,6 +309,22 @@ function sanitizeEvolucionPayload(payload: any) {
 }
 
 /**
+ * Arma el resultado de una operación a partir del error de Supabase, dejando
+ * decidido del lado del servidor si vale la pena reintentarla.
+ */
+function resultado(outboxId: number, error: { code?: string; message?: string } | null): PushResultItem {
+    if (!error) return { outbox_id: outboxId, success: true, retriable: false }
+
+    return {
+        outbox_id: outboxId,
+        success: false,
+        error: error.message,
+        error_code: error.code,
+        retriable: esReintentable(error.code),
+    }
+}
+
+/**
  * Recibe y aplica las operaciones acumuladas en la cola local (sync_outbox) en Supabase.
  */
 export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<PushResultItem[]> {
@@ -306,16 +335,25 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
     const results: PushResultItem[] = []
 
     for (const item of items) {
-        if (item.tenant_id !== tenantId) {
+        // Tenant vacío significa "adoptá el del servidor": un paciente creado
+        // sin conexión todavía no tiene tenant del lado del cliente. El payload
+        // se reescribe con `tenant_id: tenantId` en el upsert, así que la
+        // operación entra en el consultorio correcto. Una discrepancia real
+        // —tenant presente y distinto— sigue siendo un rechazo permanente,
+        // que es para lo que existe esta guarda.
+        if (item.tenant_id && item.tenant_id !== tenantId) {
             results.push({
                 outbox_id: item.id || 0,
                 success: false,
-                error: 'Discrepancia de tenant'
+                error: 'Discrepancia de tenant',
+                retriable: false,
             })
             continue
         }
 
         try {
+            const resultadosAntes = results.length
+
             if (item.entity === 'turnos') {
                 if (item.operation === 'INSERT') {
                     const payload = {
@@ -323,8 +361,11 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         tenant_id: tenantId,
                         updated_at: new Date().toISOString()
                     }
-                    const { error } = await admin.from('turnos').insert(payload)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    // upsert y no insert: si la respuesta de un push anterior se
+                    // perdió, el reintento no puede fallar por clave duplicada y
+                    // marcar como atascado un dato que ya está en la nube.
+                    const { error } = await admin.from('turnos').upsert(payload)
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'UPDATE') {
                     const { error } = await admin
                         .from('turnos')
@@ -334,14 +375,14 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         })
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'DELETE') {
                     const { error } = await admin
                         .from('turnos')
                         .delete()
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 }
             } else if (item.entity === 'pacientes') {
                 if (item.operation === 'INSERT') {
@@ -350,8 +391,11 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         tenant_id: tenantId,
                         updated_at: new Date().toISOString()
                     }
-                    const { error } = await admin.from('pacientes').insert(payload)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    // upsert y no insert: si la respuesta de un push anterior se
+                    // perdió, el reintento no puede fallar por clave duplicada y
+                    // marcar como atascado un dato que ya está en la nube.
+                    const { error } = await admin.from('pacientes').upsert(payload)
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'UPDATE') {
                     const { error } = await admin
                         .from('pacientes')
@@ -361,7 +405,7 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         })
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 }
             } else if (item.entity === 'evoluciones') {
                 if (item.operation === 'INSERT') {
@@ -375,7 +419,7 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                     // reintento sobre una fila que ya subió no debe fallar por
                     // clave duplicada y dejar el item trabado en la cola.
                     const { error } = await admin.from('historial_clinico').upsert(payload)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'UPDATE') {
                     const { error } = await admin
                         .from('historial_clinico')
@@ -385,22 +429,37 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         })
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'DELETE') {
                     const { error } = await admin
                         .from('historial_clinico')
                         .delete()
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
-                    results.push({ outbox_id: item.id || 0, success: !error, error: error?.message })
+                    results.push(resultado(item.id || 0, error))
                 }
+            }
+
+            // Toda combinación sin rama tiene que devolver un resultado igual:
+            // el cliente infiere "sesión vencida" de una respuesta vacía, y un
+            // item que no produce resultado rompería esa inferencia en silencio.
+            // Se chequea acá, y no con un else por entity, para cubrir de una
+            // sola vez la entity desconocida y la operación sin rama.
+            if (results.length === resultadosAntes) {
+                results.push({
+                    outbox_id: item.id || 0,
+                    success: false,
+                    error: `Operación no soportada: ${item.entity}/${item.operation}`,
+                    retriable: false,
+                })
             }
         } catch (opErr: any) {
             console.error(`[OFFLINE SYNC] Error ejecutando operación ${item.operation} en ${item.entity}:`, opErr)
             results.push({
                 outbox_id: item.id || 0,
                 success: false,
-                error: opErr.message || 'Excepción al sincronizar operación'
+                error: opErr.message || 'Excepción al sincronizar operación',
+                retriable: true,
             })
         }
     }

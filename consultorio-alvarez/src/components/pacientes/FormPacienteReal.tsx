@@ -424,16 +424,22 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                     // Modo Offline para crear paciente
                     const tempId = crypto.randomUUID()
                     const tempHC = 'TEMP-' + Math.floor(1000 + Math.random() * 9000)
+                    // El paciente todavía no existe en la nube, así que el
+                    // tenant sale del cache local. Encolar vacío hacía que el
+                    // servidor lo rechazara por discrepancia de tenant y el alta
+                    // quedara atascada sin salida.
+                    const tenantLocal = await syncManager.obtenerTenantId()
                     const localNuevo = {
                         id: tempId,
                         ...payload,
+                        ...(tenantLocal ? { tenant_id: tenantLocal } : {}),
                         nro_historia_clinica: payload.nro_historia_clinica || tempHC,
                         created_at: new Date().toISOString(),
                         updated_at: new Date().toISOString()
                     }
                     await guardarPacienteLocal(localNuevo as any, undefined, false)
                     await syncManager.enqueueMutation(
-                        '',
+                        tenantLocal || '',
                         'pacientes',
                         tempId,
                         'INSERT',

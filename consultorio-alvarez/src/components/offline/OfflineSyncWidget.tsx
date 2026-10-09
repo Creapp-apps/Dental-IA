@@ -26,6 +26,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog'
+import { CambiosAtascados } from '@/components/offline/CambiosAtascados'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
 
 interface OfflineSyncWidgetProps {
     themeColor?: string
@@ -40,6 +42,8 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
         isSyncing: false,
         lastSyncedAt: null,
         pendingOutboxCount: 0,
+        atascadosCount: 0,
+        authError: false,
         totalPacientesLocales: 0,
         totalTurnosLocales: 0,
         error: null
@@ -47,6 +51,10 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
     const [isOpen, setIsOpen] = useState(false)
     const [isCheckingPing, setIsCheckingPing] = useState(false)
     const [selectedInterval, setSelectedInterval] = useState<number>(15)
+    const [confirmarDescargaFull, setConfirmarDescargaFull] = useState(false)
+
+    // Lo que todavía no llegó a la nube, pendiente o atascado
+    const cambiosSinSubir = status.pendingOutboxCount + status.atascadosCount
 
     useEffect(() => {
         const unsubscribe = syncManager.subscribe(newStatus => {
@@ -107,11 +115,11 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
         toast.success(`Frecuencia de sincronización: ${val === 0 ? 'Solo manual' : `cada ${val} min`}`)
     }
 
-    const formatLastSync = (iso: string | null) => {
+    const formatLastSync = (iso: string | null, alDia = true) => {
         if (!iso) return 'Sin sincronizar todavía'
         try {
             const date = new Date(iso)
-            return 'Al día · Sync: ' + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs'
+            return (alDia ? 'Al día · Sync: ' : 'Último sync: ') + date.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) + ' hs'
         } catch {
             return 'Sincronizado recientemente'
         }
@@ -121,6 +129,10 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
     const getWidgetTitle = () => {
         if (status.isSyncing) return 'Sincronizando...'
         if (!status.isOnline || status.networkQuality === 'desconectado') return 'Sin Internet'
+        if (status.authError) return 'La sesión venció'
+        if (status.atascadosCount > 0) {
+            return `${status.atascadosCount} ${status.atascadosCount === 1 ? 'cambio con problema' : 'cambios con problema'}`
+        }
         if (status.pendingOutboxCount > 0) {
             return `${status.pendingOutboxCount} ${status.pendingOutboxCount === 1 ? 'cambio sin subir' : 'cambios sin subir'}`
         }
@@ -130,10 +142,13 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
     const getWidgetSubtitle = () => {
         if (status.isSyncing) return 'Actualizando con la nube...'
         if (!status.isOnline || status.networkQuality === 'desconectado') {
+            if (status.atascadosCount > 0) return 'Hay cambios con problema sin subir'
             return status.pendingOutboxCount > 0 
                 ? `Guardando en PC (${status.pendingOutboxCount} pendientes)` 
                 : 'Operando seguro en esta PC'
         }
+        if (status.authError) return 'Volvé a iniciar sesión para sincronizar'
+        if (status.atascadosCount > 0) return 'Tocá acá para revisarlos'
         if (status.pendingOutboxCount > 0) {
             return 'Tocá acá para subir a la nube'
         }
@@ -159,7 +174,9 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                         ? 'bg-primary/10 border-primary/40 text-primary'
                         : !status.isOnline || status.networkQuality === 'desconectado'
                             ? 'bg-rose-500/10 border-rose-500/30 text-rose-800 dark:text-rose-300'
-                            : status.pendingOutboxCount > 0
+                            : status.atascadosCount > 0 || status.authError
+                                ? 'bg-red-500/15 border-red-500/40 text-red-700 dark:text-red-300 shadow-xs'
+                                : status.pendingOutboxCount > 0
                                 ? 'bg-amber-500/15 border-amber-500/50 text-amber-900 dark:text-amber-200 shadow-xs'
                                 : 'bg-sidebar-accent/30 border-sidebar-border/40 hover:bg-sidebar-accent/60 text-sidebar-foreground'
                 )}
@@ -173,6 +190,10 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                         ) : !status.isOnline || status.networkQuality === 'desconectado' ? (
                             <div className="h-7 w-7 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-600 dark:text-rose-400">
                                 <WifiOff className="h-3.5 w-3.5" />
+                            </div>
+                        ) : status.atascadosCount > 0 || status.authError ? (
+                            <div className="h-7 w-7 rounded-full bg-red-500/20 flex items-center justify-center text-red-600 dark:text-red-400">
+                                <AlertTriangle className="h-3.5 w-3.5" />
                             </div>
                         ) : status.pendingOutboxCount > 0 ? (
                             <div className="h-7 w-7 rounded-full bg-amber-500/20 flex items-center justify-center text-amber-600 dark:text-amber-400 animate-pulse">
@@ -190,7 +211,9 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                         <div className="flex items-center gap-1.5 flex-wrap">
                             <span className={cn(
                                 "text-[11px] font-bold tracking-tight truncate",
-                                status.pendingOutboxCount > 0 && "text-amber-700 dark:text-amber-300"
+                                (status.atascadosCount > 0 || status.authError)
+                                    ? "text-red-700 dark:text-red-300"
+                                    : status.pendingOutboxCount > 0 && "text-amber-700 dark:text-amber-300"
                             )}>
                                 {getWidgetTitle()}
                             </span>
@@ -224,7 +247,9 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
 
                         <p className={cn(
                             "text-[9.5px] truncate font-medium mt-0.5",
-                            status.pendingOutboxCount > 0 
+                            (status.atascadosCount > 0 || status.authError)
+                                ? "text-red-800/90 dark:text-red-200/90 font-semibold"
+                            : status.pendingOutboxCount > 0 
                                 ? "text-amber-800/90 dark:text-amber-200/90 font-semibold" 
                                 : "text-muted-foreground"
                         )}>
@@ -237,7 +262,7 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                 <button
                     type="button"
                     onClick={handleSync}
-                    disabled={status.isSyncing || !status.isOnline}
+                    disabled={status.isSyncing || !status.isOnline || status.authError}
                     className={cn(
                         'ml-2 p-1.5 rounded-lg border hover:scale-105 active:scale-95 transition-all shrink-0 cursor-pointer shadow-xs',
                         status.pendingOutboxCount > 0
@@ -311,6 +336,20 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                             </p>
                         </div>
 
+                        {status.authError && (
+                            <div className="p-3 rounded-xl border border-red-500/40 bg-red-500/15 space-y-1.5">
+                                <div className="flex items-center gap-2 text-red-800 dark:text-red-200">
+                                    <AlertTriangle className="h-4 w-4 text-red-600 shrink-0" />
+                                    <span className="text-xs font-bold">La sesión venció</span>
+                                </div>
+                                <p className="text-[11px] text-red-900/80 dark:text-red-200/80 leading-relaxed">
+                                    Mientras no vuelvas a iniciar sesión no se sube nada a la nube. Tus cambios siguen guardados en esta computadora. Cerrá sesión y volvé a entrar para que se sincronicen.
+                                </p>
+                            </div>
+                        )}
+
+                        <CambiosAtascados cantidad={status.atascadosCount} />
+
                         {/* Alerta de Cambios Pendientes (si los hay) */}
                         {status.pendingOutboxCount > 0 && (
                             <div className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/15 space-y-1.5">
@@ -354,9 +393,11 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                                 <div className="p-2 rounded-lg bg-background border border-border/60">
                                     <span className={cn(
                                         "block text-base font-extrabold",
-                                        status.pendingOutboxCount > 0 ? "text-amber-600" : "text-emerald-600"
+                                        status.atascadosCount > 0
+                                            ? "text-red-600"
+                                            : status.pendingOutboxCount > 0 ? "text-amber-600" : "text-emerald-600"
                                     )}>
-                                        {status.pendingOutboxCount}
+                                        {status.pendingOutboxCount + status.atascadosCount}
                                     </span>
                                     <span className="text-[10px] text-muted-foreground">Por subir</span>
                                 </div>
@@ -364,7 +405,7 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
 
                             <p className="text-[10px] text-muted-foreground pt-1 flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                <span>Última sincronización con la nube: <strong>{formatLastSync(status.lastSyncedAt)}</strong></span>
+                                <span>Última sincronización con la nube: <strong>{formatLastSync(status.lastSyncedAt, status.pendingOutboxCount + status.atascadosCount === 0 && !status.authError)}</strong></span>
                             </p>
                         </div>
 
@@ -391,7 +432,7 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                         <div className="space-y-2 pt-2">
                             <button
                                 onClick={() => handleSync()}
-                                disabled={status.isSyncing || !status.isOnline}
+                                disabled={status.isSyncing || !status.isOnline || status.authError}
                                 className={cn(
                                     "w-full py-2.5 px-4 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50",
                                     status.pendingOutboxCount > 0
@@ -403,15 +444,26 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                                 <span>
                                     {status.isSyncing 
                                         ? 'Sincronizando con la nube...' 
-                                        : status.pendingOutboxCount > 0 
+                                        : status.authError
+                                            ? 'Iniciá sesión de nuevo para sincronizar'
+                                            : status.pendingOutboxCount > 0 
                                             ? `Subir ${status.pendingOutboxCount} cambios pendientes ahora` 
                                             : 'Sincronizar Novedades Ahora'}
                                 </span>
                             </button>
 
                             <button
-                                onClick={handleDownloadFull}
-                                disabled={status.isSyncing || !status.isOnline}
+                                onClick={() => {
+                                    // Esto borra pacientes y turnos locales para
+                                    // rebajarlos de cero. Habiendo cola sin subir
+                                    // el usuario tiene que saberlo antes.
+                                    if (cambiosSinSubir > 0) {
+                                        setConfirmarDescargaFull(true)
+                                        return
+                                    }
+                                    handleDownloadFull()
+                                }}
+                                disabled={status.isSyncing || !status.isOnline || status.authError}
                                 className="w-full py-2 px-4 rounded-xl border border-border bg-background hover:bg-muted text-foreground font-medium text-xs flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                             >
                                 <Download className="h-3.5 w-3.5 text-muted-foreground" />
@@ -421,6 +473,19 @@ export function OfflineSyncWidget({ themeColor, compact = false }: OfflineSyncWi
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <ConfirmModal
+                open={confirmarDescargaFull}
+                onOpenChange={abierto => { if (!abierto) setConfirmarDescargaFull(false) }}
+                title="Descargar todo de nuevo"
+                description={`Se borra la copia local de pacientes y turnos y se vuelve a bajar todo desde la nube. Tenés ${cambiosSinSubir} ${cambiosSinSubir === 1 ? 'cambio' : 'cambios'} sin subir: la copia local de esos registros se conserva y siguen en la cola, pero lo más seguro es sincronizar primero. ¿Querés descargar igual?`}
+                confirmText="Descargar igual"
+                cancelText="Mejor no"
+                onConfirm={() => {
+                    setConfirmarDescargaFull(false)
+                    handleDownloadFull()
+                }}
+            />
         </>
     )
 }
