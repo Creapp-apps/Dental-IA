@@ -18,6 +18,8 @@ const SECO = process.argv.includes('--seco')
 // Rutas que alguna fila referencia, por bucket: no son huérfanas aunque sigan en la raíz (en seco todavía no se movieron).
 const referenciados: Record<string, Set<string>> = { avatars: new Set(), paciente_adjuntos: new Set() }
 
+
+
 async function moverSiHaceFalta(bucket: string, desde: string, tenantId: string) {
     if (desde.startsWith(`${tenantId}/`)) return desde
 
@@ -38,7 +40,10 @@ async function migrarFotosDePacientes() {
         if (!ruta) { console.log(`  sin resolver, se deja: ${p.foto_url}`); continue }
         referenciados.avatars.add(ruta)
         const nueva = await moverSiHaceFalta('avatars', ruta, p.tenant_id)
-        if (!SECO) await db.from('pacientes').update({ foto_url: nueva }).eq('id', p.id)
+        if (!SECO) {
+            const { error } = await db.from('pacientes').update({ foto_url: nueva }).eq('id', p.id)
+            if (error) throw new Error(`update pacientes ${p.id}: ${error.message}`)
+        }
     }
 }
 
@@ -50,7 +55,49 @@ async function migrarAdjuntos() {
         if (!ruta) { console.log(`  sin resolver, se deja: ${a.url}`); continue }
         referenciados.paciente_adjuntos.add(ruta)
         const nueva = await moverSiHaceFalta('paciente_adjuntos', ruta, a.tenant_id)
-        if (!SECO) await db.from('paciente_adjuntos').update({ url: nueva }).eq('id', a.id)
+        if (!SECO) {
+            const { error } = await db.from('paciente_adjuntos').update({ url: nueva }).eq('id', a.id)
+            if (error) throw new Error(`update paciente_adjuntos ${a.id}: ${error.message}`)
+        }
+    }
+}
+
+async function migrarWaMedia() {
+    console.log('whatsapp_mensajes.metadata.media_url (bucket paciente_adjuntos)')
+    const { data, error: errLectura } = await db
+        .from('whatsapp_mensajes')
+        .select('id, tenant_id, metadata')
+        .not('metadata->>media_url', 'is', null)
+    if (errLectura) throw new Error(`leer whatsapp_mensajes: ${errLectura.message}`)
+
+    for (const m of data ?? []) {
+        const metadata = m.metadata as Record<string, unknown> | null
+        const valor = metadata?.media_url
+        if (typeof valor !== 'string' || !valor) continue
+
+        const ruta = extraerRuta(valor, 'paciente_adjuntos')
+        if (!ruta) { console.log(`  sin resolver, se deja (${m.id}): ${valor}`); continue }
+
+        // Ya migrada: la ruta empieza por el tenant.
+        if (ruta.startsWith(`${m.tenant_id}/`)) continue
+
+        const prefijo = `wa-media/${m.tenant_id}/`
+        if (!ruta.startsWith(prefijo)) { console.log(`  forma inesperada, se deja (${m.id}): ${ruta}`); continue }
+
+        // Reordenamiento, no prefijado: el tenant ya estaba en el segundo segmento.
+        const hacia = `${m.tenant_id}/wa-media/${ruta.slice(prefijo.length)}`
+        console.log(`  fila ${m.id}: ${valor} -> ${hacia}`)
+        if (SECO) continue
+
+        const { error: errMove } = await db.storage.from('paciente_adjuntos').move(ruta, hacia)
+        if (errMove) throw new Error(`move paciente_adjuntos/${ruta} (fila ${m.id}): ${errMove.message}`)
+
+        // Se preserva el resto del JSON (en particular raw): solo cambia media_url.
+        const { error } = await db
+            .from('whatsapp_mensajes')
+            .update({ metadata: { ...metadata, media_url: hacia } })
+            .eq('id', m.id)
+        if (error) throw new Error(`update whatsapp_mensajes ${m.id} (el objeto ya se movió a ${hacia}): ${error.message}`)
     }
 }
 
@@ -75,6 +122,7 @@ async function main() {
     if (SECO) console.log('MODO SECO: no se escribe nada\n')
     await migrarFotosDePacientes()
     await migrarAdjuntos()
+    await migrarWaMedia()
     for (const b of ['avatars', 'paciente_adjuntos', 'escaneos_3d']) await huerfanos(b)
     console.log('\nListo.')
 }
