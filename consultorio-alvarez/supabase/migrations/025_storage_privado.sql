@@ -15,6 +15,8 @@
 -- Se aplica a mano en el SQL editor de Supabase. El rollback está en
 -- 025_storage_privado_rollback.sql.
 
+BEGIN;
+
 -- 1. Buckets privados
 UPDATE storage.buckets SET public = false
 WHERE id IN ('avatars', 'paciente_adjuntos', 'escaneos_3d');
@@ -48,11 +50,10 @@ END $$;
 -- SQL puro con guard de forma, no plpgsql con EXCEPTION: un bloque EXCEPTION abre una
 -- subtransacción por fila y esto corre por fila en cada SELECT sobre storage.objects, incluido
 -- cada listado de carpeta. Así Postgres puede inlinearla.
-CREATE OR REPLACE FUNCTION storage_tenant_de_objeto(nombre TEXT)
+CREATE OR REPLACE FUNCTION public.storage_tenant_de_objeto(nombre TEXT)
 RETURNS UUID
 LANGUAGE sql
 IMMUTABLE
-RETURNS NULL ON NULL INPUT
 AS $$
     -- Un nombre sin UUID adelante no pertenece a ningún consultorio: devuelve NULL
     -- y ninguna política lo alcanza. El guard de forma evita el cast que tiraría.
@@ -127,3 +128,5 @@ USING (
     bucket_id = 'tenant_assets'
     AND storage_tenant_de_objeto(name) = get_user_tenant_id()
 );
+
+COMMIT;

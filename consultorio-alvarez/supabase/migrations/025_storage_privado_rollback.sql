@@ -52,4 +52,4 @@ FOR DELETE TO authenticated
 USING (bucket_id IN ('avatars', 'paciente_adjuntos', 'escaneos_3d', 'tenant_assets'));
 
 -- Va después de borrar las políticas que la usaban; si no, el DROP falla por dependencia.
-DROP FUNCTION IF EXISTS storage_tenant_de_objeto(TEXT);
+DROP FUNCTION IF EXISTS public.storage_tenant_de_objeto(TEXT);
