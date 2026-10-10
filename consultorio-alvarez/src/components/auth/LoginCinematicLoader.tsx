@@ -19,14 +19,23 @@ interface LoginCinematicLoaderProps {
     colorPrimary?: string
     logoUrl?: string | null
     tenantNombre?: string
-    isAlvarez?: boolean
+    /** Slug del consultorio, cuando se conoce. */
+    slug?: string | null
+    /**
+     * No hay consultorio resuelto: se entra por el dominio de la plataforma.
+     * Antes esto se llamaba `isAlvarez` y pintaba el logo de Consultorio
+     * Álvarez, que es de un consultorio puntual: con dos clínicas en
+     * producción, el usuario de una veía la marca de la otra.
+     */
+    esPlataforma?: boolean
 }
 
 export function LoginCinematicLoader({
     colorPrimary = '#2563eb',
     logoUrl,
     tenantNombre,
-    isAlvarez = true
+    slug,
+    esPlataforma = false
 }: LoginCinematicLoaderProps) {
     const { h, r, g, b } = hexToHsl(colorPrimary)
     const [stepIndex, setStepIndex] = useState(0)
@@ -192,13 +201,19 @@ export function LoginCinematicLoader({
                                     onError={() => setImgError(true)}
                                     className="relative max-h-16 max-w-[220px] w-auto object-contain drop-shadow-xl"
                                 />
-                            ) : isAlvarez ? (
+                            ) : slug === 'alvarez' ? (
                                 <img
                                     src="/LOGO-ALVAREZ.png"
                                     alt="Consultorio Álvarez"
                                     onError={(e) => {
                                         e.currentTarget.src = "/LOGO-DENTAL.png"
                                     }}
+                                    className="relative max-h-16 max-w-[220px] w-auto object-contain drop-shadow-xl"
+                                />
+                            ) : esPlataforma ? (
+                                <img
+                                    src="/LOGO-DENTAL.png"
+                                    alt="Dental-IA"
                                     className="relative max-h-16 max-w-[220px] w-auto object-contain drop-shadow-xl"
                                 />
                             ) : (
@@ -230,7 +245,7 @@ export function LoginCinematicLoader({
                             {timeSubtitle}
                         </h3>
                         <p className="text-xs text-white/50">
-                            {isAlvarez ? 'Consultorio Álvarez • Dental-IA' : (tenantNombre || 'Plataforma Dental-IA')}
+                            {tenantNombre ? `${tenantNombre} • Dental-IA` : 'Plataforma Dental-IA'}
                         </p>
                     </div>
 

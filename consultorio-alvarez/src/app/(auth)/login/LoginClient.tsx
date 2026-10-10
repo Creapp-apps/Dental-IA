@@ -26,8 +26,19 @@ export default function LoginClient({
     const [showPassword, setShowPassword] = useState(false)
     const [status, setStatus] = useState<'idle' | 'verificando' | 'ingresando'>('idle')
     const [localError, setLocalError] = useState<string | null>(null)
+    // Marca del consultorio del usuario, que se conoce recién al autenticar:
+    // en dentalia.com.ar el formulario no sabe de qué clínica es quien entra.
+    const [marcaUsuario, setMarcaUsuario] = useState<{
+        nombre?: string
+        slug?: string
+        logo_url?: string | null
+        color_primario?: string | null
+    } | null>(null)
 
-    const isAlvarez = !slug || slug === 'alvarez'
+    // Alvarez y el dominio de la plataforma muestran la marca Dental-IA en el
+    // encabezado; el resto de los consultorios, la suya. No confundir con el
+    // logo del loader, que ahora sale del consultorio del usuario.
+    const usaMarcaPlataforma = !slug || slug === 'alvarez'
     const { h, r, g, b } = hexToHsl(colorPrimary)
 
     const activeError = localError || (errorMsg?.includes('Invalid login credentials')
@@ -57,10 +68,11 @@ export default function LoginClient({
             <AnimatePresence>
                 {status === 'ingresando' && (
                     <LoginCinematicLoader 
-                        colorPrimary={colorPrimary}
-                        logoUrl={logoUrl}
-                        tenantNombre={tenantNombre}
-                        isAlvarez={isAlvarez}
+                        colorPrimary={marcaUsuario?.color_primario || colorPrimary}
+                        logoUrl={marcaUsuario?.logo_url ?? logoUrl}
+                        tenantNombre={marcaUsuario?.nombre || tenantNombre}
+                        slug={marcaUsuario?.slug || slug}
+                        esPlataforma={!slug && !marcaUsuario}
                     />
                 )}
             </AnimatePresence>
@@ -124,7 +136,7 @@ export default function LoginClient({
                     </div>
                     <div className="text-center">
                         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
-                            {isAlvarez ? (
+                            {usaMarcaPlataforma ? (
                                 <>
                                     Dental
                                     <span 
@@ -144,7 +156,7 @@ export default function LoginClient({
                             className="text-sm mt-1.5 font-medium tracking-wide"
                             style={{ color: `hsl(${h}, 40%, 82%, 0.75)` }}
                         >
-                            {isAlvarez ? 'Plataforma de gestión odontológica' : 'Panel de Gestión Odontológica'}
+                            {usaMarcaPlataforma ? 'Plataforma de gestión odontológica' : 'Panel de Gestión Odontológica'}
                         </p>
                     </div>
                 </div>
@@ -165,7 +177,7 @@ export default function LoginClient({
                                 className="text-sm mt-0.5"
                                 style={{ color: `hsl(${h}, 30%, 80%, 0.6)` }}
                             >
-                                {isAlvarez ? 'Ingresá con tus credenciales de acceso' : `Ingresá al panel de ${tenantNombre || 'tu consultorio'}`}
+                                {usaMarcaPlataforma ? 'Ingresá con tus credenciales de acceso' : `Ingresá al panel de ${tenantNombre || 'tu consultorio'}`}
                             </p>
                         </div>
 
@@ -198,6 +210,7 @@ export default function LoginClient({
 
                                     if (result?.success && result?.redirectTo) {
                                         const targetUrl = result.redirectTo
+                                        if (result.tenant) setMarcaUsuario(result.tenant)
                                         setStatus('ingresando')
                                         setTimeout(() => {
                                             window.location.assign(targetUrl)

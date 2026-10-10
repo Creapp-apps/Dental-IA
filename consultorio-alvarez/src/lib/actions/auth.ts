@@ -6,10 +6,19 @@ import { createClient } from '@/lib/supabase/server'
 import { esEmailSuperadmin } from '@/lib/auth/superadmins'
 
 // ── LOGIN ──────────────────────────────────────────────────────
+export interface MarcaTenant {
+    nombre: string
+    slug: string
+    logo_url: string | null
+    color_primario: string | null
+}
+
 export async function loginAction(formData: FormData): Promise<{
     success?: boolean
     redirectTo?: string
     error?: string
+    /** Marca del consultorio del usuario, para la pantalla de ingreso. */
+    tenant?: MarcaTenant | null
 }> {
     const email = formData.get('email') as string
     const password = formData.get('password') as string
@@ -40,11 +49,25 @@ export async function loginAction(formData: FormData): Promise<{
 
     const isSuperadmin = profile?.rol === 'superadmin' || esEmailSuperadmin(userEmail)
 
+    // La marca que corresponde mostrar mientras se entra sólo se conoce acá:
+    // en el dominio de la plataforma el formulario no sabe de qué consultorio
+    // es quien está escribiendo su email.
+    let tenant: MarcaTenant | null = null
+    if (profile?.tenant_id) {
+        const { data } = await supabase
+            .from('tenants')
+            .select('nombre, slug, logo_url, color_primario')
+            .eq('id', profile.tenant_id)
+            .maybeSingle()
+        tenant = (data as MarcaTenant | null) ?? null
+    }
+
     revalidatePath('/', 'layout')
 
     return {
         success: true,
-        redirectTo: isSuperadmin ? '/superadmin' : '/admin'
+        redirectTo: isSuperadmin ? '/superadmin' : '/admin',
+        tenant
     }
 }
 
