@@ -825,18 +825,19 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                         <Field label="Matrícula"><Input value={form.matricula} onChange={e => setForm(f => ({ ...f, matricula: e.target.value }))} /></Field>
                         <Field label="Email *"><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></Field>
                         <Field label="Rol en el consultorio">
-                            <select
+                            <GlassSelect
                                 value={form.rol}
-                                onChange={e => setForm(f => ({ ...f, rol: e.target.value }))}
-                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
-                            >
-                                <option value="profesional">Profesional — atiende su agenda</option>
-                                <option value="admin">Administrador — gestiona todo el consultorio</option>
-                            </select>
+                                onChange={valor => setForm(f => ({ ...f, rol: valor }))}
+                                options={[
+                                    { id: 'profesional', label: 'Profesional' },
+                                    { id: 'admin', label: 'Administrador' },
+                                ]}
+                            />
                             <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-                                El profesional ve sólo los turnos que tiene asignados y no accede a
-                                los datos de contacto del paciente, al listado de pacientes ni a los
-                                cobros. El administrador sí.
+                                El profesional atiende su agenda: ve sólo los turnos que tiene
+                                asignados y no accede a los datos de contacto del paciente, al
+                                listado de pacientes ni a los cobros. El administrador gestiona
+                                todo el consultorio.
                                 {editingId && !profesionales.find(p => p.id === editingId)?.usuarios?.length && (
                                     <> Este profesional todavía no tiene cuenta de acceso, así que el rol se aplica recién cuando se le cree una.</>
                                 )}
