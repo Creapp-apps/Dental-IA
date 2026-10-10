@@ -16,6 +16,7 @@ import {
     getObrasSocialesPublicas,
     getPacientePorDni,
     getConfiguracionSeniaPublica,
+    getReservaEligeProfesional,
 } from '@/lib/actions/reservas'
 import { crearPreferenciaPagoSenia } from '@/lib/actions/mercadopago'
 import {
@@ -53,12 +54,15 @@ interface Professional {
 // ── Step indicator ────────────────────────────────────────────────
 
 const STEP_LABELS = ['Profesional', 'Fecha y hora', 'Tus datos']
+// Cuando el consultorio no deja elegir profesional, ese paso no se muestra.
+// Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §10
+const STEP_LABELS_SIN_PROFESIONAL = STEP_LABELS.slice(1)
 
-function StepIndicator({ current }: { current: number }) {
+function StepIndicator({ current, labels = STEP_LABELS }: { current: number; labels?: string[] }) {
     return (
         <div className="border-b border-white/10 px-6 py-4">
             <div className="flex items-center gap-0">
-                {STEP_LABELS.map((label, i) => {
+                {labels.map((label, i) => {
                     const isCompleted = i < current
                     const isCurrent = i === current
                     return (
@@ -88,7 +92,7 @@ function StepIndicator({ current }: { current: number }) {
                                     {label}
                                 </span>
                             </div>
-                            {i < STEP_LABELS.length - 1 && (
+                            {i < labels.length - 1 && (
                                 <div
                                     className={cn(
                                         'flex-1 h-0.5 mx-3 transition-all duration-500',
@@ -882,6 +886,9 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
     const [obrasSociales, setObrasSociales] = useState<any[]>([])
     const [loadingDays, setLoadingDays] = useState(false)
     const [loadingProfs, setLoadingProfs] = useState(true)
+    // true mientras no se sepa lo contrario: el paso de profesional es el
+    // comportamiento de siempre.
+    const [eligeProfesional, setEligeProfesional] = useState(true)
     const [configSenia, setConfigSenia] = useState<{
         requiereSenia: boolean
         montoSenia: number
@@ -892,12 +899,18 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
     useEffect(() => {
         async function loadData() {
             try {
-                const [profs, obras, seniaRes] = await Promise.all([
+                const [profs, obras, seniaRes, elige] = await Promise.all([
                     getProfesionalesPublicos(slug),
                     getObrasSocialesPublicas(slug),
                     getConfiguracionSeniaPublica(slug),
+                    getReservaEligeProfesional(slug),
                 ])
                 setProfessionals(profs as Professional[])
+                setEligeProfesional(elige)
+                if (!elige) {
+                    // Sin paso de profesional, la reserva arranca en fecha y hora.
+                    setStep(1)
+                }
                 setObrasSociales(obras)
                 if (seniaRes?.success && seniaRes.requiereSenia) {
                     setConfigSenia({
@@ -917,7 +930,9 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
 
     // Fetch availability reactively when professional is selected
     useEffect(() => {
-        if (!professionalId) {
+        // Sin selección de profesional la disponibilidad es la del consultorio
+        // entero, así que no hay nada que esperar.
+        if (!professionalId && eligeProfesional) {
             setAvailableDays([])
             return
         }
@@ -925,7 +940,7 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
         async function loadAvailability() {
             setLoadingDays(true)
             try {
-                const days = await getTurnosDisponibles(slug, professionalId)
+                const days = await getTurnosDisponibles(slug, eligeProfesional ? professionalId : null)
                 setAvailableDays(days)
             } catch (err) {
                 console.error('Error loading availability:', err)
@@ -934,12 +949,12 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
             }
         }
         loadAvailability()
-    }, [professionalId, slug])
+    }, [professionalId, slug, eligeProfesional])
 
     // Reusable refresh for availability (called after booking)
     async function refreshAvailability() {
-        if (professionalId) {
-            const days = await getTurnosDisponibles(slug, professionalId)
+        if (professionalId || !eligeProfesional) {
+            const days = await getTurnosDisponibles(slug, eligeProfesional ? professionalId : null)
             setAvailableDays(days)
         }
     }
@@ -952,7 +967,7 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
     }
 
     const canNext = [
-        professionalId !== null,
+        professionalId !== null || !eligeProfesional,
         selectedDate !== null && selectedTime !== null && selectedTime !== '',
         datos.es_nuevo === 'si'
             ? datos.nombre.trim() !== '' && datos.apellido.trim() !== '' && datos.telefono.trim() !== '' && datos.dni.trim() !== ''
@@ -1107,7 +1122,10 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
 
     return (
         <div>
-            <StepIndicator current={step} />
+            <StepIndicator
+                current={eligeProfesional ? step : step - 1}
+                labels={eligeProfesional ? STEP_LABELS : STEP_LABELS_SIN_PROFESIONAL}
+            />
 
             <div className="p-6 md:p-8 overflow-hidden relative">
                 <AnimatePresence mode="wait" custom={direction}>
@@ -1193,7 +1211,7 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
                         setDirection(-1)
                         setStep((s) => s - 1)
                     }}
-                    disabled={step === 0}
+                    disabled={step === (eligeProfesional ? 0 : 1)}
                     className="flex items-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-white/10 hover:text-white transition-colors disabled:opacity-0 cursor-pointer"
                 >
                     <ChevronLeft className="h-4 w-4" />

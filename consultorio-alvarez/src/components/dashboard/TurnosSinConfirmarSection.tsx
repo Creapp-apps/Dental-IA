@@ -344,7 +344,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                     />
                                                     <div className="flex flex-col">
                                                         <span className="text-foreground font-semibold text-sm whitespace-nowrap">
-                                                            Dr. {turno.profesional?.apellido}
+                                                            {turno.profesional?.apellido ? `Dr. ${turno.profesional.apellido}` : 'Sin asignar'}
                                                         </span>
                                                         {turno.profesional?.nombre && (
                                                             <span className="text-xs text-muted-foreground whitespace-nowrap">
