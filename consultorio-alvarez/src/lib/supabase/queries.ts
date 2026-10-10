@@ -113,7 +113,9 @@ export async function getProfesionales(onlyActive: boolean = true) {
     const tenantId = await getTenantId()
     if (!tenantId) return []
 
-    let query = supabase.from('profesionales').select('*, usuarios(id)').eq('tenant_id', tenantId).order('nombre')
+    // usuarios(id, rol): la pantalla de equipo muestra y edita el rol de la
+    // cuenta vinculada (diseño §4: el consultorio tiene admin y profesional).
+    let query = supabase.from('profesionales').select('*, usuarios(id, rol)').eq('tenant_id', tenantId).order('nombre')
     if (onlyActive) query = query.eq('activo', true)
     const { data, error } = await query
     if (error) { console.error('getProfesionales:', error); return [] }

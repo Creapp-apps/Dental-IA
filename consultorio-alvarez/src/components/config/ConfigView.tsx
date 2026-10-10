@@ -648,7 +648,7 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
     const [showForm, setShowForm] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-    const [form, setForm] = useState({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '' })
+    const [form, setForm] = useState({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '', rol: 'profesional' })
 
     // Avatar states
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -656,7 +656,7 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
     const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
     function abrirNuevo() {
-        setForm({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '' })
+        setForm({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '', rol: 'profesional' })
         setAvatarPreview(null)
         setEditingId(null)
         setShowForm(true)
@@ -671,7 +671,8 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
             email: p.email || '',
             password: '',
             color_agenda: p.color_agenda || '#2563eb',
-            avatar_url: p.avatar_url || p.foto_url || ''
+            avatar_url: p.avatar_url || p.foto_url || '',
+            rol: p.usuarios?.[0]?.rol === 'admin' ? 'admin' : 'profesional'
         })
         setAvatarPreview(p.avatar_url || p.foto_url || null)
         setEditingId(p.id)
@@ -748,7 +749,7 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                 const { password, ...updateData } = form
                 r = await actualizarProfesional(editingId, updateData)
             } else {
-                r = await crearProfesional(form)
+                r = await crearProfesional({ ...form, rol: form.rol === 'admin' ? 'admin' : 'profesional' })
             }
             if (r.error) glassAlert.error({ title: 'Error', description: r.error })
             else {
@@ -823,6 +824,24 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                         <Field label="Especialidad"><Input value={form.especialidad} onChange={e => setForm(f => ({ ...f, especialidad: e.target.value }))} placeholder="Odontología general" /></Field>
                         <Field label="Matrícula"><Input value={form.matricula} onChange={e => setForm(f => ({ ...f, matricula: e.target.value }))} /></Field>
                         <Field label="Email *"><Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></Field>
+                        <Field label="Rol en el consultorio">
+                            <select
+                                value={form.rol}
+                                onChange={e => setForm(f => ({ ...f, rol: e.target.value }))}
+                                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring cursor-pointer"
+                            >
+                                <option value="profesional">Profesional — atiende su agenda</option>
+                                <option value="admin">Administrador — gestiona todo el consultorio</option>
+                            </select>
+                            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                                El profesional ve sólo los turnos que tiene asignados y no accede a
+                                los datos de contacto del paciente, al listado de pacientes ni a los
+                                cobros. El administrador sí.
+                                {editingId && !profesionales.find(p => p.id === editingId)?.usuarios?.length && (
+                                    <> Este profesional todavía no tiene cuenta de acceso, así que el rol se aplica recién cuando se le cree una.</>
+                                )}
+                            </p>
+                        </Field>
                     </div>
                     {!editingId && (
                         <div className="grid grid-cols-1 gap-3">
@@ -852,9 +871,24 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                                 <div className="flex items-center gap-2 flex-wrap">
                                     <p className="text-sm font-semibold text-foreground">Dr. {p.nombre} {p.apellido}</p>
                                     {p.usuarios && p.usuarios.length > 0 ? (
-                                        <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-medium flex items-center gap-1" title="Tiene cuenta de acceso vinculada">
-                                            <Key className="h-2.5 w-2.5" /> Cuenta activa
-                                        </span>
+                                        <>
+                                            <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-medium flex items-center gap-1" title="Tiene cuenta de acceso vinculada">
+                                                <Key className="h-2.5 w-2.5" /> Cuenta activa
+                                            </span>
+                                            <span
+                                                className={cn(
+                                                    'text-[10px] px-1.5 py-0.5 rounded border font-medium',
+                                                    p.usuarios[0]?.rol === 'admin' || p.usuarios[0]?.rol === 'superadmin'
+                                                        ? 'bg-primary/10 text-primary border-primary/20'
+                                                        : 'bg-muted text-muted-foreground border-border'
+                                                )}
+                                                title="Rol de la cuenta en el consultorio"
+                                            >
+                                                {p.usuarios[0]?.rol === 'superadmin'
+                                                    ? 'Superadmin'
+                                                    : p.usuarios[0]?.rol === 'admin' ? 'Administrador' : 'Profesional'}
+                                            </span>
+                                        </>
                                     ) : (
                                         <span className="text-[10px] bg-amber-500/10 text-amber-600 dark:text-amber-400 px-1.5 py-0.5 rounded border border-amber-500/20 font-medium flex items-center gap-1" title="Sin cuenta de acceso individual">
                                             Sin cuenta
