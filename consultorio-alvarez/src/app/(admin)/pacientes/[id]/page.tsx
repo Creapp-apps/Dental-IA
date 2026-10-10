@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
-import { getProfesionales, getTiposTratamiento } from '@/lib/supabase/queries'
+import { getProfesionales, getTiposTratamiento, getPacienteById, origenPacientes } from '@/lib/supabase/queries'
 import { getEscaneosPacienteAction } from '@/lib/actions/escaneos-3d'
 import { ArrowLeft } from 'lucide-react'
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
@@ -13,8 +13,12 @@ import { PacientePerfilOptimistic } from '@/components/pacientes/PacientePerfilO
 async function getPacienteCompleto(id: string) {
     const supabase = await createClient()
 
+    // El paciente se pide por getPacienteById, que devuelve las columnas que
+    // corresponden al rol: al profesional, sin datos de contacto (§8).
+    // El resto sale con el cliente con sesión, donde RLS ya acota lo que ve
+    // cada uno: los turnos de esta ficha, por ejemplo, son los suyos (§9).
     const [pacienteRes, turnosRes, historialRes, odontogramaRes, presupuestosRes, adjuntosRes, escaneosRes] = await Promise.all([
-        supabase.from('pacientes').select('*, obra_social:obras_sociales(*)').eq('id', id).single(),
+        getPacienteById(id),
         supabase.from('turnos').select(`
             *, profesional:profesionales(nombre, apellido),
             tipo_tratamiento:tipos_tratamiento(nombre, color)
@@ -32,7 +36,7 @@ async function getPacienteCompleto(id: string) {
     ])
 
     return {
-        paciente: pacienteRes.data,
+        paciente: pacienteRes,
         turnos: turnosRes.data ?? [],
         historial: historialRes.data ?? [],
         odontograma: odontogramaRes.data ?? [],
@@ -50,6 +54,8 @@ export default async function FichaPacientePage({
     const { id } = await params
     const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos, escaneos3d } = await getPacienteCompleto(id)
     if (!p) notFound()
+
+    const { esProfesional } = await origenPacientes()
 
     // Cargar catálogos filtrados estrictamente por el tenant_id del consultorio
     const [profesionales, tiposTratamiento] = await Promise.all([
@@ -77,13 +83,13 @@ export default async function FichaPacientePage({
                     </div>
                 </div>
 
-                <EditarPacienteBtn pacienteId={p.id} label="Editar Paciente" size="sm" />
+                {!esProfesional && <EditarPacienteBtn pacienteId={p.id} label="Editar Paciente" size="sm" />}
             </div>
 
             {/* Layout: Profile sidebar + Tabbed content */}
             <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
                 {/* ── Left: Profile card con soporte reactivo Local-First / Optimistic ── */}
-                <PacientePerfilOptimistic initialPaciente={p} />
+                <PacientePerfilOptimistic initialPaciente={p} esProfesional={esProfesional} />
 
                 {/* ── Right: Tabbed content ── */}
                 <FichaPacienteTabs

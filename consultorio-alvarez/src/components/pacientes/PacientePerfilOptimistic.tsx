@@ -12,9 +12,15 @@ const GENERO_LABEL: Record<string, string> = { M: 'Masculino', F: 'Femenino', X:
 
 interface PacientePerfilOptimisticProps {
     initialPaciente: any
+    /**
+     * El profesional no recibe del servidor el teléfono, el email, el DNI ni la
+     * dirección del paciente, así que la ficha no dibuja ese bloque.
+     * Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §8 y §12
+     */
+    esProfesional?: boolean
 }
 
-export function PacientePerfilOptimistic({ initialPaciente }: PacientePerfilOptimisticProps) {
+export function PacientePerfilOptimistic({ initialPaciente, esProfesional = false }: PacientePerfilOptimisticProps) {
     const [paciente, setPaciente] = useState<any>(initialPaciente)
     const [hasPendingSync, setHasPendingSync] = useState(false)
     const [isSyncingNow, setIsSyncingNow] = useState(false)
@@ -168,23 +174,33 @@ export function PacientePerfilOptimistic({ initialPaciente }: PacientePerfilOpti
                 </div>
 
                 <div className="space-y-2.5 text-sm">
-                    <DatoFila label="DNI" valor={p.dni || '—'} />
-                    <DatoFila label="CUIT" valor={p.cuit || '—'} />
+                    {!esProfesional && (
+                        <>
+                            <DatoFila label="DNI" valor={p.dni || '—'} />
+                            <DatoFila label="CUIT" valor={p.cuit || '—'} />
+                        </>
+                    )}
                     <DatoFila label="Nac." valor={p.fecha_nacimiento ? format(new Date(p.fecha_nacimiento), "dd/MM/yyyy") : null} />
                     <DatoFila label="Género" valor={p.genero ? GENERO_LABEL[p.genero] : null} />
-                    <div className="h-px bg-border my-1" />
-                    <DatoFila label="Teléfono" valor={p.telefono} icon={<Phone className="h-3 w-3" />} />
-                    <DatoFila label="Email" valor={p.email} icon={<Mail className="h-3 w-3" />} />
-                    <DatoFila label="Dirección" valor={p.direccion} icon={<MapPin className="h-3 w-3" />} />
+                    {!esProfesional && (
+                        <>
+                            <div className="h-px bg-border my-1" />
+                            <DatoFila label="Teléfono" valor={p.telefono} icon={<Phone className="h-3 w-3" />} />
+                            <DatoFila label="Email" valor={p.email} icon={<Mail className="h-3 w-3" />} />
+                            <DatoFila label="Dirección" valor={p.direccion} icon={<MapPin className="h-3 w-3" />} />
+                        </>
+                    )}
                     <div className="h-px bg-border my-1" />
                     <DatoFila label="Obra Social" valor={p.obra_social?.nombre ?? 'Particular'} icon={<CreditCard className="h-3 w-3" />} />
                     <DatoFila label="Plan" valor={p.plan_obra_social} />
-                    {p.n_afiliado && <DatoFila label="N° Afiliado" valor={p.n_afiliado} />}
+                    {!esProfesional && p.n_afiliado && <DatoFila label="N° Afiliado" valor={p.n_afiliado} />}
                 </div>
 
-                <div className="mt-4 pt-3 border-t border-border">
-                    <EditarPacienteBtn pacienteId={p.id} label="Editar Información" className="w-full text-xs justify-center h-8" />
-                </div>
+                {!esProfesional && (
+                    <div className="mt-4 pt-3 border-t border-border">
+                        <EditarPacienteBtn pacienteId={p.id} label="Editar Información" className="w-full text-xs justify-center h-8" />
+                    </div>
+                )}
             </div>
 
             {p.notas_internas && (

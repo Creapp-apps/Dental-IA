@@ -13,6 +13,7 @@ import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
 
 
 import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
+import { getActor, requireActor, requireAdmin } from '@/lib/auth/actor'
 
 // ============================================================
 // SERVER ACTIONS — Turnos
@@ -21,6 +22,11 @@ import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
 async function getTenantId() {
     return await getAuthenticatedTenantId()
 }
+
+// Agendar es de recepción: crear, reprogramar, reasignar y borrar turnos es
+// sólo de admin. El profesional únicamente mueve el estado de los suyos
+// (EN_SALA, ATENDIDO), que es parte de atender.
+// Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §9
 
 export async function crearTurno(formData: {
     paciente_id: string
@@ -33,9 +39,11 @@ export async function crearTurno(formData: {
     es_sobreturno?: boolean
     numero_pieza?: string
 }) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+
     const supabase = await createClient()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const tenantId = actor.tenantId
 
     const { data, error } = await supabase
         .from('turnos')
@@ -147,12 +155,26 @@ export async function crearTurno(formData: {
 }
 
 export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
+    const { ok, actor, error: denied } = await requireActor()
+    if (!ok) return { error: denied }
+
     const supabase = await createClient()
 
-    const { error } = await supabase
+    let query = supabase
         .from('turnos')
         .update({ estado: nuevoEstado })
         .eq('id', turnoId)
+        .eq('tenant_id', actor.tenantId)
+
+    // El profesional sólo cambia el estado de sus propios turnos.
+    if (actor.rol === 'profesional' && !actor.esSuperadmin) {
+        if (!actor.profesionalId) {
+            return { error: 'Tu usuario no está vinculado a un profesional' }
+        }
+        query = query.eq('profesional_id', actor.profesionalId)
+    }
+
+    const { error } = await query
 
     if (error) return { error: error.message }
 
@@ -248,6 +270,9 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
 }
 
 export async function moverTurno(turnoId: string, nuevaFechaInicio: string, nuevaFechaFin: string, nuevoProfesionalId?: string) {
+    const { ok, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+
     const supabase = await createClient()
 
     const updateFields: any = {
@@ -326,6 +351,9 @@ export async function editarTurno(turnoId: string, formData: {
     es_sobreturno?: boolean
     numero_pieza?: string
 }) {
+    const { ok, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+
     const supabase = await createClient()
 
     // Obtener la fecha anterior para saber si fue reprogramado
@@ -411,12 +439,16 @@ export async function editarTurno(turnoId: string, formData: {
 }
 
 export async function eliminarTurno(turnoId: string) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+
     const supabase = await createClient()
 
     const { error } = await supabase
         .from('turnos')
         .delete()
         .eq('id', turnoId)
+        .eq('tenant_id', actor.tenantId)
 
     if (error) return { error: error.message }
 
@@ -805,15 +837,23 @@ export async function buscarTurnosAction(params: BuscarTurnosParams): Promise<{ 
     const tenantId = await getTenantId()
     if (!tenantId) return { turnos: [], error: 'Tenant no autenticado' }
 
+    const { alcanceAgenda } = await import('@/lib/supabase/queries')
+    const agenda = await alcanceAgenda()
+
     const admin = createAdminClient()
     const { query, fechaDesde, fechaHasta, profesionalId, estado, limit = 50 } = params
 
     const hasQuery = Boolean(query && query.trim().length > 0)
 
+    // Al profesional, ni el teléfono ni el DNI del paciente.
+    const camposPaciente = agenda.esProfesional
+        ? 'id, nombre, apellido'
+        : 'id, nombre, apellido, dni, telefono'
+
     // Si busca por paciente usamos !inner para filtrar turnos por la relación paciente en una única query
     const selectStr = `
         *,
-        paciente:pacientes${hasQuery ? '!inner' : ''}(id, nombre, apellido, dni, telefono),
+        paciente:pacientes${hasQuery ? '!inner' : ''}(${camposPaciente}),
         profesional:profesionales(id, nombre, apellido, color_agenda),
         tipo_tratamiento:tipos_tratamiento(id, nombre, duracion_minutos, prioridad, color)
     `
@@ -823,6 +863,12 @@ export async function buscarTurnosAction(params: BuscarTurnosParams): Promise<{ 
         .select(selectStr)
         .eq('tenant_id', tenantId)
 
+    // La agenda del profesional son sus turnos: la búsqueda no es una puerta
+    // de atrás a la del resto del consultorio.
+    if (agenda.esProfesional) {
+        turnosQuery = turnosQuery.eq('profesional_id', agenda.profesionalId ?? '')
+    }
+
     if (hasQuery) {
         const cleanTerm = query!.trim()
         const tokens = cleanTerm.split(/\s+/).filter(Boolean)
@@ -830,7 +876,9 @@ export async function buscarTurnosAction(params: BuscarTurnosParams): Promise<{ 
         if (tokens.length === 1) {
             const term = tokens[0]
             turnosQuery = turnosQuery.or(
-                `nombre.ilike.%${term}%,apellido.ilike.%${term}%,dni.ilike.%${term}%,nro_historia_clinica.ilike.%${term}%`,
+                agenda.esProfesional
+                    ? `nombre.ilike.%${term}%,apellido.ilike.%${term}%,nro_historia_clinica.ilike.%${term}%`
+                    : `nombre.ilike.%${term}%,apellido.ilike.%${term}%,dni.ilike.%${term}%,nro_historia_clinica.ilike.%${term}%`,
                 { foreignTable: 'pacientes' }
             )
         } else {

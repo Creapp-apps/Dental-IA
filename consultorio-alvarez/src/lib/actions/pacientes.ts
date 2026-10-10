@@ -4,7 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 
-import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
+import { getAuthenticatedTenantId, COLUMNAS_CLINICAS_EDITABLES } from '@/lib/supabase/queries'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { requireActor, requireAdmin } from '@/lib/auth/actor'
 
 async function getTenantId() {
     return await getAuthenticatedTenantId()
@@ -48,9 +50,13 @@ export async function crearPaciente(formData: {
     notas_internas?: string
     registro_completo?: boolean
 }) {
+    // Los datos de contacto del paciente son del admin. El profesional corrige
+    // lo clínico por actualizarDatosClinicosPaciente.
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+
     const supabase = await createClient()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const tenantId = actor.tenantId
 
     let finalObraSocialId = formData.obra_social_id || null
 
@@ -139,6 +145,47 @@ export async function crearPaciente(formData: {
     return { error: lastError?.message || 'Error al generar un número de historia clínica único.' }
 }
 
+/**
+ * Lo único que un profesional puede escribir sobre un paciente: motivo de
+ * consulta, alergias, medicación y antecedentes. Ni teléfono, ni email, ni DNI.
+ *
+ * Corre con service_role a propósito: RLS no sabe restringir columnas y la
+ * vista pacientes_clinico no es actualizable, así que la lista blanca vive acá,
+ * en un solo archivo revisable.
+ * Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §8
+ */
+export async function actualizarDatosClinicosPaciente(id: string, datos: {
+    motivo_consulta?: string | null
+    alergias?: string | null
+    medicacion_actual?: string | null
+    antecedentes?: string | null
+}) {
+    const { ok, actor, error: denied } = await requireActor()
+    if (!ok) return { error: denied }
+
+    const cambios = Object.fromEntries(
+        Object.entries(datos)
+            .filter(([columna]) => (COLUMNAS_CLINICAS_EDITABLES as readonly string[]).includes(columna))
+            .map(([columna, valor]) => [columna, valor === '' ? null : valor])
+    )
+
+    if (Object.keys(cambios).length === 0) {
+        return { error: 'No hay datos clínicos para actualizar' }
+    }
+
+    const admin = createAdminClient()
+    const { error } = await admin
+        .from('pacientes')
+        .update({ ...cambios, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .eq('tenant_id', actor.tenantId)
+
+    if (error) return { error: error.message }
+
+    revalidatePath(`/pacientes/${id}`)
+    return { success: true }
+}
+
 export async function actualizarPaciente(id: string, formData: {
     nro_historia_clinica?: string
     nombre?: string
@@ -161,9 +208,13 @@ export async function actualizarPaciente(id: string, formData: {
     notas_internas?: string
     registro_completo?: boolean
 }) {
+    // Los datos de contacto del paciente son del admin. El profesional corrige
+    // lo clínico por actualizarDatosClinicosPaciente.
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+
     const supabase = await createClient()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const tenantId = actor.tenantId
 
     let finalObraSocialId = formData.obra_social_id || null
 
@@ -223,9 +274,11 @@ export async function actualizarPaciente(id: string, formData: {
 }
 
 export async function eliminarPaciente(id: string) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+
     const supabase = await createClient()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const tenantId = actor.tenantId
 
     const { error } = await supabase
         .from('pacientes')

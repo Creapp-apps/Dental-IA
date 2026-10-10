@@ -334,6 +334,15 @@ class OfflineSyncManager {
                     value: 'true',
                     updated_at: new Date().toISOString()
                 })
+
+                // Con qué rol se armó esta copia. Un profesional baja menos
+                // datos que un admin, así que si el rol cambia hay que rehacer
+                // la base local entera (§8).
+                await localDb.sync_meta.put({
+                    key: 'rol_snapshot',
+                    value: res.rol ?? null,
+                    updated_at: new Date().toISOString()
+                })
             })
 
             await this.refreshLocalMetrics()
@@ -466,6 +475,21 @@ class OfflineSyncManager {
                 await this.refreshLocalMetrics()
                 this.updateStatus({ isSyncing: false, error: motivo })
                 return { success: false, pushed: pushedCount, pulled: 0, error: motivo }
+            }
+
+            // El rol del usuario cambió desde el último snapshot: su base local
+            // quedó con datos que ya no le corresponden (o le faltan los que sí).
+            // Se rehace entera antes de seguir. Diseño §8.
+            const rolGuardado = (await localDb.sync_meta.get('rol_snapshot'))?.value ?? null
+            if (pullRes.rol && rolGuardado && pullRes.rol !== rolGuardado) {
+                console.warn('[SYNC MANAGER] Cambió el rol del usuario: se rehace la base local')
+                const snapshot = await this.downloadFullSnapshot()
+                return {
+                    success: snapshot.success,
+                    pushed: pushedCount,
+                    pulled: 0,
+                    error: snapshot.error
+                }
             }
 
             await localDb.transaction('rw', [localDb.pacientes, localDb.turnos, localDb.sync_meta], async () => {

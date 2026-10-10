@@ -1,8 +1,8 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { getObrasSociales } from '@/lib/supabase/queries'
+import { getObrasSociales, getCurrentUsuario } from '@/lib/supabase/queries'
 import { FormPacienteReal } from '@/components/pacientes/FormPacienteReal'
 
 export default async function EditarPacientePage({
@@ -10,6 +10,12 @@ export default async function EditarPacientePage({
 }: {
     params: Promise<{ id: string }>
 }) {
+    // Alta y edición completa del paciente son de admin (§8, §9).
+    const usuario = await getCurrentUsuario()
+    if (usuario?.rol === 'profesional') {
+        redirect('/agenda')
+    }
+
     const { id } = await params
     const supabase = await createClient()
 

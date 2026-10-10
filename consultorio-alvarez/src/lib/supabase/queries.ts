@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { getActor } from '@/lib/auth/actor'
 import { cache } from 'react'
 
 // ============================================================
@@ -175,6 +176,84 @@ const PACIENTE_SELECT_FIELDS = `
     obra_social:obras_sociales(id, nombre)
 `
 
+// Las mismas columnas que expone la vista pacientes_clinico (migración 022):
+// ni teléfono, ni email, ni DNI, ni CUIT, ni dirección, ni ciudad, ni número de
+// afiliado, ni notas internas. Esta constante es la que rige en los caminos que
+// leen con el cliente admin, donde RLS no se evalúa.
+// Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §8
+export const PACIENTE_CLINICO_COLUMNAS = `
+    id,
+    tenant_id,
+    nro_historia_clinica,
+    nombre,
+    apellido,
+    fecha_nacimiento,
+    genero,
+    obra_social_id,
+    plan_obra_social,
+    motivo_consulta,
+    alergias,
+    medicacion_actual,
+    antecedentes,
+    registro_completo,
+    foto_url,
+    created_at,
+    updated_at
+`
+
+// Las cuatro columnas clínicas que el profesional sí puede escribir (§8).
+export const COLUMNAS_CLINICAS_EDITABLES = [
+    'motivo_consulta',
+    'alergias',
+    'medicacion_actual',
+    'antecedentes',
+] as const
+
+const PACIENTE_CLINICO_FIELDS = `${PACIENTE_CLINICO_COLUMNAS}, obra_social:obras_sociales(id, nombre)`
+
+const PACIENTE_CLINICO_COMPACT_FIELDS = `
+    id,
+    nro_historia_clinica,
+    nombre,
+    apellido,
+    registro_completo,
+    obra_social_id
+`
+
+// Un turno arrastra datos del paciente para la agenda; al profesional no le
+// viaja el teléfono.
+const PACIENTE_EN_TURNO_FIELDS = 'id, nombre, apellido, telefono, obra_social_id'
+const PACIENTE_EN_TURNO_CLINICO_FIELDS = 'id, nombre, apellido, obra_social_id'
+
+/**
+ * Qué puede leer de un paciente quien está pidiendo los datos.
+ * El superadmin de la plataforma lee como admin.
+ */
+export const origenPacientes = cache(async () => {
+    const actor = await getActor()
+    const esProfesional = actor?.rol === 'profesional' && !actor.esSuperadmin
+    return {
+        esProfesional,
+        campos: esProfesional ? PACIENTE_CLINICO_FIELDS : PACIENTE_SELECT_FIELDS,
+        camposCompactos: esProfesional ? PACIENTE_CLINICO_COMPACT_FIELDS : PACIENTE_COMPACT_FIELDS,
+        camposEnTurno: esProfesional ? PACIENTE_EN_TURNO_CLINICO_FIELDS : PACIENTE_EN_TURNO_FIELDS,
+    }
+})
+
+/**
+ * Hasta dónde llega la agenda de quien consulta: el profesional ve sólo los
+ * turnos que tiene asignados.
+ * Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §9
+ */
+export const alcanceAgenda = cache(async () => {
+    const actor = await getActor()
+    const esProfesional = actor?.rol === 'profesional' && !actor.esSuperadmin
+    return {
+        esProfesional,
+        profesionalId: actor?.profesionalId ?? null,
+    }
+})
+
 export const PACIENTE_COMPACT_FIELDS = `
     id,
     nro_historia_clinica,
@@ -250,10 +329,11 @@ export async function getPacientes(limit: number = 50, offset: number = 0) {
     if (!tenantId) return []
 
     const effectiveLimit = limit > 0 ? limit : 50
+    const { campos } = await origenPacientes()
 
     const { data, error } = await supabase
         .from('pacientes')
-        .select(PACIENTE_SELECT_FIELDS)
+        .select(campos)
         .eq('tenant_id', tenantId)
         .order('apellido', { ascending: true })
         .range(offset, offset + effectiveLimit - 1)
@@ -262,7 +342,8 @@ export async function getPacientes(limit: number = 50, offset: number = 0) {
         console.error('getPacientes error:', error)
         return []
     }
-    return data ?? []
+    // El select se arma según el rol, así que supabase-js no puede tipar la fila.
+    return (data ?? []) as any[]
 }
 
 export async function getPacientesCompactos(limit: number = 5000) {
@@ -270,23 +351,25 @@ export async function getPacientesCompactos(limit: number = 5000) {
     const tenantId = await getTenantId()
     if (!tenantId) return []
 
+    const { camposCompactos } = await origenPacientes()
+
     // Consultar hasta 3.000 registros en paralelo para superar el límite REST de 1.000 de Supabase
     const [p1, p2, p3] = await Promise.all([
         supabase
             .from('pacientes')
-            .select(PACIENTE_COMPACT_FIELDS)
+            .select(camposCompactos)
             .eq('tenant_id', tenantId)
             .order('apellido', { ascending: true })
             .range(0, 999),
         supabase
             .from('pacientes')
-            .select(PACIENTE_COMPACT_FIELDS)
+            .select(camposCompactos)
             .eq('tenant_id', tenantId)
             .order('apellido', { ascending: true })
             .range(1000, 1999),
         supabase
             .from('pacientes')
-            .select(PACIENTE_COMPACT_FIELDS)
+            .select(camposCompactos)
             .eq('tenant_id', tenantId)
             .order('apellido', { ascending: true })
             .range(2000, 2999)
@@ -298,7 +381,7 @@ export async function getPacientesCompactos(limit: number = 5000) {
         ...(p3.data || [])
     ]
 
-    return all
+    return all as any[]
 }
 
 export async function searchPacientes(searchTerm: string, limit: number = 20, compact: boolean = true) {
@@ -311,30 +394,34 @@ export async function searchPacientes(searchTerm: string, limit: number = 20, co
     const digitsOnly = cleanTerm.replace(/\D/g, '')
     const effectiveLimit = Math.min(Math.max(1, limit), 25)
 
+    const { esProfesional, campos, camposCompactos } = await origenPacientes()
+
     let query = supabase
         .from('pacientes')
-        .select(compact ? PACIENTE_COMPACT_FIELDS : PACIENTE_SELECT_FIELDS)
+        .select(compact ? camposCompactos : campos)
         .eq('tenant_id', tenantId)
         .order('apellido', { ascending: true })
         .limit(effectiveLimit)
 
     if (isNumeric && digitsOnly.length >= 2) {
+        // Al profesional tampoco se le busca por DNI: no lo ve, y poder
+        // preguntar por un DNI es otra forma de leerlo.
         const variants = formatDniVariants(digitsOnly)
-        const clauses = variants.flatMap(v => [
-            `dni.ilike.%${v}%`,
-            `nro_historia_clinica.ilike.%${v}%`
-        ]).concat([`nro_historia_clinica.ilike.%${cleanTerm}%`])
+        const clauses = variants.flatMap(v => (
+            esProfesional
+                ? [`nro_historia_clinica.ilike.%${v}%`]
+                : [`dni.ilike.%${v}%`, `nro_historia_clinica.ilike.%${v}%`]
+        )).concat([`nro_historia_clinica.ilike.%${cleanTerm}%`])
         query = query.or(clauses.join(','))
     } else {
         const tokens = cleanTerm.split(/\s+/).filter(Boolean)
         if (tokens.length === 1) {
             const variants = getSearchTokenVariants(tokens[0])
-            const clauses = variants.flatMap(t => [
-                `nombre.ilike.%${t}%`,
-                `apellido.ilike.%${t}%`,
-                `dni.ilike.%${t}%`,
-                `nro_historia_clinica.ilike.%${t}%`
-            ])
+            const clauses = variants.flatMap(t => (
+                esProfesional
+                    ? [`nombre.ilike.%${t}%`, `apellido.ilike.%${t}%`, `nro_historia_clinica.ilike.%${t}%`]
+                    : [`nombre.ilike.%${t}%`, `apellido.ilike.%${t}%`, `dni.ilike.%${t}%`, `nro_historia_clinica.ilike.%${t}%`]
+            ))
             query = query.or(clauses.join(','))
         } else {
             const t0 = tokens[0]
@@ -355,7 +442,7 @@ export async function searchPacientes(searchTerm: string, limit: number = 20, co
         return []
     }
 
-    return data ?? []
+    return (data ?? []) as any[]
 }
 
 export async function getPacienteById(id: string) {
@@ -363,14 +450,16 @@ export async function getPacienteById(id: string) {
     const tenantId = await getTenantId()
     if (!tenantId) return null
 
+    const { campos } = await origenPacientes()
+
     const { data, error } = await supabase
         .from('pacientes')
-        .select('*, obra_social:obras_sociales(*)')
+        .select(campos)
         .eq('id', id)
         .eq('tenant_id', tenantId)
         .single()
     if (error) { console.error('getPacienteById:', error); return null }
-    return data
+    return data as any
 }
 
 // ---- TURNOS ----
@@ -381,21 +470,29 @@ export async function getTurnosDelDia(fecha: Date) {
     if (!tenantId) return []
 
     const diaStr = fecha.toISOString().split('T')[0]
-    const { data: turnos, error } = await supabase
+    const agenda = await alcanceAgenda()
+
+    let turnosQuery = supabase
         .from('turnos')
         .select('*')
         .eq('tenant_id', tenantId)
         .gte('fecha_inicio', `${diaStr}T00:00:00`)
         .lt('fecha_inicio', `${diaStr}T23:59:59`)
-        .order('fecha_inicio')
+
+    if (agenda.esProfesional) {
+        turnosQuery = turnosQuery.eq('profesional_id', agenda.profesionalId ?? '')
+    }
+
+    const { data: turnos, error } = await turnosQuery.order('fecha_inicio')
 
     if (error) { console.error('getTurnosDelDia:', error); return [] }
     if (!turnos || turnos.length === 0) return []
 
     const pacIds = Array.from(new Set(turnos.map((t: any) => t.paciente_id).filter(Boolean)))
+    const { camposEnTurno } = await origenPacientes()
     const [pacientesRes, profMap, tipoMap] = await Promise.all([
         pacIds.length > 0
-            ? supabase.from('pacientes').select('id, nombre, apellido, telefono, obra_social_id').in('id', pacIds)
+            ? supabase.from('pacientes').select(camposEnTurno).in('id', pacIds)
             : Promise.resolve({ data: [] }),
         getCachedProfesionalesMap(tenantId),
         getCachedTiposTratamientoMap(tenantId)
@@ -416,6 +513,8 @@ export async function getTurnosSemana(inicio: Date, fin: Date, profesionalId?: s
     const tenantId = await getTenantId()
     if (!tenantId) return []
 
+    const agenda = await alcanceAgenda()
+
     let query = supabase
         .from('turnos')
         .select('*')
@@ -423,7 +522,9 @@ export async function getTurnosSemana(inicio: Date, fin: Date, profesionalId?: s
         .gte('fecha_inicio', inicio.toISOString())
         .lte('fecha_inicio', fin.toISOString())
 
-    if (profesionalId) {
+    if (agenda.esProfesional) {
+        query = query.eq('profesional_id', agenda.profesionalId ?? '')
+    } else if (profesionalId) {
         query = query.eq('profesional_id', profesionalId)
     }
 
@@ -433,9 +534,10 @@ export async function getTurnosSemana(inicio: Date, fin: Date, profesionalId?: s
     if (!turnos || turnos.length === 0) return []
 
     const pacIds = Array.from(new Set(turnos.map((t: any) => t.paciente_id).filter(Boolean)))
+    const { camposEnTurno } = await origenPacientes()
     const [pacientesRes, profMap, tipoMap] = await Promise.all([
         pacIds.length > 0
-            ? supabase.from('pacientes').select('id, nombre, apellido, telefono, obra_social_id').in('id', pacIds)
+            ? supabase.from('pacientes').select(camposEnTurno).in('id', pacIds)
             : Promise.resolve({ data: [] }),
         getCachedProfesionalesMap(tenantId),
         getCachedTiposTratamientoMap(tenantId)
@@ -518,11 +620,14 @@ export async function getTurnosSinConfirmar() {
     const hoy = new Date()
     hoy.setHours(0, 0, 0, 0)
 
-    const { data, error } = await supabase
+    const agenda = await alcanceAgenda()
+    const { camposEnTurno } = await origenPacientes()
+
+    let query = supabase
         .from('turnos')
         .select(`
             *,
-            paciente:pacientes(id, nombre, apellido, telefono),
+            paciente:pacientes(${camposEnTurno}),
             profesional:profesionales(id, nombre, apellido, color_agenda),
             tipo_tratamiento:tipos_tratamiento(id, nombre, duracion_minutos, prioridad, color),
             recordatorios(id, created_at, estado_envio, error_detalle, mensaje_enviado)
@@ -530,13 +635,20 @@ export async function getTurnosSinConfirmar() {
         .eq('tenant_id', tenantId)
         .in('estado', ['PENDIENTE', 'CONFIRMADO', 'CANCELADO'])
         .gte('fecha_inicio', hoy.toISOString())
-        .order('fecha_inicio', { ascending: true })
+
+    if (agenda.esProfesional) {
+        query = query.eq('profesional_id', agenda.profesionalId ?? '')
+    }
+
+    const { data, error } = await query.order('fecha_inicio', { ascending: true })
 
     if (error) {
         console.error('getTurnosSinConfirmar error:', error)
         return []
     }
-    return data ?? []
+    // El embed del paciente cambia según el rol, así que supabase-js no puede
+    // tipar la fila.
+    return (data ?? []) as any[]
 }
 
 export async function getTodayOperationalSummary() {
@@ -547,7 +659,9 @@ export async function getTodayOperationalSummary() {
     const now = new Date()
     const diaStr = now.toISOString().split('T')[0]
 
-    const { data: turnos, error } = await supabase
+    const agenda = await alcanceAgenda()
+
+    let resumenQuery = supabase
         .from('turnos')
         .select(`
             id,
@@ -558,7 +672,12 @@ export async function getTodayOperationalSummary() {
         .eq('tenant_id', tenantId)
         .gte('fecha_inicio', `${diaStr}T00:00:00`)
         .lt('fecha_inicio', `${diaStr}T23:59:59`)
-        .order('fecha_inicio', { ascending: true })
+
+    if (agenda.esProfesional) {
+        resumenQuery = resumenQuery.eq('profesional_id', agenda.profesionalId ?? '')
+    }
+
+    const { data: turnos, error } = await resumenQuery.order('fecha_inicio', { ascending: true })
 
     if (error || !turnos) {
         return { turnosHoy: 0, turnosConfirmados: 0, turnosPendientes: 0, proximoTurno: null }

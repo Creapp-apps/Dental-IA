@@ -1,12 +1,37 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
+import { getAuthenticatedTenantId, PACIENTE_CLINICO_COLUMNAS, COLUMNAS_CLINICAS_EDITABLES } from '@/lib/supabase/queries'
+import { getActor } from '@/lib/auth/actor'
 import { LocalPaciente, LocalTurno, LocalProfesional, LocalTratamiento, LocalObraSocial, SyncOutboxItem } from '@/lib/offline/db'
 import { esReintentable } from '@/lib/offline/outbox-errors'
 
+/**
+ * Qué se baja a la computadora de quien sincroniza.
+ * La base local de un profesional no puede contener un teléfono ni un turno
+ * ajeno: lo que no se manda, no queda en IndexedDB.
+ * Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §8 y §9
+ */
+async function alcanceDeSincronizacion() {
+    const actor = await getActor()
+    const esProfesional = actor?.rol === 'profesional' && !actor.esSuperadmin
+    return {
+        esProfesional,
+        profesionalId: actor?.profesionalId ?? null,
+        columnasPaciente: esProfesional ? PACIENTE_CLINICO_COLUMNAS : '*',
+        pacienteEnTurno: esProfesional
+            ? 'nombre, apellido'
+            : 'nombre, apellido, dni, telefono',
+    }
+}
+
 export interface FullSnapshotResult {
     success: boolean
+    /**
+     * Rol con el que se armó esta copia. Si cambia, lo que ya está en IndexedDB
+     * quedó con datos de más o de menos y hay que rehacer la base local (§8).
+     */
+    rol?: string | null
     pacientes: LocalPaciente[]
     turnos: LocalTurno[]
     profesionales: LocalProfesional[]
@@ -23,6 +48,8 @@ export interface FullSnapshotResult {
 
 export interface IncrementalPullResult {
     success: boolean
+    /** Igual que en el snapshot: un cambio de rol invalida la base local. */
+    rol?: string | null
     pacientes: LocalPaciente[]
     turnos: LocalTurno[]
     server_time: string
@@ -96,6 +123,8 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
         const en180Dias = new Date(now)
         en180Dias.setDate(en180Dias.getDate() + 180)
 
+        const alcance = await alcanceDeSincronizacion()
+
         const [
             pacientesData,
             turnosData,
@@ -106,24 +135,30 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
             fetchAllRows(async (from, to) => {
                 return admin
                     .from('pacientes')
-                    .select('*')
+                    .select(alcance.columnasPaciente)
                     .eq('tenant_id', tenantId)
                     .order('apellido', { ascending: true })
                     .range(from, to)
             }),
 
             fetchAllRows(async (from, to) => {
-                return admin
+                let query = admin
                     .from('turnos')
                     .select(`
                         *,
-                        paciente:pacientes(nombre, apellido, dni, telefono),
+                        paciente:pacientes(${alcance.pacienteEnTurno}),
                         profesional:profesionales(nombre, apellido),
                         tipo_tratamiento:tipos_tratamiento(nombre, color)
                     `)
                     .eq('tenant_id', tenantId)
                     .gte('fecha_inicio', hace90Dias.toISOString())
                     .lte('fecha_inicio', en180Dias.toISOString())
+
+                if (alcance.esProfesional && alcance.profesionalId) {
+                    query = query.eq('profesional_id', alcance.profesionalId)
+                }
+
+                return query
                     .order('fecha_inicio', { ascending: true })
                     .range(from, to)
             }),
@@ -176,7 +211,8 @@ export async function fetchFullSnapshotAction(): Promise<FullSnapshotResult> {
 
         return {
             success: true,
-            pacientes: (pacientesData as LocalPaciente[]) || [],
+            rol: alcance.esProfesional ? 'profesional' : 'admin',
+            pacientes: (pacientesData as unknown as LocalPaciente[]) || [],
             turnos: turnosMapeados,
             profesionales: (profesionalesData as LocalProfesional[]) || [],
             tipos_tratamiento: (tratamientosData as LocalTratamiento[]) || [],
@@ -219,6 +255,8 @@ export async function fetchIncrementalPullAction(sinceIsoDate: string): Promise<
     const server_time = new Date().toISOString()
 
     try {
+        const alcance = await alcanceDeSincronizacion()
+
         const [
             pacientesNuevos,
             turnosNuevos
@@ -226,24 +264,29 @@ export async function fetchIncrementalPullAction(sinceIsoDate: string): Promise<
             fetchAllRows(async (from, to) => {
                 return admin
                     .from('pacientes')
-                    .select('*')
+                    .select(alcance.columnasPaciente)
                     .eq('tenant_id', tenantId)
                     .gt('updated_at', sinceIsoDate)
                     .range(from, to)
             }),
 
             fetchAllRows(async (from, to) => {
-                return admin
+                let query = admin
                     .from('turnos')
                     .select(`
                         *,
-                        paciente:pacientes(nombre, apellido, dni, telefono),
+                        paciente:pacientes(${alcance.pacienteEnTurno}),
                         profesional:profesionales(nombre, apellido),
                         tipo_tratamiento:tipos_tratamiento(nombre, color)
                     `)
                     .eq('tenant_id', tenantId)
                     .gt('updated_at', sinceIsoDate)
-                    .range(from, to)
+
+                if (alcance.esProfesional && alcance.profesionalId) {
+                    query = query.eq('profesional_id', alcance.profesionalId)
+                }
+
+                return query.range(from, to)
             })
         ])
 
@@ -275,7 +318,8 @@ export async function fetchIncrementalPullAction(sinceIsoDate: string): Promise<
 
         return {
             success: true,
-            pacientes: (pacientesNuevos as LocalPaciente[]) || [],
+            rol: alcance.esProfesional ? 'profesional' : 'admin',
+            pacientes: (pacientesNuevos as unknown as LocalPaciente[]) || [],
             turnos: turnosMapeados,
             server_time
         }
@@ -332,7 +376,18 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
     if (!tenantId || !items || items.length === 0) return []
 
     const admin = createAdminClient()
+    const alcance = await alcanceDeSincronizacion()
     const results: PushResultItem[] = []
+
+    // Lo que sube un profesional pasa por el mismo filtro que lo que baja: este
+    // camino escribe con service_role, así que RLS no lo frena y el permiso lo
+    // hace cumplir el código. Diseño §8 y §9.
+    const rechazo = (item: SyncOutboxItem, error: string): PushResultItem => ({
+        outbox_id: item.id || 0,
+        success: false,
+        error,
+        retriable: false,
+    })
 
     for (const item of items) {
         // Tenant vacío significa "adoptá el del servidor": un paciente creado
@@ -355,6 +410,11 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
             const resultadosAntes = results.length
 
             if (item.entity === 'turnos') {
+                if (alcance.esProfesional && item.operation !== 'UPDATE') {
+                    // Crear, reprogramar y reasignar es de recepción.
+                    results.push(rechazo(item, 'Un profesional no puede crear ni borrar turnos'))
+                    continue
+                }
                 if (item.operation === 'INSERT') {
                     const payload = {
                         ...item.payload,
@@ -367,14 +427,31 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                     const { error } = await admin.from('turnos').upsert(payload)
                     results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'UPDATE') {
-                    const { error } = await admin
+                    // Del turno propio, el profesional sólo mueve el estado
+                    // (EN_SALA, ATENDIDO), que es parte de atender.
+                    const payload = alcance.esProfesional
+                        ? { estado: item.payload?.estado }
+                        : item.payload
+
+                    if (alcance.esProfesional && !payload.estado) {
+                        results.push(rechazo(item, 'Un profesional sólo puede cambiar el estado de sus turnos'))
+                        continue
+                    }
+
+                    let query = admin
                         .from('turnos')
                         .update({
-                            ...item.payload,
+                            ...payload,
                             updated_at: new Date().toISOString()
                         })
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
+
+                    if (alcance.esProfesional && alcance.profesionalId) {
+                        query = query.eq('profesional_id', alcance.profesionalId)
+                    }
+
+                    const { error } = await query
                     results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'DELETE') {
                     const { error } = await admin
@@ -385,6 +462,10 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                     results.push(resultado(item.id || 0, error))
                 }
             } else if (item.entity === 'pacientes') {
+                if (alcance.esProfesional && item.operation !== 'UPDATE') {
+                    results.push(rechazo(item, 'Un profesional no puede crear ni borrar pacientes'))
+                    continue
+                }
                 if (item.operation === 'INSERT') {
                     const payload = {
                         ...item.payload,
@@ -397,10 +478,25 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                     const { error } = await admin.from('pacientes').upsert(payload)
                     results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'UPDATE') {
+                    // El profesional sólo corrige lo clínico. Su copia local no
+                    // tiene los datos de contacto, así que mandar el payload
+                    // entero además los borraría.
+                    const payload = alcance.esProfesional
+                        ? Object.fromEntries(
+                            Object.entries(item.payload || {})
+                                .filter(([columna]) => (COLUMNAS_CLINICAS_EDITABLES as readonly string[]).includes(columna))
+                        )
+                        : item.payload
+
+                    if (alcance.esProfesional && Object.keys(payload).length === 0) {
+                        results.push(rechazo(item, 'Un profesional sólo puede editar motivo de consulta, alergias, medicación y antecedentes'))
+                        continue
+                    }
+
                     const { error } = await admin
                         .from('pacientes')
                         .update({
-                            ...item.payload,
+                            ...payload,
                             updated_at: new Date().toISOString()
                         })
                         .eq('id', item.entity_id)
@@ -431,11 +527,18 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         .eq('tenant_id', tenantId)
                     results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'DELETE') {
-                    const { error } = await admin
+                    // Borra las propias; las del colega las borra el admin.
+                    let query = admin
                         .from('historial_clinico')
                         .delete()
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
+
+                    if (alcance.esProfesional && alcance.profesionalId) {
+                        query = query.eq('profesional_id', alcance.profesionalId)
+                    }
+
+                    const { error } = await query
                     results.push(resultado(item.id || 0, error))
                 }
             }
