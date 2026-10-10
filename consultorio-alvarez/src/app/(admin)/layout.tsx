@@ -1,3 +1,4 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { headers } from 'next/headers'
 import { resolveTenant } from '@/lib/tenant'
@@ -7,13 +8,32 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { AdminBackground } from '@/components/ui/admin-background'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
 import { NotificationProvider } from '@/components/providers/NotificationProvider'
-import { getCurrentUsuario, getTodayOperationalSummary } from '@/lib/supabase/queries'
+import { getCurrentTenant, getCurrentUsuario, getTodayOperationalSummary } from '@/lib/supabase/queries'
 import { getBillingConfig } from '@/lib/actions/billing'
 import { BillingGuard } from '@/components/providers/BillingGuard'
 import { NumpadTabProvider } from '@/components/providers/NumpadTabProvider'
 import { generateTenantCssTheme } from '@/lib/theme'
 import { SessionResumeHandler } from '@/components/providers/SessionResumeHandler'
 import { BillingDueModalToast } from '@/components/billing/BillingDueModalToast'
+
+// El título de la pestaña debe ser el del consultorio del usuario logueado,
+// no el de la raíz: con varios consultorios en producción, un título fijo
+// muestra el nombre de otra clínica sobre el panel correcto.
+export async function generateMetadata(): Promise<Metadata> {
+    const tenant = await getCurrentTenant()
+    const nombre = tenant?.nombre?.trim()
+
+    if (!nombre) {
+        return { title: 'Panel de Administración | Dental-IA' }
+    }
+
+    return {
+        title: {
+            default: `${nombre} - Panel`,
+            template: `%s · ${nombre}`,
+        },
+    }
+}
 
 export default async function AdminLayout({
     children,

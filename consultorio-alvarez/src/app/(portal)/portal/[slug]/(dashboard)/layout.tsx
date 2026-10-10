@@ -1,7 +1,25 @@
+import type { Metadata } from 'next'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getLandingConfigPublica } from '@/lib/actions/landing'
+import { resolveTenant } from '@/lib/tenant'
 import { PortalNavbar } from '@/components/portal/PortalNavbar'
+
+// Igual que en el panel: la pestaña lleva el nombre del consultorio del portal,
+// no el título fijo de la raíz.
+export async function generateMetadata({
+    params,
+}: {
+    params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+    const { slug } = await params
+    const tenant = await resolveTenant(slug)
+    const nombre = tenant?.nombre?.trim()
+
+    return {
+        title: nombre ? `${nombre} - Portal del Paciente` : 'Portal del Paciente | Dental-IA',
+    }
+}
 
 export default async function PortalLayout({
     children,
