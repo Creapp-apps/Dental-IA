@@ -32,7 +32,8 @@ export interface LocalTurno {
     id: string
     tenant_id: string
     paciente_id: string
-    profesional_id: string
+    /** null = turno sin asignar, a la espera de recepción (diseño §10). */
+    profesional_id: string | null
     tipo_tratamiento_id: string
     fecha_inicio: string
     fecha_fin: string

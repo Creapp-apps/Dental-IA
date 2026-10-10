@@ -97,6 +97,9 @@ export async function getTurnosAgendaLocal(
             if (!t.fecha_inicio) return false
             const tTime = new Date(t.fecha_inicio).getTime()
             if (tTime < desdeTime || tTime > hastaTime) return false
+            // 'sin-asignar' es el carril de los turnos que entraron por la web
+            // sin profesional y espera que recepción los asigne (diseño §10).
+            if (profesionalId === 'sin-asignar') return !t.profesional_id
             if (profesionalId && profesionalId !== 'todos' && t.profesional_id !== profesionalId) return false
             return true
         })

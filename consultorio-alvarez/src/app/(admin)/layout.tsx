@@ -12,6 +12,7 @@ import { getCurrentTenant, getCurrentUsuario, getTodayOperationalSummary } from 
 import { getBillingConfig } from '@/lib/actions/billing'
 import { BillingGuard } from '@/components/providers/BillingGuard'
 import { NumpadTabProvider } from '@/components/providers/NumpadTabProvider'
+import { esEmailSuperadmin } from '@/lib/auth/superadmins'
 import { generateTenantCssTheme } from '@/lib/theme'
 import { SessionResumeHandler } from '@/components/providers/SessionResumeHandler'
 import { BillingDueModalToast } from '@/components/billing/BillingDueModalToast'
@@ -78,12 +79,7 @@ export default async function AdminLayout({
         cleanHost.endsWith('.local') || 
         cleanHost.endsWith('.vercel.app')
 
-    const isSuperadmin = 
-        usuario.rol === 'superadmin' || 
-        user.email === 'creapp.ar@gmail.com' ||
-        user.email === 'mazasebastian@hotmail.com' || 
-        user.email?.endsWith('@creapp.com') || 
-        user.email?.endsWith('@dental-ia.com')
+    const isSuperadmin = usuario.rol === 'superadmin' || esEmailSuperadmin(user.email)
 
     if (!isLocalhost && !isSuperadmin) {
         const requestedTenant = await resolveTenant(rawHost)

@@ -1,12 +1,21 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
+import { requireAdmin } from '@/lib/auth/actor'
 import { revalidatePath } from 'next/cache'
 
-// All config actions use the admin client (service_role key) to bypass RLS.
-// This is safe because these are Server Actions — never exposed to the browser.
-// Once Auth is implemented, we'll validate permissions here before executing.
+// Configurar el consultorio es sólo de admin, y cada operación por id se acota
+// al consultorio del actor, para que un id ajeno no sea alcanzable aunque se
+// invoque a mano.
+// Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §7 y §12
+//
+// Obras sociales, tipos de tratamiento y los datos del consultorio pasan al
+// cliente con sesión: ahí las políticas de la migración 021 se evalúan de
+// verdad y requireAdmin() queda como segunda línea, la que da el error claro.
+// El alta y la baja de profesionales siguen con el cliente admin porque tocan
+// la API de auth (crear y borrar credenciales), que exige service_role.
 
 function getAdmin() {
     return createAdminClient()
@@ -26,9 +35,10 @@ export async function getTenantConfig(explicitTenantId?: string) {
 }
 
 export async function actualizarTenant(updates: Record<string, any>) {
-    const supabase = getAdmin()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const tenantId = actor.tenantId
 
     const { error } = await supabase.from('tenants').update(updates).eq('id', tenantId)
     if (error) return { error: error.message }
@@ -46,9 +56,10 @@ export async function crearProfesional(data: {
     matricula?: string; email: string; color_agenda?: string;
     avatar_url?: string; password?: string;
 }) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
     const supabase = getAdmin()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const tenantId = actor.tenantId
 
     // 1. Crear el usuario en Supabase Auth
     const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
@@ -120,6 +131,8 @@ export async function crearProfesional(data: {
 }
 
 export async function actualizarProfesional(id: string, data: Record<string, any>) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
     const supabase = getAdmin()
     
     // Obtenemos los valores antes de limpiarlos para actualizar la tabla correspondiente
@@ -130,7 +143,7 @@ export async function actualizarProfesional(id: string, data: Record<string, any
     }
     
     // 1. Actualizar tabla de profesionales
-    const { error: profError } = await supabase.from('profesionales').update(clean).eq('id', id)
+    const { error: profError } = await supabase.from('profesionales').update(clean).eq('id', id).eq('tenant_id', actor.tenantId)
     if (profError) return { error: profError.message }
 
     // 2. Buscar si tiene un usuario vinculado en public.usuarios
@@ -138,6 +151,7 @@ export async function actualizarProfesional(id: string, data: Record<string, any
         .from('usuarios')
         .select('id')
         .eq('profesional_id', id)
+        .eq('tenant_id', actor.tenantId)
         .maybeSingle()
 
     if (usuario?.id) {
@@ -165,10 +179,12 @@ export async function actualizarProfesional(id: string, data: Record<string, any
 }
 
 export async function toggleProfesionalEstado(id: string, activo: boolean) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
     const supabase = getAdmin()
     
     // 1. Actualizar estado del profesional
-    const { error: profError } = await supabase.from('profesionales').update({ activo }).eq('id', id)
+    const { error: profError } = await supabase.from('profesionales').update({ activo }).eq('id', id).eq('tenant_id', actor.tenantId)
     if (profError) return { error: profError.message }
 
     // 2. Sincronizar estado en public.usuarios
@@ -176,6 +192,7 @@ export async function toggleProfesionalEstado(id: string, activo: boolean) {
         .from('usuarios')
         .select('id')
         .eq('profesional_id', id)
+        .eq('tenant_id', actor.tenantId)
         .maybeSingle()
 
     if (usuario?.id) {
@@ -188,6 +205,8 @@ export async function toggleProfesionalEstado(id: string, activo: boolean) {
 }
 
 export async function eliminarProfesional(id: string) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
     const supabase = getAdmin()
 
     // 1. Obtener el usuario vinculado en public.usuarios (si existe)
@@ -195,10 +214,11 @@ export async function eliminarProfesional(id: string) {
         .from('usuarios')
         .select('id')
         .eq('profesional_id', id)
+        .eq('tenant_id', actor.tenantId)
         .maybeSingle()
 
     // 2. Intentar eliminar el profesional primero (para validar restricciones de clave foránea)
-    const { error: profError } = await supabase.from('profesionales').delete().eq('id', id)
+    const { error: profError } = await supabase.from('profesionales').delete().eq('id', id).eq('tenant_id', actor.tenantId)
     if (profError) {
         if (profError.code === '23503') {
             return { error: 'No se puede eliminar el profesional porque tiene turnos, historiales clínicos o presupuestos asociados. Se recomienda desactivar su cuenta.' }
@@ -224,9 +244,10 @@ export async function eliminarProfesional(id: string) {
 }
 
 export async function crearObraSocial(data: { nombre: string; codigo?: string; planes?: string }) {
-    const supabase = getAdmin()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const tenantId = actor.tenantId
 
     const { error } = await supabase.from('obras_sociales').insert({ tenant_id: tenantId, ...data })
     if (error) return { error: error.message }
@@ -235,24 +256,30 @@ export async function crearObraSocial(data: { nombre: string; codigo?: string; p
 }
 
 export async function toggleObraSocial(id: string, activo: boolean) {
-    const supabase = getAdmin()
-    const { error } = await supabase.from('obras_sociales').update({ activo }).eq('id', id)
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const { error } = await supabase.from('obras_sociales').update({ activo }).eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
     return { success: true }
 }
 
 export async function actualizarObraSocial(id: string, data: { nombre?: string; codigo?: string; planes?: string }) {
-    const supabase = getAdmin()
-    const { error } = await supabase.from('obras_sociales').update(data).eq('id', id)
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const { error } = await supabase.from('obras_sociales').update(data).eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
     return { success: true }
 }
 
 export async function eliminarObraSocial(id: string) {
-    const supabase = getAdmin()
-    const { error } = await supabase.from('obras_sociales').delete().eq('id', id)
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const { error } = await supabase.from('obras_sociales').delete().eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
     return { success: true }
@@ -262,9 +289,10 @@ export async function crearTipoTratamiento(data: {
     nombre: string; duracion_minutos: number; precio_referencia?: number;
     color?: string; descripcion?: string
 }) {
-    const supabase = getAdmin()
-    const tenantId = await getTenantId()
-    if (!tenantId) return { error: 'Tenant no encontrado' }
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const tenantId = actor.tenantId
 
     const { error } = await supabase.from('tipos_tratamiento').insert({
         tenant_id: tenantId, ...data,
@@ -277,8 +305,10 @@ export async function crearTipoTratamiento(data: {
 }
 
 export async function toggleTipoTratamiento(id: string, activo: boolean) {
-    const supabase = getAdmin()
-    const { error } = await supabase.from('tipos_tratamiento').update({ activo }).eq('id', id)
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const { error } = await supabase.from('tipos_tratamiento').update({ activo }).eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
     return { success: true }
@@ -288,16 +318,20 @@ export async function actualizarTipoTratamiento(id: string, data: {
     nombre?: string; duracion_minutos?: number; precio_referencia?: number;
     color?: string; descripcion?: string
 }) {
-    const supabase = getAdmin()
-    const { error } = await supabase.from('tipos_tratamiento').update(data).eq('id', id)
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const { error } = await supabase.from('tipos_tratamiento').update(data).eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
     return { success: true }
 }
 
 export async function eliminarTipoTratamiento(id: string) {
-    const supabase = getAdmin()
-    const { error } = await supabase.from('tipos_tratamiento').delete().eq('id', id)
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const { error } = await supabase.from('tipos_tratamiento').delete().eq('id', id).eq('tenant_id', actor.tenantId)
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
     return { success: true }

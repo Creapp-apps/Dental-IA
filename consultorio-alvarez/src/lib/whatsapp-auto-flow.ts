@@ -645,7 +645,6 @@ export async function procesarMensajeAutonomo({
 
         try {
             const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
-            await sendPushToRole('secretaria', tenantId, '📸 Foto Clínica Recibida', `Paciente +${cleanPhone} envió una foto por WhatsApp.`, '/mensajes')
             await sendPushToRole('admin', tenantId, '📸 Foto Clínica Recibida', `Paciente +${cleanPhone} envió una foto por WhatsApp.`, '/mensajes')
         } catch (e) {}
 
@@ -778,7 +777,7 @@ export async function procesarMensajeAutonomo({
 
         try {
             const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
-            await sendPushToRole('secretaria', tenantId, '🦷 Turno Especial Solicitado', `Paciente (+${cleanPhone}) requiere turno especial/extenso.`, '/mensajes')
+            await sendPushToRole('admin', tenantId, '🦷 Turno Especial Solicitado', `Paciente (+${cleanPhone}) requiere turno especial/extenso.`, '/mensajes')
         } catch (e) {}
 
         const msgTratamiento = `¡Recibido! 🦷✨\n\n` +

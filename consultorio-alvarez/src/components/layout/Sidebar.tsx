@@ -189,6 +189,13 @@ export function Sidebar({ tenantId, userEmail, userRole, themeColor, logoConfig,
 
     const isProfesional = userRole === 'profesional'
 
+    // El listado de pacientes es de admin: sin listado no hay cartera que
+    // exportar. El profesional llega a una ficha desde un turno de su agenda.
+    // Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §9
+    const itemsPrincipales = navItems
+        .slice(0, 4)
+        .filter(item => !(isProfesional && item.href === '/pacientes'))
+
     useEffect(() => {
         if (!tenantId) return
         const supabase = createClient()
@@ -281,7 +288,7 @@ export function Sidebar({ tenantId, userEmail, userRole, themeColor, logoConfig,
                     <p className="text-[10px] font-bold tracking-wider text-sidebar-foreground/50 px-3 py-1 uppercase">
                         Principal
                     </p>
-                    {navItems.slice(0, 4).map((item) => {
+                    {itemsPrincipales.map((item) => {
                         const isActuallyActive = pathname === item.href || pathname.startsWith(item.href + '/')
                         const isOptimisticActive = pendingPath === item.href
                         const isActive = isActuallyActive || isOptimisticActive

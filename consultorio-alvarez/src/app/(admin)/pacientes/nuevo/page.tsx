@@ -1,9 +1,16 @@
-import { getObrasSociales } from '@/lib/supabase/queries'
+import { redirect } from 'next/navigation'
+import { getObrasSociales, getCurrentUsuario } from '@/lib/supabase/queries'
 import { FormPacienteReal } from '@/components/pacientes/FormPacienteReal'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 
 export default async function NuevoPacientePage() {
+    // Alta y edición completa del paciente son de admin (§8, §9).
+    const usuario = await getCurrentUsuario()
+    if (usuario?.rol === 'profesional') {
+        redirect('/agenda')
+    }
+
     const obrasSociales = await getObrasSociales()
 
     return (

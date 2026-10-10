@@ -55,7 +55,7 @@ export interface Tenant {
 
 // ---- Roles / Tratamientos ----
 
-export type Rol = 'admin' | 'profesional' | 'secretaria'
+export type Rol = 'superadmin' | 'admin' | 'profesional'
 
 export type PrioridadTratamiento = 'URGENTE' | 'ALTA' | 'NORMAL' | 'BAJA'
 

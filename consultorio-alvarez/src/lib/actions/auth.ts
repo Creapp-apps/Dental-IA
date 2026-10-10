@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { esEmailSuperadmin } from '@/lib/auth/superadmins'
 
 // ── LOGIN ──────────────────────────────────────────────────────
 export async function loginAction(formData: FormData): Promise<{
@@ -37,12 +38,7 @@ export async function loginAction(formData: FormData): Promise<{
         .eq('id', data.user.id)
         .maybeSingle()
 
-    const isSuperadmin = 
-        profile?.rol === 'superadmin' || 
-        userEmail === 'creapp.ar@gmail.com' ||
-        userEmail === 'mazasebastian@hotmail.com' || 
-        userEmail.endsWith('@creapp.com') || 
-        userEmail.endsWith('@dental-ia.com')
+    const isSuperadmin = profile?.rol === 'superadmin' || esEmailSuperadmin(userEmail)
 
     revalidatePath('/', 'layout')
 

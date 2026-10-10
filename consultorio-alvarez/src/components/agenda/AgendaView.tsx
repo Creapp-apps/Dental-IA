@@ -61,6 +61,11 @@ const VIEW_OPTIONS: { key: ViewMode; label: string }[] = [
     { key: 'mes', label: 'Mes' },
 ]
 
+// Turnos que entraron sin profesional, a la espera de que recepción los asigne.
+// Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §10
+const SIN_ASIGNAR = 'sin-asignar'
+const COLOR_SIN_ASIGNAR = '#94a3b8'
+
 const HOUR_HEIGHT = 80
 const HOURS = Array.from({ length: 14 }, (_, i) => i + 8) // 8:00 to 21:00
 
@@ -206,9 +211,16 @@ export function AgendaView({
     const [dropdownOpen, setDropdownOpen] = useState(false)
 
     const selectedProfObj = useMemo(() => {
-        if (filtroProf === 'todos') return null
+        if (filtroProf === 'todos' || filtroProf === SIN_ASIGNAR) return null
         return profesionales.find(p => p.id === filtroProf)
     }, [filtroProf, profesionales])
+
+    // Turnos que entraron por la web sin profesional, a la espera de que
+    // recepción los asigne. Diseño §10.
+    const haySinAsignar = useMemo(
+        () => turnos.some((t: any) => !t.profesional_id),
+        [turnos]
+    )
 
     const dynamicSubtitle = useMemo(() => {
         const vistaText = vistaActiva === 'hoy' ? 'Vista diaria'
@@ -624,8 +636,10 @@ export function AgendaView({
         setDiaSeleccionado(fechaTurno)
 
         // Si hay un filtro de profesional activo que oculta a este profesional, resetear a 'todos'
-        if (filtroProf !== 'todos' && turno.profesional_id && filtroProf !== turno.profesional_id) {
-            setFiltroProf('todos')
+        if (filtroProf !== 'todos' && filtroProf !== turno.profesional_id) {
+            // Vale también para un turno sin asignar: si el filtro es de un
+            // profesional, la tarjeta no está en pantalla.
+            setFiltroProf(turno.profesional_id ? 'todos' : SIN_ASIGNAR)
         }
 
         // Resaltar visualmente la tarjeta del turno con scroll suave y efecto halo/pulse
@@ -765,16 +779,20 @@ export function AgendaView({
 
     const columns = useMemo(() => {
         const showProfColumns = vistaActiva === 'hoy'
-        const turnosBase = filtroProf === 'todos' 
-            ? turnos 
-            : turnos.filter((t: any) => t.profesional_id === filtroProf)
+        const turnosBase = filtroProf === 'todos'
+            ? turnos
+            : filtroProf === SIN_ASIGNAR
+                ? turnos.filter((t: any) => !t.profesional_id)
+                : turnos.filter((t: any) => t.profesional_id === filtroProf)
         
         if (showProfColumns) {
             const profsToDisplay = filtroProf === 'todos'
                 ? profesionales
-                : profesionales.filter(p => p.id === filtroProf)
+                : filtroProf === SIN_ASIGNAR
+                    ? []
+                    : profesionales.filter(p => p.id === filtroProf)
 
-            return profsToDisplay.map(prof => {
+            const columnasProf = profsToDisplay.map(prof => {
                 const turnosDiaProf = turnosBase.filter(
                     (t: any) => t.profesional_id === prof.id && isSameDay(parseISO(t.fecha_inicio), diaSeleccionado)
                 )
@@ -791,6 +809,28 @@ export function AgendaView({
                     turnos: turnosDiaProf
                 }
             })
+
+            // Carril para los turnos sin asignar del día.
+            const turnosSinAsignarDia = (filtroProf === 'todos' || filtroProf === SIN_ASIGNAR)
+                ? turnosBase.filter((t: any) => !t.profesional_id && isSameDay(parseISO(t.fecha_inicio), diaSeleccionado))
+                : []
+
+            if (turnosSinAsignarDia.length > 0 || filtroProf === SIN_ASIGNAR) {
+                columnasProf.push({
+                    header: (
+                        <div className="flex items-center gap-2 justify-center py-0.5">
+                            <span className="h-2.5 w-2.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: COLOR_SIN_ASIGNAR }} />
+                            <span className="text-xs font-bold text-foreground truncate">Sin asignar</span>
+                        </div>
+                    ),
+                    date: diaSeleccionado,
+                    profesionalId: '',
+                    colorProf: COLOR_SIN_ASIGNAR,
+                    turnos: turnosSinAsignarDia
+                })
+            }
+
+            return columnasProf
         } else {
             return diasVisibles.map(dia => {
                 const turnosDia = turnosBase.filter(
@@ -821,16 +861,20 @@ export function AgendaView({
     }, [vistaActiva, profesionales, turnos, diaSeleccionado, diasVisibles, filtroProf])
 
     const mobileColumns = useMemo(() => {
-        const turnosBase = filtroProf === 'todos' 
-            ? turnos 
-            : turnos.filter((t: any) => t.profesional_id === filtroProf)
+        const turnosBase = filtroProf === 'todos'
+            ? turnos
+            : filtroProf === SIN_ASIGNAR
+                ? turnos.filter((t: any) => !t.profesional_id)
+                : turnos.filter((t: any) => t.profesional_id === filtroProf)
 
         if (vistaActiva === 'hoy') {
-            const profsToShow = filtroProf === 'todos' 
-                ? profesionales 
-                : profesionales.filter(p => p.id === filtroProf)
+            const profsToShow = filtroProf === 'todos'
+                ? profesionales
+                : filtroProf === SIN_ASIGNAR
+                    ? []
+                    : profesionales.filter(p => p.id === filtroProf)
 
-            return profsToShow.map(prof => {
+            const columnasProf = profsToShow.map(prof => {
                 const turnosDiaProf = turnosBase.filter(
                     (t: any) => t.profesional_id === prof.id && isSameDay(parseISO(t.fecha_inicio), diaSeleccionado)
                 )
@@ -847,6 +891,27 @@ export function AgendaView({
                     turnos: turnosDiaProf
                 }
             })
+
+            const turnosSinAsignarDia = (filtroProf === 'todos' || filtroProf === SIN_ASIGNAR)
+                ? turnosBase.filter((t: any) => !t.profesional_id && isSameDay(parseISO(t.fecha_inicio), diaSeleccionado))
+                : []
+
+            if (turnosSinAsignarDia.length > 0 || filtroProf === SIN_ASIGNAR) {
+                columnasProf.push({
+                    header: (
+                        <div className="flex items-center gap-1 justify-center py-1 max-w-full">
+                            <span className="h-2 w-2 rounded-full shrink-0" style={{ backgroundColor: COLOR_SIN_ASIGNAR }} />
+                            <span className="text-[10px] font-bold text-foreground truncate">Sin asignar</span>
+                        </div>
+                    ),
+                    date: diaSeleccionado,
+                    profesionalId: '',
+                    colorProf: COLOR_SIN_ASIGNAR,
+                    turnos: turnosSinAsignarDia
+                })
+            }
+
+            return columnasProf
         } else {
             const filteredDays = vistaActiva === '3dias' ? diasVisibles.slice(0, 3) : diasVisibles
             return filteredDays.map(dia => {
@@ -1562,6 +1627,21 @@ export function AgendaView({
                                 >
                                     👥 Todos los profesionales
                                 </button>
+                                {haySinAsignar && (
+                                    <button
+                                        onClick={() => setFiltroProf(SIN_ASIGNAR)}
+                                        className={cn(
+                                            'px-2.5 py-1 text-xs font-semibold rounded-lg transition-all duration-200 shrink-0 flex items-center gap-1.5 border',
+                                            filtroProf === SIN_ASIGNAR
+                                                ? 'border-transparent text-white shadow-sm'
+                                                : 'glass border-white/10 text-muted-foreground hover:text-foreground hover:bg-white/10'
+                                        )}
+                                        style={filtroProf === SIN_ASIGNAR ? { backgroundColor: `${COLOR_SIN_ASIGNAR}45`, borderColor: COLOR_SIN_ASIGNAR, color: '#ffffff' } : undefined}
+                                    >
+                                        <span className="h-2 w-2 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: COLOR_SIN_ASIGNAR }} />
+                                        Sin asignar
+                                    </button>
+                                )}
                                 {profesionales.map(prof => {
                                     const isSelected = filtroProf === prof.id
                                     return (
@@ -2080,6 +2160,21 @@ export function AgendaView({
                             >
                                 Todos
                             </button>
+                            {haySinAsignar && (
+                                <button
+                                    onClick={() => setFiltroProf(SIN_ASIGNAR)}
+                                    className={cn(
+                                        "px-3 py-1 text-[11px] font-bold rounded-full border transition-all duration-200 shrink-0 flex items-center gap-1.5",
+                                        filtroProf === SIN_ASIGNAR
+                                            ? "border-transparent text-foreground shadow-sm"
+                                            : "glass border-white/10 text-muted-foreground hover:text-foreground"
+                                    )}
+                                    style={filtroProf === SIN_ASIGNAR ? { backgroundColor: `${COLOR_SIN_ASIGNAR}35`, border: `1px solid ${COLOR_SIN_ASIGNAR}` } : undefined}
+                                >
+                                    <span className="h-2 w-2 rounded-full shadow-sm" style={{ backgroundColor: COLOR_SIN_ASIGNAR }} />
+                                    Sin asignar
+                                </button>
+                            )}
                             {profesionales.map(prof => (
                                 <button
                                     key={prof.id}

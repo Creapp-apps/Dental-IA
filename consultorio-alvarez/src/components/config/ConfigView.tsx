@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, CreditCard, Clock, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown, ChevronUp, Stethoscope, Sparkles, MapPin, Mail, Phone, Info, Sun, Moon, Eye, EyeOff, SlidersHorizontal } from 'lucide-react'
+import { Building2, Users, CreditCard, Clock, CalendarCheck, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown, ChevronUp, Stethoscope, Sparkles, MapPin, Mail, Phone, Info, Sun, Moon, Eye, EyeOff, SlidersHorizontal } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -31,6 +31,7 @@ type TabId =
     | 'profesionales' 
     | 'obras_sociales' 
     | 'horarios' 
+    | 'reservas_online' 
     | 'sonidos' 
     | 'mi_web' 
     | 'integraciones'
@@ -84,6 +85,7 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
             category: 'Operación y Turnos',
             items: [
                 { id: 'horarios', label: 'Horarios de Atención', shortLabel: 'Horarios', icon: Clock, desc: 'Días hábiles e intervalos' },
+                { id: 'reservas_online', label: 'Reservas online', shortLabel: 'Reservas', icon: CalendarCheck, desc: 'Qué elige el paciente en la web' },
                 { id: 'sonidos', label: 'Sonidos y Alertas', shortLabel: 'Alertas', icon: Volume2, desc: 'Avisos acústicos en tiempo real' },
             ]
         },
@@ -206,6 +208,7 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
                         {tab === 'profesionales' && <TabProfesionales tenantId={tenant.id} profesionales={profesionales} router={router} />}
                         {tab === 'obras_sociales' && <TabObrasSociales obrasSociales={obrasSociales} />}
                         {tab === 'horarios' && <TabHorarios horarios={tenant.horarios} profesionales={profesionales} />}
+                        {tab === 'reservas_online' && <TabReservasOnline tenant={tenant} />}
                         {tab === 'sonidos' && <TabSonidos />}
                         {tab === 'mi_web' && landingConfig && <TabMiWeb config={landingConfig} slug={slug} />}
                         {tab === 'mi_web' && !landingConfig && (
@@ -1689,6 +1692,74 @@ interface SonidosSettings {
     turno_nuevo: ConfigNotificacion
     alerta: ConfigNotificacion
     sistema: ConfigNotificacion
+}
+
+// ── Reservas online ──────────────────────────────────────────────
+// Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §10
+// Va acá y no en "Mi Portal Web", que es marca y textos, ni dentro de
+// Horarios, que son días hábiles e intervalos.
+function TabReservasOnline({ tenant }: { tenant: any }) {
+    const [isPending, startTransition] = useTransition()
+    const [eligeProfesional, setEligeProfesional] = useState<boolean>(
+        tenant?.reserva_web_elige_profesional !== false
+    )
+
+    function cambiar(valor: boolean) {
+        setEligeProfesional(valor)
+        startTransition(async () => {
+            const res = await actualizarTenant({ reserva_web_elige_profesional: valor })
+            if (res?.error) {
+                setEligeProfesional(!valor)
+                glassAlert.error({ title: 'No se pudo guardar', description: res.error })
+            }
+        })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h2 className="text-lg font-semibold text-foreground">Reservas online</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                    Cómo se comporta el formulario de turnos de tu web pública.
+                </p>
+            </div>
+
+            <div className="glass rounded-xl p-4 sm:p-5 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                    <div className="space-y-1">
+                        <p className="text-sm font-semibold text-foreground">
+                            El paciente elige profesional
+                        </p>
+                        <p className="text-xs text-muted-foreground max-w-prose">
+                            Activado, la reserva web empieza preguntando con quién se quiere atender.
+                            Desactivado, el paciente elige tratamiento y horario, y el turno entra
+                            sin profesional asignado: aparece en la agenda en el carril
+                            «Sin asignar» para que recepción lo asigne.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-checked={eligeProfesional}
+                        disabled={isPending}
+                        onClick={() => cambiar(!eligeProfesional)}
+                        className={cn(
+                            'relative h-6 w-11 shrink-0 rounded-full transition-colors cursor-pointer disabled:opacity-60',
+                            eligeProfesional ? 'bg-primary' : 'bg-muted-foreground/30'
+                        )}
+                    >
+                        <span
+                            className={cn(
+                                'absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform',
+                                eligeProfesional ? 'translate-x-[22px]' : 'translate-x-0.5'
+                            )}
+                        />
+                    </button>
+                </div>
+            </div>
+        </div>
+    )
 }
 
 function TabSonidos() {

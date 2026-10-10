@@ -1,4 +1,5 @@
-import { getPacientes, searchPacientes, getTotalPacientesCount } from '@/lib/supabase/queries'
+import { redirect } from 'next/navigation'
+import { getPacientes, searchPacientes, getTotalPacientesCount, getCurrentUsuario } from '@/lib/supabase/queries'
 import { PacientesListView } from '@/components/pacientes/PacientesListView'
 
 export default async function PacientesPage({
@@ -6,6 +7,13 @@ export default async function PacientesPage({
 }: {
     searchParams?: Promise<{ q?: string }>
 }) {
+    // El listado completo de pacientes es de admin (§9). El profesional entra a
+    // la ficha desde su agenda.
+    const usuario = await getCurrentUsuario()
+    if (usuario?.rol === 'profesional') {
+        redirect('/agenda')
+    }
+
     const resolvedParams = await searchParams
     const query = resolvedParams?.q?.trim() ?? ''
 

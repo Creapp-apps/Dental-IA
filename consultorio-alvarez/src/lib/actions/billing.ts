@@ -1,16 +1,37 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { requireActor, requireAdmin, requireSuperadmin } from '@/lib/auth/actor'
 import { revalidatePath } from 'next/cache'
 
 function getAdmin() {
     return createAdminClient()
 }
 
+// Estas acciones reciben el tenant_id por parámetro y usan service_role, así
+// que sin control cualquiera podía leer o escribir la facturación de otro
+// consultorio. Regla: el propio consultorio lo maneja su admin; cualquier
+// otro, sólo el superadmin de la plataforma. Diseño: §12
+async function puedeOperarTenant(tenantId: string, exigirAdmin = true): Promise<string | null> {
+    const guard = exigirAdmin ? await requireAdmin() : await requireActor()
+    if (!guard.ok) return guard.error
+    if (guard.actor.tenantId !== tenantId && !guard.actor.esSuperadmin) {
+        return 'Acceso denegado. No podés operar la facturación de otro consultorio.'
+    }
+    return null
+}
+
 /**
  * Obtiene la configuración de facturación y el historial de pagos de un tenant.
  */
 export async function getBillingConfig(tenantId: string) {
+    // Lectura: la ve cualquier miembro del consultorio, porque el aviso de
+    // vencimiento se muestra en todo el panel.
+    const denied = await puedeOperarTenant(tenantId, false)
+    if (denied) {
+        return { settings: null, paymentsList: [] as any[] }
+    }
+
     const supabase = getAdmin()
 
     // 1. Obtener settings
@@ -53,6 +74,9 @@ export async function getBillingConfig(tenantId: string) {
  * Actualiza los ajustes de facturación de un tenant.
  */
 export async function updateBillingSettings(tenantId: string, settings: any) {
+    const denied = await puedeOperarTenant(tenantId)
+    if (denied) return { error: denied }
+
     const supabase = getAdmin()
 
     const { error } = await supabase
@@ -92,6 +116,9 @@ export async function registrarPago(
     tenantId: string, 
     payment: { monto: number; metodo: string; periodo: string; fecha_pago: string }
 ) {
+    const denied = await puedeOperarTenant(tenantId)
+    if (denied) return { error: denied }
+
     const supabase = getAdmin()
 
     // 1. Obtener la lista actual de pagos
@@ -144,6 +171,9 @@ export async function registrarPago(
  * Elimina un pago del historial de un tenant.
  */
 export async function eliminarPago(tenantId: string, paymentId: string) {
+    const denied = await puedeOperarTenant(tenantId)
+    if (denied) return { error: denied }
+
     const supabase = getAdmin()
 
     // 1. Obtener la lista actual de pagos
@@ -185,6 +215,10 @@ export async function eliminarPago(tenantId: string, paymentId: string) {
  * Obtiene la lista de todos los tenants para el selector de Superadmin.
  */
 export async function getTenants() {
+    // El selector de consultorios es del superadmin: para el resto, vacío.
+    const { ok } = await requireSuperadmin()
+    if (!ok) return []
+
     const supabase = getAdmin()
     const { data, error } = await supabase
         .from('tenants')

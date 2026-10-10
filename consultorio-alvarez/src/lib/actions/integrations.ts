@@ -1,25 +1,24 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { requireAdmin } from '@/lib/auth/actor'
 import { revalidatePath } from 'next/cache'
 
+// Las credenciales de WhatsApp, Mercado Pago y ARCA son del consultorio:
+// sólo admin las toca. Diseño: §12
 export async function guardarIntegracion(provider: 'whatsapp' | 'mercadopago' | 'arca', credentials: any) {
     try {
+        const { ok, actor, error: denied } = await requireAdmin()
+        if (!ok) return { error: denied }
+
         const supabase = await createClient()
 
-        // 1. Get user -> tenant_id
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return { error: 'No autorizado' }
-
-        const { data: profile } = await supabase.from('usuarios').select('tenant_id').eq('id', user.id).single()
-        if (!profile?.tenant_id) return { error: 'Tenant no encontrado' }
-
-        // 2. Upsert the integration
+        // Upsert the integration
         const { error } = await supabase
             .from('tenant_integrations')
             .upsert(
                 {
-                    tenant_id: profile.tenant_id,
+                    tenant_id: actor.tenantId,
                     provider,
                     credentials,
                     is_active: credentials && Object.keys(credentials).length > 0, // simple validation check

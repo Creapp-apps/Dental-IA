@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
 import { resolveTenant } from '@/lib/tenant'
+import { esEmailSuperadmin } from '@/lib/auth/superadmins'
 import { getLandingConfigPublica } from '@/lib/actions/landing'
 import { createClient } from '@/lib/supabase/server'
 import LoginClient from './LoginClient'
@@ -50,12 +51,7 @@ export default async function LoginPage({
     const supabase = await createClient()
     const { data: { user } } = await supabase.auth.getUser()
     if (user && tenant) {
-        const userEmail = user.email || ''
-        const isSuperadmin = 
-            userEmail === 'creapp.ar@gmail.com' ||
-            userEmail === 'mazasebastian@hotmail.com' || 
-            userEmail.endsWith('@creapp.com') || 
-            userEmail.endsWith('@dental-ia.com')
+        const isSuperadmin = esEmailSuperadmin(user.email)
 
         if (!isSuperadmin) {
             const { data: usuario } = await supabase.from('usuarios').select('tenant_id, rol').eq('id', user.id).single()

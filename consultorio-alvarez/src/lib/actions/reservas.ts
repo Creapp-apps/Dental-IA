@@ -10,10 +10,24 @@ async function getTenantBySlug(slug: string) {
     const supabase = createAdminClient()
     const { data } = await supabase
         .from('tenants')
-        .select('id, nombre, slug, horarios')
+        // select('*') y no la lista de columnas: así este código funciona igual
+        // antes y después de la migración 027. Si la columna todavía no existe,
+        // reserva_web_elige_profesional queda undefined y vale el default, que
+        // es seguir pidiendo profesional.
+        .select('*')
         .eq('slug', slug)
         .single()
     return data
+}
+
+/**
+ * Si la reserva online muestra el paso "¿Con quién querés atenderte?".
+ * Cuando está en false el turno entra sin profesional y lo asigna recepción.
+ * Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §10
+ */
+export async function getReservaEligeProfesional(tenantSlug: string): Promise<boolean> {
+    const tenant = await getTenantBySlug(tenantSlug)
+    return (tenant as any)?.reserva_web_elige_profesional !== false
 }
 
 export async function getProfesionalesPublicos(tenantSlug: string, fecha?: string, hora?: string) {
@@ -433,8 +447,25 @@ export async function crearReservaPublica(data: {
     }
 
     // Determine profesional
-    let profesionalId = data.profesionalId
-    if (!profesionalId || profesionalId === 'sin-preferencia') {
+    const eligeProfesional = (tenant as any).reserva_web_elige_profesional !== false
+
+    let profesionalId: string | null = data.profesionalId
+
+    if (!eligeProfesional) {
+        // El consultorio no deja elegir: el turno entra sin asignar. Igual se
+        // exige que alguien tenga el horario libre, para no sobrevender el slot.
+        const hayLugar = profs.some(p => {
+            if (ocupadosSet.has(p.id)) return false
+            const h = getHorarioProf(allSchedules, p.id, dow)
+            return profTieneSlot(h, data.hora)
+        })
+
+        if (!hayLugar) {
+            return { error: 'No hay turnos disponibles en el día y horario seleccionado' }
+        }
+
+        profesionalId = null
+    } else if (!profesionalId || profesionalId === 'sin-preferencia') {
         // Find professional who works on this day, at this specific hour, and is NOT occupied
         const candidateProf = profs.find(p => {
             if (ocupadosSet.has(p.id)) return false
@@ -464,7 +495,7 @@ export async function crearReservaPublica(data: {
         }
     }
 
-    if (!profesionalId) return { error: 'No hay profesionales disponibles' }
+    if (eligeProfesional && !profesionalId) return { error: 'No hay profesionales disponibles' }
 
     // Get default treatment type (prioritizing consultation/checkup/routine keywords)
     const { data: todosTratamientos } = await supabase
@@ -621,10 +652,7 @@ export async function crearReservaPublica(data: {
         const pushTitle = '🌟 Nueva Solicitud de Turno'
         const pushBody = `${data.nombre} ${data.apellido} solicitó un turno el ${data.fecha} a las ${data.hora}.`
         
-        await Promise.all([
-            sendPushToRole('admin', tenant.id, pushTitle, pushBody, '/agenda'),
-            sendPushToRole('secretaria', tenant.id, pushTitle, pushBody, '/agenda')
-        ])
+        await sendPushToRole('admin', tenant.id, pushTitle, pushBody, '/agenda')
     } catch (pushErr) {
         console.error('Error al enviar push a administradores en crearReservaPublica:', pushErr)
     }
@@ -638,18 +666,21 @@ export async function crearReservaPublica(data: {
             let cleanPhone = normalizarTelefonoArgentino(data.telefono)
 
             // Obtener nombres para los parámetros de la plantilla
+            // Un turno sin asignar todavía no tiene profesional que nombrar.
             let profesionalNombre = 'el especialista'
-            try {
-                const { data: profData } = await supabase
-                    .from('profesionales')
-                    .select('nombre, apellido')
-                    .eq('id', profesionalId)
-                    .single()
-                if (profData) {
-                    profesionalNombre = `${limpiarTituloProfesional(profData.nombre)} ${profData.apellido.trim()}`
+            if (profesionalId) {
+                try {
+                    const { data: profData } = await supabase
+                        .from('profesionales')
+                        .select('nombre, apellido')
+                        .eq('id', profesionalId)
+                        .single()
+                    if (profData) {
+                        profesionalNombre = `${limpiarTituloProfesional(profData.nombre)} ${profData.apellido.trim()}`
+                    }
+                } catch (profErr) {
+                    console.error('Error fetching profesional details for WhatsApp template:', profErr)
                 }
-            } catch (profErr) {
-                console.error('Error fetching profesional details for WhatsApp template:', profErr)
             }
 
             let tratamientoNombre = 'Consulta'

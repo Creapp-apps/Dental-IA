@@ -535,11 +535,10 @@ export async function POST(request: NextRequest) {
                     leida: false
                 })
 
-                // Despachar Push Notification a administradores, secretarias y profesionales
+                // Despachar Push Notification a administradores y profesionales
                 try {
                     const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
                     await sendPushToRole('admin', tenantId, '🚨 Guardia Odontológica Activada', `Paciente (+${cleanPhone}) activó la guardia por WhatsApp.`, '/mensajes')
-                    await sendPushToRole('secretaria', tenantId, '🚨 Guardia Odontológica Activada', `Paciente (+${cleanPhone}) activó la guardia por WhatsApp.`, '/mensajes')
                     await sendPushToRole('profesional', tenantId, '🚨 Guardia Odontológica Activada', `Paciente (+${cleanPhone}) activó la guardia por WhatsApp.`, '/mensajes')
                 } catch (pushErr) {
                     console.error('Error al despachar push de guardia:', pushErr)
@@ -574,11 +573,10 @@ export async function POST(request: NextRequest) {
                     leida: false
                 })
 
-                // Despachar Push Notification a administradores y secretarias
+                // Despachar Push Notification a administradores (recepción)
                 try {
                     const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
                     await sendPushToRole('admin', tenantId, '💬 Solicitud de Recepción', `Paciente (+${cleanPhone}) solicitó hablar con recepción por WhatsApp.`, '/mensajes')
-                    await sendPushToRole('secretaria', tenantId, '💬 Solicitud de Recepción', `Paciente (+${cleanPhone}) solicitó hablar con recepción por WhatsApp.`, '/mensajes')
                 } catch (pushErr) {
                     console.error('Error al despachar push de recepción:', pushErr)
                 }
