@@ -14,10 +14,10 @@ import {
     getTurnosDisponibles,
     crearReservaPublica,
     getObrasSocialesPublicas,
-    getPacientePorDni,
     getConfiguracionSeniaPublica,
     getReservaEligeProfesional,
 } from '@/lib/actions/reservas'
+import { solicitarOtpReserva, verificarOtpReserva } from '@/lib/actions/otp-reserva'
 import { crearPreferenciaPagoSenia } from '@/lib/actions/mercadopago'
 import {
     Check,
@@ -500,12 +500,18 @@ function StepPatientData({
     const [buscando, setBuscando] = useState(false)
     const [errorBusqueda, setErrorBusqueda] = useState<string | null>(null)
     const [pacienteEncontrado, setPacienteEncontrado] = useState<any | null>(null)
+    const [otpEnviado, setOtpEnviado] = useState(false)
+    const [codigo, setCodigo] = useState('')
+    const [verificando, setVerificando] = useState(false)
 
     const inputClass =
         'w-full rounded-lg border border-gray-200 bg-white px-3.5 py-2.5 text-sm text-gray-800 outline-none transition-all placeholder:text-gray-400 focus:shadow-sm'
     const focusStyle = { '--tw-ring-color': 'var(--landing-primary, #0d9488)40', '--tw-ring-shadow': 'var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color)' } as React.CSSProperties
 
-    async function handleBuscarDni() {
+    // Paso 1: pedir el envío del código al contacto registrado del paciente.
+    // Por seguridad (DT-001) el servidor responde siempre genérico: no revela si
+    // el DNI corresponde a un paciente ni a qué contacto se envió.
+    async function handleEnviarCodigo() {
         const cleanDni = datos.dni.replace(/\D/g, '')
         if (!cleanDni) {
             setErrorBusqueda('Por favor, ingresá un DNI válido')
@@ -515,29 +521,64 @@ function StepPatientData({
         setBuscando(true)
         setErrorBusqueda(null)
         setPacienteEncontrado(null)
+        setCodigo('')
         onChange('pacienteExistenteId', '')
 
         try {
-            const res = await getPacientePorDni(slug, cleanDni)
-            if (res.error) {
-                setErrorBusqueda(res.error)
-            } else if (res.data) {
-                setPacienteEncontrado(res.data)
-                // Populate the required fields in parent state for confirmation / WhatsApp redirect
-                onChange('pacienteExistenteId', res.data.id)
-                onChange('nombre', res.data.nombre)
-                onChange('apellido', res.data.apellido)
-                onChange('telefono', res.data.telefono || '')
-                onChange('email', res.data.email || '')
-                onChange('obraSocialId', res.data.obra_social_id || '')
-            } else {
-                setErrorBusqueda('DNI no encontrado, por favor contacte a administración')
-            }
+            await solicitarOtpReserva(slug, cleanDni)
+            setOtpEnviado(true)
         } catch (err) {
-            setErrorBusqueda('Ocurrió un error al buscar el DNI. Reintentá.')
+            setErrorBusqueda('Ocurrió un error al enviar el código. Reintentá.')
         } finally {
             setBuscando(false)
         }
+    }
+
+    // Paso 2: verificar el código. Sólo si es correcto el servidor devuelve la PII.
+    async function handleVerificarCodigo() {
+        const cleanDni = datos.dni.replace(/\D/g, '')
+        const cleanCodigo = codigo.replace(/\D/g, '')
+        if (!cleanCodigo) {
+            setErrorBusqueda('Ingresá el código que recibiste')
+            return
+        }
+
+        setVerificando(true)
+        setErrorBusqueda(null)
+
+        try {
+            const res = await verificarOtpReserva(slug, cleanDni, cleanCodigo)
+            if (res.ok) {
+                setPacienteEncontrado(res.paciente)
+                onChange('pacienteExistenteId', res.paciente.id)
+                onChange('nombre', res.paciente.nombre)
+                onChange('apellido', res.paciente.apellido)
+                onChange('telefono', res.paciente.telefono || '')
+                onChange('email', res.paciente.email || '')
+                onChange('obraSocialId', res.paciente.obra_social_id || '')
+            } else if (res.motivo === 'expirado') {
+                setErrorBusqueda('El código venció. Pedí uno nuevo.')
+            } else if (res.motivo === 'bloqueado') {
+                setErrorBusqueda('Demasiados intentos. Pedí un código nuevo en unos minutos.')
+            } else {
+                setErrorBusqueda('Código incorrecto. Revisalo e intentá de nuevo.')
+            }
+        } catch (err) {
+            setErrorBusqueda('Ocurrió un error al verificar el código. Reintentá.')
+        } finally {
+            setVerificando(false)
+        }
+    }
+
+    // Degradación: si no llega/no verifica el código, el paciente sigue como nuevo
+    // (tipea sus datos a mano). No se filtra ninguna PII.
+    function handleContinuarComoNuevo() {
+        setOtpEnviado(false)
+        setCodigo('')
+        setErrorBusqueda(null)
+        setPacienteEncontrado(null)
+        onChange('es_nuevo', 'si')
+        onChange('pacienteExistenteId', '')
     }
 
     const selectedObra = obrasSociales.find(o => o.id === datos.obraSocialId)
@@ -587,7 +628,9 @@ function StepPatientData({
                         onChange('es_nuevo', val)
                         setPacienteEncontrado(null)
                         setErrorBusqueda(null)
-                        
+                        setOtpEnviado(false)
+                        setCodigo('')
+
                         // Reset parent fields
                         onChange('nombre', '')
                         onChange('apellido', '')
@@ -736,32 +779,97 @@ function StepPatientData({
                                     placeholder="Ingresa tu número de DNI completo"
                                     value={datos.dni}
                                     onChange={(e) => onChange('dni', e.target.value)}
-                                    disabled={buscando}
+                                    disabled={buscando || otpEnviado}
                                     onKeyDown={(e) => {
                                         if (e.key === 'Enter') {
                                             e.preventDefault()
-                                            handleBuscarDni()
+                                            handleEnviarCodigo()
                                         }
                                     }}
                                 />
                             </div>
                             <button
                                 type="button"
-                                onClick={handleBuscarDni}
-                                disabled={buscando || !datos.dni.trim()}
+                                onClick={handleEnviarCodigo}
+                                disabled={buscando || otpEnviado || !datos.dni.trim()}
                                 className="w-full sm:w-auto px-6 py-2.5 rounded-lg text-sm font-semibold text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 transition-all hover:brightness-105 active:scale-[0.98]"
                                 style={{ backgroundColor: 'var(--landing-primary, #0d9488)' }}
                             >
                                 {buscando ? (
                                     <>
                                         <Loader2 className="h-4 w-4 animate-spin" />
-                                        Buscando...
+                                        Enviando...
                                     </>
                                 ) : (
-                                    'Ingresar DNI'
+                                    'Enviar código'
                                 )}
                             </button>
                         </div>
+
+                        {/* Paso 2: ingreso del código OTP (sólo tras enviarlo y antes de verificar) */}
+                        {otpEnviado && !pacienteEncontrado && (
+                            <div className="flex flex-col gap-3 animate-fadeIn">
+                                <p className="text-xs text-slate-300 leading-relaxed">
+                                    Si el DNI corresponde a un paciente registrado, te enviamos un código a tu
+                                    contacto (WhatsApp o email). Ingresalo para continuar. Vence en 10 minutos.
+                                </p>
+                                <div className="flex flex-col sm:flex-row gap-3 items-end">
+                                    <div className="flex-1 w-full">
+                                        <label className="block text-xs font-medium text-slate-300 mb-1.5">Código de verificación *</label>
+                                        <input
+                                            type="text"
+                                            inputMode="numeric"
+                                            autoComplete="one-time-code"
+                                            className={cn(inputClass, 'focus:ring-2 tracking-widest')}
+                                            style={{ outlineColor: 'var(--landing-primary, #0d9488)' }}
+                                            placeholder="------"
+                                            value={codigo}
+                                            onChange={(e) => setCodigo(e.target.value)}
+                                            disabled={verificando}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault()
+                                                    handleVerificarCodigo()
+                                                }
+                                            }}
+                                        />
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handleVerificarCodigo}
+                                        disabled={verificando || !codigo.trim()}
+                                        className="w-full sm:w-auto px-6 py-2.5 rounded-lg text-sm font-semibold text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer flex items-center justify-center gap-2 transition-all hover:brightness-105 active:scale-[0.98]"
+                                        style={{ backgroundColor: 'var(--landing-primary, #0d9488)' }}
+                                    >
+                                        {verificando ? (
+                                            <>
+                                                <Loader2 className="h-4 w-4 animate-spin" />
+                                                Verificando...
+                                            </>
+                                        ) : (
+                                            'Verificar'
+                                        )}
+                                    </button>
+                                </div>
+                                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+                                    <button
+                                        type="button"
+                                        onClick={handleEnviarCodigo}
+                                        disabled={buscando}
+                                        className="text-slate-300 underline underline-offset-2 hover:text-white disabled:opacity-40 cursor-pointer"
+                                    >
+                                        Reenviar código
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={handleContinuarComoNuevo}
+                                        className="text-slate-300 underline underline-offset-2 hover:text-white cursor-pointer"
+                                    >
+                                        No recibí el código / continuar como paciente nuevo
+                                    </button>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Error de Búsqueda */}
                         {errorBusqueda && (
@@ -1074,13 +1182,9 @@ export function BookingForm({ slug = 'alvarez' }: { slug?: string }) {
                 } else {
                     // Si el consultorio tiene activada la seña obligatoria, redirigir a Mercado Pago
                     if (result.requiereSenia && result.turnoId && result.montoSenia) {
+                        // DT-004: sólo se pasa turnoId; el monto y el resto se derivan server-side.
                         const prefResult = await crearPreferenciaPagoSenia({
                             turnoId: result.turnoId,
-                            tenantId: result.tenantId,
-                            pacienteNombre: `${datos.nombre} ${datos.apellido}`.trim(),
-                            pacienteEmail: datos.email,
-                            monto: result.montoSenia,
-                            clinicaNombre: result.clinicaNombre,
                         })
 
                         if (prefResult.success && prefResult.initPoint) {

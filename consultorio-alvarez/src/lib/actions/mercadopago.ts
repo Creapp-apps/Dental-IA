@@ -1,28 +1,30 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
+import { calcularSenia } from '@/lib/pagos/senia'
 
+// DT-004: la action recibe SÓLO turnoId. El monto, el tenant y los datos del
+// payer se derivan server-side desde la base; nunca se confía un monto del cliente.
 interface CrearPreferenciaSeniaParams {
-    tenantId: string
     turnoId: string
-    pacienteNombre: string
-    pacienteEmail?: string
-    monto: number
-    clinicaNombre?: string
 }
 
-export async function crearPreferenciaPagoSenia({
-    tenantId,
-    turnoId,
-    pacienteNombre,
-    pacienteEmail,
-    monto,
-    clinicaNombre = 'Consultorio Odontológico'
-}: CrearPreferenciaSeniaParams) {
+export async function crearPreferenciaPagoSenia({ turnoId }: CrearPreferenciaSeniaParams) {
     try {
+        if (!turnoId) return { error: 'Falta el turno' }
         const admin = createAdminClient()
 
-        // 1. Obtener las credenciales de Mercado Pago del tenant
+        // 1. Turno → tenant y paciente (autoritativo; ignora cualquier dato del cliente).
+        const { data: turno } = await admin
+            .from('turnos')
+            .select('id, tenant_id, paciente_id')
+            .eq('id', turnoId)
+            .maybeSingle()
+
+        if (!turno) return { error: 'Turno no encontrado' }
+        const tenantId = turno.tenant_id
+
+        // 2. Credenciales de Mercado Pago del tenant.
         const { data: integracion, error: intError } = await admin
             .from('tenant_integrations')
             .select('credentials, is_active')
@@ -41,6 +43,21 @@ export async function crearPreferenciaPagoSenia({
         if (!accessToken) {
             return { error: 'Credenciales de Mercado Pago incompletas en el consultorio' }
         }
+
+        // 3. Monto de la seña calculado desde los creds guardados (DT-004), nunca del cliente.
+        const { requiereSenia, monto } = calcularSenia({ isActive: integracion.is_active, credentials })
+        if (!requiereSenia) {
+            return { error: 'Este turno no requiere seña' }
+        }
+
+        // 4. Datos del payer y clínica derivados del turno.
+        const [{ data: paciente }, { data: tenant }] = await Promise.all([
+            admin.from('pacientes').select('nombre, apellido, email').eq('id', turno.paciente_id).maybeSingle(),
+            admin.from('tenants').select('nombre').eq('id', tenantId).maybeSingle(),
+        ])
+        const clinicaNombre = tenant?.nombre || 'Consultorio Odontológico'
+        const pacienteNombre = paciente ? `${paciente.nombre ?? ''} ${paciente.apellido ?? ''}`.trim() : ''
+        const pacienteEmail = paciente?.email ?? undefined
 
         // 2. Determinar la URL base de la aplicación
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL 

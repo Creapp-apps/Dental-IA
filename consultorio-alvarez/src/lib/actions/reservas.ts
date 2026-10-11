@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { getNextNroHistoriaClinica } from './pacientes'
 import { normalizarTelefonoArgentino, limpiarTituloProfesional } from '@/lib/utils'
 import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
+import { calcularSenia } from '@/lib/pagos/senia'
 
 async function getTenantBySlug(slug: string) {
     const supabase = createAdminClient()
@@ -526,9 +527,21 @@ export async function crearReservaPublica(data: {
         return { error: 'No hay tipos de tratamiento configurados' }
     }
 
-    // Try to find existing patient by ID or DNI (with or without dots)
-    let pacienteId: string | null = data.pacienteExistenteId || null
+    // DT-002: pacienteExistenteId lo manda el cliente. Sólo se acepta si pertenece a
+    // ESTE tenant; si no, se descarta y se sigue por DNI / paciente nuevo. Evita enganchar
+    // el turno a un paciente de otra clínica (fuga cross-tenant por escritura).
     const cleanDni = data.dni ? data.dni.replace(/\D/g, '') : null
+    let pacienteId: string | null = null
+
+    if (data.pacienteExistenteId) {
+        const { data: duenio } = await supabase
+            .from('pacientes')
+            .select('id')
+            .eq('id', data.pacienteExistenteId)
+            .eq('tenant_id', tenant.id)
+            .maybeSingle()
+        pacienteId = duenio?.id ?? null
+    }
 
     if (!pacienteId && cleanDni) {
         const dotsDni = formatDniWithDots(cleanDni)
@@ -785,8 +798,8 @@ export async function getConfiguracionSeniaPublica(tenantSlug: string) {
             .maybeSingle()
 
         const mpCreds = mpIntegracion?.credentials as any
-        const requiereSenia = Boolean(mpIntegracion?.is_active && mpCreds?.cobrar_senia && Number(mpCreds?.monto_senia) > 0)
-        const montoSenia = requiereSenia ? Number(mpCreds?.monto_senia) : 0
+        // Fuente única del monto (DT-004): mismo cálculo que crearPreferenciaPagoSenia.
+        const { requiereSenia, monto: montoSenia } = calcularSenia({ isActive: mpIntegracion?.is_active, credentials: mpCreds })
 
         return {
             success: true,
@@ -801,6 +814,11 @@ export async function getConfiguracionSeniaPublica(tenantSlug: string) {
     }
 }
 
+// getPacientePorDni se eliminó (DT-001): devolvía PII a cualquier anónimo con sólo
+// DNI + slug, cross-tenant. El autocompletado de "paciente existente" ahora pasa por
+// el flujo OTP: src/lib/actions/otp-reserva.ts (solicitar + verificar). El lookup
+// interno vive en src/lib/pacientes-lookup.ts (no 'use server', no invocable por cliente).
+// formatDniWithDots queda porque crearReservaPublica lo usa para matchear la ficha.
 function formatDniWithDots(dni: string): string {
     const clean = dni.replace(/\D/g, '')
     if (clean.length === 7) {
@@ -809,39 +827,6 @@ function formatDniWithDots(dni: string): string {
         return `${clean.slice(0, 2)}.${clean.slice(2, 5)}.${clean.slice(5)}`
     }
     return clean
-}
-
-export async function getPacientePorDni(tenantSlug: string, dni: string) {
-    const supabase = createAdminClient()
-    const tenant = await getTenantBySlug(tenantSlug)
-    if (!tenant) return { error: 'Consultorio no encontrado' }
-
-    const cleanDni = dni.replace(/\D/g, '')
-    if (!cleanDni) return { error: 'DNI inválido' }
-
-    const dotsDni = formatDniWithDots(cleanDni)
-
-    const { data, error } = await supabase
-        .from('pacientes')
-        .select(`
-            id,
-            nombre,
-            apellido,
-            telefono,
-            email,
-            obra_social_id
-        `)
-        .eq('tenant_id', tenant.id)
-        .or(`dni.eq.${cleanDni},dni.eq.${dotsDni}`)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-    if (error) {
-        return { error: 'Error al buscar paciente: ' + error.message }
-    }
-
-    return { data }
 }
 
 export async function notificarDemoraTurno(turnoId: string, demora: number, mensaje: string, metodo: 'MANUAL' | 'OFICIAL') {
