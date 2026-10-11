@@ -4,6 +4,16 @@ import { esEmailSuperadmin } from '@/lib/auth/superadmins'
 
 const ADMIN_PREFIXES = ['/admin', '/agenda', '/pacientes', '/cobros', '/configuracion', '/mis-pagos', '/mensajes', '/superadmin']
 
+// Primer segmento de ruta que NO es un slug de tenant. Usado para resolver
+// slugs limpios (ej: /curadent, /curadent/reservar) tanto en el GET como en
+// el POST de las Server Actions.
+const SYSTEM_RESERVED_ROUTES = [
+    'admin', 'agenda', 'pacientes', 'cobros', 'configuracion', 'mis-pagos', 'mensajes',
+    'superadmin', 'login', 'portal', 'reservar', 'api', 'test-turnos',
+    'terminos', 'privacidad', 'cookies', 'reembolsos',
+    'favicon.ico', 'icon.png', 'apple-icon.png', 'sounds', 'images', 'manifest.json', 'manifest.webmanifest'
+]
+
 export async function proxy(request: NextRequest) {
     const { pathname } = request.nextUrl
 
@@ -25,6 +35,23 @@ export async function proxy(request: NextRequest) {
     // El middleware NUNCA debe redirigir (307) una Server Action porque el cliente React
     // falla con "An unexpected response was received from the server".
     if (request.headers.has('next-action')) {
+        // Las Server Actions POSTean a la URL actual del navegador (ej: /curadent
+        // o /curadent/reservar). Esas URLs con slug limpio NO son rutas reales de
+        // Next, así que sin reescribir devuelven 404 y la acción falla. Hay que
+        // aplicar el MISMO rewrite que el GET, con rewrite (nunca redirect: un 307
+        // rompe la Server Action con "An unexpected response was received").
+        const segs = pathname.split('/').filter(Boolean)
+        const first = segs[0]?.toLowerCase()
+        if (first && !SYSTEM_RESERVED_ROUTES.includes(first)) {
+            const rest = segs.slice(1).join('/')
+            if (rest === '' || rest === 'reservar') {
+                const url = request.nextUrl.clone()
+                url.pathname = rest === 'reservar' ? '/reservar' : '/'
+                url.searchParams.set('slug', first)
+                requestHeaders.set('x-tenant-host', first)
+                return NextResponse.rewrite(url, { request: { headers: requestHeaders } })
+            }
+        }
         return NextResponse.next({
             request: {
                 headers: requestHeaders,
@@ -65,13 +92,6 @@ export async function proxy(request: NextRequest) {
     }
 
     // ── Soporte para slugs limpios de tenants en entornos sin subdominios (ej: /curadent, /alvarez) ──
-    const SYSTEM_RESERVED_ROUTES = [
-        'admin', 'agenda', 'pacientes', 'cobros', 'configuracion', 'mis-pagos', 'mensajes',
-        'superadmin', 'login', 'portal', 'reservar', 'api', 'test-turnos',
-        'terminos', 'privacidad', 'cookies', 'reembolsos',
-        'favicon.ico', 'icon.png', 'apple-icon.png', 'sounds', 'images', 'manifest.json', 'manifest.webmanifest'
-    ]
-
     const pathSegments = pathname.split('/').filter(Boolean)
     const firstSegment = pathSegments[0]?.toLowerCase()
 
