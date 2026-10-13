@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box, Plus, Zap } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
+import type { OdontogramaTipo } from '@/lib/pacientes/odontograma'
 import { TabAdjuntos } from '@/components/pacientes/TabAdjuntos'
 import { TabEscaneos3D } from '@/components/pacientes/TabEscaneos3D'
 import { TabEvoluciones } from '@/components/pacientes/TabEvoluciones'
@@ -39,6 +40,9 @@ interface FichaPacienteTabsProps {
     motivoConsulta: string | null
     profesionales: any[]
     tiposTratamiento: any[]
+    esProfesional?: boolean
+    miProfesionalId?: string | null
+    odontogramaTipo?: OdontogramaTipo
 }
 
 export function FichaPacienteTabs({
@@ -53,6 +57,9 @@ export function FichaPacienteTabs({
     motivoConsulta,
     profesionales,
     tiposTratamiento,
+    esProfesional = false,
+    miProfesionalId = null,
+    odontogramaTipo = 'ADULTO',
 }: FichaPacienteTabsProps) {
     const [tab, setTab] = useState<TabId>('consulta')
     const [cachedData, setCachedData] = useState<LocalFichaReciente | null>(null)
@@ -146,10 +153,12 @@ export function FichaPacienteTabs({
                             historial={effectiveHistorial}
                             profesionales={profesionales}
                             turnos={effectiveTurnos}
+                            esProfesional={esProfesional}
+                            miProfesionalId={miProfesionalId}
                         />
                     )}
                     {tab === 'odontograma' && (
-                        <OdontogramaInteractivo pacienteId={pacienteId} piezasData={effectiveOdontograma} />
+                        <OdontogramaInteractivo pacienteId={pacienteId} piezasData={effectiveOdontograma} tipoInicial={odontogramaTipo} />
                     )}
                     {tab === 'escaneos3d' && (
                         <TabEscaneos3D pacienteId={pacienteId} escaneosIniciales={effectiveEscaneos3d} />

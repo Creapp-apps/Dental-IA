@@ -15,6 +15,11 @@ export default async function MensajesPage() {
         redirect('/login')
     }
 
+    // La bandeja de Mensajes (WhatsApp) es exclusiva de administración.
+    if (usuario.rol === 'profesional') {
+        redirect('/agenda')
+    }
+
     const admin = createAdminClient()
     const { data: tenant } = await admin
         .from('tenants')

@@ -191,11 +191,17 @@ export function Sidebar({ tenantId, userEmail, userRole, themeColor, logoConfig,
 
     // El profesional también ve Pacientes, pero acotado a los suyos y sin datos
     // de contacto (lo aplican las queries y la ficha por rol).
+    // Mensajes (bandeja de WhatsApp) es exclusivo de administración.
     // Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §9
-    const itemsPrincipales = navItems.slice(0, 4)
+    const itemsPrincipales = navItems
+        .slice(0, 4)
+        .filter(item => !(isProfesional && item.href === '/mensajes'))
 
     useEffect(() => {
         if (!tenantId) return
+        // Mensajes es sólo de administración: el profesional no cuenta ni se
+        // suscribe a las conversaciones de WhatsApp.
+        if (isProfesional) return
         const supabase = createClient()
 
         const fetchPendingChats = async () => {
@@ -231,7 +237,7 @@ export function Sidebar({ tenantId, userEmail, userRole, themeColor, logoConfig,
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [tenantId])
+    }, [tenantId, isProfesional])
 
     useEffect(() => {
         setMounted(true)

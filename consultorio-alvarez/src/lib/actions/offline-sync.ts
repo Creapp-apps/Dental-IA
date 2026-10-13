@@ -3,6 +3,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getAuthenticatedTenantId, PACIENTE_CLINICO_COLUMNAS, COLUMNAS_CLINICAS_EDITABLES, idsPacientesDelProfesional } from '@/lib/supabase/queries'
 import { getActor } from '@/lib/auth/actor'
+import { autorEvolucion } from '@/lib/pacientes/scope'
 import { LocalPaciente, LocalTurno, LocalProfesional, LocalTratamiento, LocalObraSocial, SyncOutboxItem } from '@/lib/offline/db'
 import { esReintentable } from '@/lib/offline/outbox-errors'
 
@@ -526,6 +527,12 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                 if (item.operation === 'INSERT') {
                     const payload = {
                         ...sanitizeEvolucionPayload(item.payload),
+                        // Un profesional sólo puede firmar con su propio id.
+                        profesional_id: autorEvolucion({
+                            esProfesional: alcance.esProfesional,
+                            profesionalId: alcance.profesionalId,
+                            autorSolicitado: item.payload?.profesional_id,
+                        }),
                         id: item.entity_id,
                         tenant_id: tenantId,
                         updated_at: new Date().toISOString()
@@ -541,6 +548,12 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         .from('historial_clinico')
                         .update({
                             ...sanitizeEvolucionPayload(item.payload),
+                            // Un profesional sólo puede firmar con su propio id.
+                            profesional_id: autorEvolucion({
+                                esProfesional: alcance.esProfesional,
+                                profesionalId: alcance.profesionalId,
+                                autorSolicitado: item.payload?.profesional_id,
+                            }),
                             updated_at: new Date().toISOString()
                         })
                         .eq('id', item.entity_id)

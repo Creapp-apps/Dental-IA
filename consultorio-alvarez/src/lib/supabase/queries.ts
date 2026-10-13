@@ -1,7 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getActor } from '@/lib/auth/actor'
-import { idsPacientesEnScope, puedeVerFichaPaciente } from '@/lib/pacientes/scope'
+import { idsPacientesEnScope, puedeVerFichaPaciente, unirIdsPacientes } from '@/lib/pacientes/scope'
 import { cache } from 'react'
 
 // ============================================================
@@ -175,6 +175,8 @@ const PACIENTE_SELECT_FIELDS = `
     notas_internas,
     registro_completo,
     foto_url,
+    profesional_id,
+    odontograma_tipo,
     created_at,
     obra_social:obras_sociales(id, nombre)
 `
@@ -200,6 +202,7 @@ export const PACIENTE_CLINICO_COLUMNAS = `
     antecedentes,
     registro_completo,
     foto_url,
+    odontograma_tipo,
     created_at,
     updated_at
 `
@@ -271,17 +274,27 @@ export const idsPacientesDelProfesional = cache(async (): Promise<string[] | nul
     const tenantId = await getTenantId()
     if (!tenantId || !profesionalId) return []
 
-    const { data, error } = await supabase
-        .from('turnos')
-        .select('paciente_id')
-        .eq('tenant_id', tenantId)
-        .eq('profesional_id', profesionalId)
+    // Alcance = unión de: pacientes asignados a este profesional (de cabecera)
+    // y pacientes con los que tuvo turnos en su agenda. (addendum 2026-10-13)
+    const [asignadosRes, turnosRes] = await Promise.all([
+        supabase
+            .from('pacientes')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('profesional_id', profesionalId),
+        supabase
+            .from('turnos')
+            .select('paciente_id')
+            .eq('tenant_id', tenantId)
+            .eq('profesional_id', profesionalId),
+    ])
 
-    if (error) {
-        console.error('idsPacientesDelProfesional error:', error)
-        return []
-    }
-    return idsPacientesEnScope(data ?? [])
+    if (asignadosRes.error) console.error('idsPacientesDelProfesional (asignados):', asignadosRes.error)
+    if (turnosRes.error) console.error('idsPacientesDelProfesional (turnos):', turnosRes.error)
+
+    const asignados = (asignadosRes.data ?? []).map((p: any) => p.id)
+    const deTurnos = idsPacientesEnScope(turnosRes.data ?? [])
+    return unirIdsPacientes(asignados, deTurnos)
 })
 
 /**
@@ -640,17 +653,26 @@ export async function getDashboardStats() {
 
     const hoy = new Date().toISOString().split('T')[0]
 
+    // El profesional sólo cuenta sus turnos y sus pacientes. (§9)
+    const agenda = await alcanceAgenda()
+    const scopeIds = await idsPacientesDelProfesional()
+
+    let turnosQuery = supabase
+        .from('turnos')
+        .select('id, estado', { count: 'exact' })
+        .eq('tenant_id', tenantId)
+        .gte('fecha_inicio', `${hoy}T00:00:00`)
+        .lt('fecha_inicio', `${hoy}T23:59:59`)
+    if (agenda.esProfesional) {
+        turnosQuery = turnosQuery.eq('profesional_id', agenda.profesionalId ?? '')
+    }
+
     const [pacientes, turnos, cobrosPendientes] = await Promise.all([
         supabase
             .from('pacientes')
             .select('id', { count: 'exact', head: true })
             .eq('tenant_id', tenantId),
-        supabase
-            .from('turnos')
-            .select('id, estado', { count: 'exact' })
-            .eq('tenant_id', tenantId)
-            .gte('fecha_inicio', `${hoy}T00:00:00`)
-            .lt('fecha_inicio', `${hoy}T23:59:59`),
+        turnosQuery,
         supabase
             .from('cobros')
             .select('monto_total, monto_pagado')
@@ -662,8 +684,11 @@ export async function getDashboardStats() {
     const montoPendiente = (cobrosPendientes.data ?? [])
         .reduce((sum, c) => sum + (c.monto_total - c.monto_pagado), 0)
 
+    // Para el profesional, "pacientes" es su alcance (asignados ∪ con turno).
+    const pacientesCount = scopeIds !== null ? scopeIds.length : (pacientes.count ?? 0)
+
     return {
-        pacientes: pacientes.count ?? 0,
+        pacientes: pacientesCount,
         turnosHoy: turnosData.length,
         turnosConfirmados: turnosData.filter(t => ['CONFIRMADO', 'EN_SALA', 'ATENDIDO'].includes(t.estado)).length,
         turnosPendientes: turnosData.filter(t => t.estado === 'PENDIENTE').length,

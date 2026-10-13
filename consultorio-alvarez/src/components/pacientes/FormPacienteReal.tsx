@@ -39,6 +39,7 @@ const schema = z.object({
         message: 'Formato inválido (DD/MM/AAAA)'
     }),
     genero: z.string().optional(),
+    profesional_id: z.string().optional(),
     telefono: z.string().optional(),
     email: z.string().email('Email inválido').optional().or(z.literal('')),
     direccion: z.string().optional(),
@@ -115,7 +116,7 @@ function compressImage(file: File, maxWidth = 1200, maxHeight = 1200, quality = 
     })
 }
 
-export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: any[], paciente?: any }) {
+export function FormPacienteReal({ obrasSociales, paciente, profesionales = [] }: { obrasSociales: any[], paciente?: any, profesionales?: any[] }) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const [savingStatusText, setSavingStatusText] = useState<string | null>(null)
@@ -187,6 +188,7 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             cuit: paciente.cuit || '',
             fecha_nacimiento: paciente.fecha_nacimiento ? paciente.fecha_nacimiento.split('-').reverse().join('/') : '',
             genero: paciente.genero || '',
+            profesional_id: paciente.profesional_id || '',
             telefono: paciente.telefono || '',
             email: paciente.email || '',
             direccion: paciente.direccion || '',
@@ -199,8 +201,24 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
             medicacion_actual: paciente.medicacion_actual || '',
             antecedentes: paciente.antecedentes || '',
             notas_internas: paciente.notas_internas || '',
-        } : { genero: '', obra_social_id: '' },
+        } : { genero: '', obra_social_id: '', profesional_id: '' },
     })
+
+    // Opciones del profesional asignado: "Sin asignar" + profesionales activos.
+    // Si el asignado actual quedó inactivo, se muestra igual marcado "(inactivo)"
+    // hasta que admin reasigne (su borrado definitivo lo limpia por FK).
+    const profesionalesActivos = (profesionales || []).filter((p: any) => p.activo)
+    const opcionesProfesional: { value: string; label: string }[] = [
+        { value: '', label: 'Sin asignar' },
+        ...profesionalesActivos.map((p: any) => ({ value: p.id, label: `${p.nombre} ${p.apellido}` })),
+    ]
+    const asignadoActual = paciente?.profesional_id
+    if (asignadoActual && !profesionalesActivos.some((p: any) => p.id === asignadoActual)) {
+        const inactivo = (profesionales || []).find((p: any) => p.id === asignadoActual)
+        if (inactivo) {
+            opcionesProfesional.push({ value: inactivo.id, label: `${inactivo.nombre} ${inactivo.apellido} (inactivo)` })
+        }
+    }
 
     async function runOcrProcessing(base64Image: string) {
         setIsOcrPending(true)
@@ -574,6 +592,16 @@ export function FormPacienteReal({ obrasSociales, paciente }: { obrasSociales: a
                                 { value: 'X', label: 'No binario' }
                             ]}
                             placeholder="—"
+                        />
+                    </Field>
+                </div>
+                <div className="mt-4">
+                    <Field label="Profesional asignado">
+                        <GlassSelect
+                            value={watch('profesional_id') || ''}
+                            onChange={v => setValue('profesional_id', v)}
+                            options={opcionesProfesional}
+                            placeholder="Sin asignar"
                         />
                     </Field>
                 </div>

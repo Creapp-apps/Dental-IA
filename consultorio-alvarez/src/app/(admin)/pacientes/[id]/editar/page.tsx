@@ -2,7 +2,7 @@ import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { getObrasSociales, getCurrentUsuario } from '@/lib/supabase/queries'
+import { getObrasSociales, getCurrentUsuario, getProfesionales } from '@/lib/supabase/queries'
 import { FormPacienteReal } from '@/components/pacientes/FormPacienteReal'
 
 export default async function EditarPacientePage({
@@ -19,9 +19,12 @@ export default async function EditarPacientePage({
     const { id } = await params
     const supabase = await createClient()
 
-    const [pacienteRes, obrasSociales] = await Promise.all([
+    const [pacienteRes, obrasSociales, profesionales] = await Promise.all([
         supabase.from('pacientes').select('*, obra_social:obras_sociales(*)').eq('id', id).single(),
-        getObrasSociales()
+        getObrasSociales(),
+        // Todos (activos e inactivos) para poder mostrar "(inactivo)" si corresponde;
+        // el dropdown ofrece sólo los activos.
+        getProfesionales(false)
     ])
 
     if (!pacienteRes.data) {
@@ -38,7 +41,7 @@ export default async function EditarPacientePage({
                 </Link>
                 <h1 className="text-2xl font-bold text-foreground">Editar paciente</h1>
             </div>
-            <FormPacienteReal obrasSociales={obrasSociales} paciente={paciente} />
+            <FormPacienteReal obrasSociales={obrasSociales} paciente={paciente} profesionales={profesionales} />
         </div>
     )
 }

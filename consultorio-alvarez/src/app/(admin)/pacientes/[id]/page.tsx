@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
-import { getProfesionales, getTiposTratamiento, getPacienteById, origenPacientes, idsPacientesDelProfesional } from '@/lib/supabase/queries'
+import { getProfesionales, getTiposTratamiento, getPacienteById, origenPacientes, idsPacientesDelProfesional, alcanceAgenda } from '@/lib/supabase/queries'
 import { puedeVerFichaPaciente } from '@/lib/pacientes/scope'
 import { getEscaneosPacienteAction } from '@/lib/actions/escaneos-3d'
 import { ArrowLeft } from 'lucide-react'
@@ -65,6 +65,8 @@ export default async function FichaPacientePage({
     if (!p) notFound()
 
     const { esProfesional } = await origenPacientes()
+    // El id del profesional logueado, para fijar la autoría de sus evoluciones.
+    const { profesionalId: miProfesionalId } = await alcanceAgenda()
 
     // Cargar catálogos filtrados estrictamente por el tenant_id del consultorio
     const [profesionales, tiposTratamiento] = await Promise.all([
@@ -113,6 +115,9 @@ export default async function FichaPacientePage({
                     motivoConsulta={p.motivo_consulta}
                     profesionales={profesionales}
                     tiposTratamiento={tiposTratamiento}
+                    esProfesional={esProfesional}
+                    miProfesionalId={miProfesionalId}
+                    odontogramaTipo={p.odontograma_tipo ?? 'ADULTO'}
                 />
             </div>
         </div>

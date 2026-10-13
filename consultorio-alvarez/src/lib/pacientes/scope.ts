@@ -15,6 +15,40 @@ export function idsPacientesEnScope(
 }
 
 /**
+ * Une varias listas de IDs de paciente en una sola, sin duplicados ni vacíos.
+ * El alcance del profesional es la unión de sus pacientes asignados y los de
+ * su agenda (turnos).
+ */
+export function unirIdsPacientes(...listas: Array<Array<string | null | undefined>>): string[] {
+    const ids = new Set<string>()
+    for (const lista of listas) {
+        for (const id of lista) {
+            if (id) ids.add(id)
+        }
+    }
+    return [...ids]
+}
+
+/**
+ * Autor (profesional) que queda firmando una evolución de la historia clínica.
+ * Un profesional sólo puede firmar con su propio id (integridad médico-legal:
+ * nadie escribe a nombre de otro). Admin/recepción registra en nombre de quien
+ * atendió, así que respeta el autor solicitado.
+ */
+export function autorEvolucion({
+    esProfesional,
+    profesionalId,
+    autorSolicitado,
+}: {
+    esProfesional: boolean
+    profesionalId: string | null
+    autorSolicitado: string | null | undefined
+}): string | null | undefined {
+    if (esProfesional) return profesionalId
+    return autorSolicitado
+}
+
+/**
  * ¿Puede ver la ficha de este paciente?
  * - No profesional (admin/superadmin): siempre.
  * - Profesional: sólo si el paciente está en su scope.

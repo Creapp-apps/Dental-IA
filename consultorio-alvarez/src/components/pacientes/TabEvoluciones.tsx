@@ -36,6 +36,9 @@ interface TabEvolucionesProps {
     historial: any[]
     profesionales: any[]
     turnos: any[]
+    /** El profesional sólo puede firmar evoluciones con su propio id. */
+    esProfesional?: boolean
+    miProfesionalId?: string | null
 }
 
 /**
@@ -88,6 +91,8 @@ export function TabEvoluciones({
     historial,
     profesionales,
     turnos,
+    esProfesional = false,
+    miProfesionalId = null,
 }: TabEvolucionesProps) {
     const [modalAbierto, setModalAbierto] = useState(false)
     const [enEdicion, setEnEdicion] = useState<LocalEvolucion | null>(null)
@@ -274,6 +279,8 @@ export function TabEvoluciones({
                     profesionales={profesionales}
                     turnos={turnos}
                     onGuardar={guardar}
+                    esProfesional={esProfesional}
+                    miProfesionalId={miProfesionalId}
                 />
             )}
 
@@ -317,6 +324,8 @@ interface ModalEvolucionProps {
         procedimiento: string
         observaciones: string
     }) => void
+    esProfesional?: boolean
+    miProfesionalId?: string | null
 }
 
 function ModalEvolucion({
@@ -326,9 +335,14 @@ function ModalEvolucion({
     profesionales,
     turnos,
     onGuardar,
+    esProfesional = false,
+    miProfesionalId = null,
 }: ModalEvolucionProps) {
     const [fecha, setFecha] = useState(evolucion?.fecha ?? format(new Date(), 'yyyy-MM-dd'))
-    const [profesionalId, setProfesionalId] = useState(evolucion?.profesional_id ?? '')
+    // El profesional firma siempre con su propio id; admin elige a quien atendió.
+    const [profesionalId, setProfesionalId] = useState(
+        evolucion?.profesional_id ?? (esProfesional ? (miProfesionalId ?? '') : '')
+    )
     const [turnoId, setTurnoId] = useState(evolucion?.turno_id ?? '')
     const [procedimiento, setProcedimiento] = useState(evolucion?.procedimiento_realizado ?? '')
     const [observaciones, setObservaciones] = useState(evolucion?.observaciones ?? '')
@@ -372,12 +386,22 @@ function ModalEvolucion({
                         </div>
                         <div className="space-y-1.5">
                             <Label>Profesional</Label>
-                            <GlassSelect
-                                value={profesionalId}
-                                onChange={setProfesionalId}
-                                options={opcionesProfesionales}
-                                placeholder="Seleccionar profesional"
-                            />
+                            {esProfesional ? (
+                                // El profesional firma siempre con su propio nombre (no puede
+                                // atribuir la evolución a otro). Campo fijo, sin dropdown.
+                                <Input
+                                    value={opcionesProfesionales.find(o => o.value === profesionalId)?.label ?? 'Vos'}
+                                    readOnly
+                                    disabled
+                                />
+                            ) : (
+                                <GlassSelect
+                                    value={profesionalId}
+                                    onChange={setProfesionalId}
+                                    options={opcionesProfesionales}
+                                    placeholder="Seleccionar profesional"
+                                />
+                            )}
                         </div>
                     </div>
 

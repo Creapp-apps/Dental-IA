@@ -344,3 +344,9 @@ no-op, sin cambios de comportamiento.
 
 Verificación: `tsc` sin errores + suite unit (lógica pura de alcance). Falta QA
 manual con una cuenta `profesional` real (ver plan de pruebas).
+
+### Mensajes (WhatsApp) es sólo de administración
+
+La bandeja de Mensajes queda exclusiva de admin: el profesional no ve el link en
+el sidebar, no se suscribe al conteo de conversaciones, y `/mensajes` lo redirige
+a `/agenda` si entra por URL.

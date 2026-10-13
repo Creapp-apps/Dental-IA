@@ -212,6 +212,7 @@ export async function actualizarPaciente(id: string, formData: {
     antecedentes?: string
     notas_internas?: string
     registro_completo?: boolean
+    profesional_id?: string | null
 }) {
     // Los datos de contacto del paciente son del admin. El profesional corrige
     // lo clínico por actualizarDatosClinicosPaciente.
@@ -320,6 +321,37 @@ export async function guardarOdontograma(pacienteId: string, pieza: string, esta
         }, {
             onConflict: 'paciente_id,pieza,cara',
         })
+
+    if (error) return { error: error.message }
+
+    after(() => {
+        revalidatePath(`/pacientes/${pacienteId}`)
+    })
+    return { success: true }
+}
+
+const ODONTOGRAMA_TIPOS = ['ADULTO', 'NINO', 'MIXTO'] as const
+
+/** Tipo de dentición del odontograma del paciente (adulto / niño / mixto). */
+export async function actualizarOdontogramaTipo(pacienteId: string, tipo: string) {
+    if (!(ODONTOGRAMA_TIPOS as readonly string[]).includes(tipo)) {
+        return { error: 'Tipo de odontograma inválido' }
+    }
+
+    const supabase = await createClient()
+    const tenantId = await getTenantId()
+    if (!tenantId) return { error: 'Tenant no encontrado' }
+
+    // Un profesional sólo escribe sobre sus pacientes (los de su agenda). (§9)
+    if (!(await pacienteEnAlcance(pacienteId))) {
+        return { error: 'No autorizado: el paciente no está en tu alcance' }
+    }
+
+    const { error } = await supabase
+        .from('pacientes')
+        .update({ odontograma_tipo: tipo, updated_at: new Date().toISOString() })
+        .eq('id', pacienteId)
+        .eq('tenant_id', tenantId)
 
     if (error) return { error: error.message }
 

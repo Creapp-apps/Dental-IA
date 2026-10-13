@@ -2,7 +2,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { Calendar, Clock, Users, AlertCircle, DollarSign, Stethoscope } from 'lucide-react'
 import { redirect } from 'next/navigation'
-import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario, getTurnosSinConfirmar } from '@/lib/supabase/queries'
+import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario, getTurnosSinConfirmar, alcanceAgenda } from '@/lib/supabase/queries'
 import { DashboardKPI } from '@/components/dashboard/DashboardKPI'
 import { TurnoCardGlass } from '@/components/dashboard/TurnoCardGlass'
 import { TurnosSinConfirmarSection } from '@/components/dashboard/TurnosSinConfirmarSection'
@@ -33,6 +33,13 @@ export default async function DashboardPage(props: {
     // Obtener configuración de cobros para banners de vencimiento
     const billing = usuario ? await getBillingConfig(usuario.tenant_id) : null
     const settings = billing?.settings
+
+    // El profesional sólo ve su propia columna de turnos del día, no la de sus
+    // colegas. (§9)
+    const agenda = await alcanceAgenda()
+    const profesionalesVisibles = agenda.esProfesional && agenda.profesionalId
+        ? profesionales.filter((p: any) => p.id === agenda.profesionalId)
+        : profesionales
 
     const turnosPendientes = turnos.filter((t: any) => t.estado === 'PENDIENTE')
     const turnosUrgentes = turnos.filter(
@@ -211,7 +218,7 @@ export default async function DashboardPage(props: {
 
             {/* Turnos por profesional */}
             <div className="grid gap-6 lg:grid-cols-2">
-                {profesionales.map((prof: any) => {
+                {profesionalesVisibles.map((prof: any) => {
                     const turnosProf = turnos.filter((t: any) => t.profesional_id === prof.id)
                     return (
                         <div key={prof.id} className="space-y-3">

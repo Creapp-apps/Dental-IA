@@ -3,8 +3,10 @@
 import { useState, useTransition } from 'react'
 import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { guardarOdontograma } from '@/lib/actions/pacientes'
+import { guardarOdontograma, actualizarOdontogramaTipo } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
+import { GlassSelect } from '@/components/ui/glass-select'
+import { cuadrantesPorTipo, type Cuadrante, type OdontogramaTipo } from '@/lib/pacientes/odontograma'
 
 // ============================================================
 // ODONTOGRAMA INTERACTIVO — 32 piezas FDI notation con 5 caras
@@ -29,14 +31,10 @@ const CARAS_NOMBRES: Record<string, string> = {
     left: 'Lateral Izquierdo',
 }
 
-const CUADRANTE_SUPERIOR_DERECHO = ['18', '17', '16', '15', '14', '13', '12', '11']
-const CUADRANTE_SUPERIOR_IZQUIERDO = ['21', '22', '23', '24', '25', '26', '27', '28']
-const CUADRANTE_INFERIOR_IZQUIERDO = ['31', '32', '33', '34', '35', '36', '37', '38']
-const CUADRANTE_INFERIOR_DERECHO = ['48', '47', '46', '45', '44', '43', '42', '41']
-
 interface OdontogramaInteractivoProps {
     pacienteId: string
     piezasData: Array<{ pieza: string; estado: string; cara?: string | null; notas?: string | null }>
+    tipoInicial?: OdontogramaTipo
 }
 
 type PiezaState = {
@@ -44,7 +42,31 @@ type PiezaState = {
     caras: Record<string, string>
 }
 
-export function OdontogramaInteractivo({ pacienteId, piezasData }: OdontogramaInteractivoProps) {
+export function OdontogramaInteractivo({ pacienteId, piezasData, tipoInicial = 'ADULTO' }: OdontogramaInteractivoProps) {
+    const [tipo, setTipo] = useState<OdontogramaTipo>(tipoInicial)
+    const [, startTipoTransition] = useTransition()
+
+    function cambiarTipo(nuevo: string) {
+        const t = nuevo as OdontogramaTipo
+        setTipo(t)
+        startTipoTransition(async () => {
+            const result = await actualizarOdontogramaTipo(pacienteId, t)
+            if (result.error) {
+                glassAlert.error({ title: 'Error', description: result.error })
+            }
+        })
+    }
+
+    // Cuadrantes a mostrar según la dentición, agrupados por bloque (perm/temp).
+    const cuadrantes = cuadrantesPorTipo(tipo)
+    const bloques: Array<{ denticion: Cuadrante['denticion']; cuadrantes: Cuadrante[] }> = []
+    for (const c of cuadrantes) {
+        let bloque = bloques.find(b => b.denticion === c.denticion)
+        if (!bloque) { bloque = { denticion: c.denticion, cuadrantes: [] }; bloques.push(bloque) }
+        bloque.cuadrantes.push(c)
+    }
+    const ladoDe = (cs: Cuadrante[], posicion: string, lado: string) =>
+        cs.find(c => c.posicion === posicion && c.lado === lado)?.dientes ?? []
     const [piezas, setPiezas] = useState<Record<string, PiezaState>>(() => {
         const map: Record<string, PiezaState> = {}
         piezasData.forEach(p => {
@@ -122,35 +144,60 @@ export function OdontogramaInteractivo({ pacienteId, piezasData }: OdontogramaIn
 
     return (
         <div className="space-y-4">
+            {/* Selector de dentición */}
+            <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-muted-foreground">Dentición</span>
+                <div className="w-44">
+                    <GlassSelect
+                        value={tipo}
+                        onChange={cambiarTipo}
+                        options={[
+                            { value: 'ADULTO', label: 'Adulto' },
+                            { value: 'NINO', label: 'Niño' },
+                            { value: 'MIXTO', label: 'Mixto' },
+                        ]}
+                    />
+                </div>
+            </div>
+
             {/* Dental chart */}
             <div className="glass rounded-2xl shadow-glass p-6 overflow-x-auto">
-                <div className="min-w-[800px]">
-                    {/* Arcada superior */}
-                    <div className="text-center text-xs text-muted-foreground mb-4 font-medium">SUPERIOR</div>
-                    <div className="flex justify-center gap-1.5 mb-2">
-                        {CUADRANTE_SUPERIOR_DERECHO.map(pieza => (
-                            <Tooth key={pieza} pieza={pieza} state={piezas[pieza]} selected={selected} onSelect={handleSelect} />
-                        ))}
-                        <div className="w-px bg-border mx-3" />
-                        {CUADRANTE_SUPERIOR_IZQUIERDO.map(pieza => (
-                            <Tooth key={pieza} pieza={pieza} state={piezas[pieza]} selected={selected} onSelect={handleSelect} />
-                        ))}
-                    </div>
+                <div className="min-w-[800px] space-y-8">
+                    {bloques.map(bloque => (
+                        <div key={bloque.denticion}>
+                            {bloques.length > 1 && (
+                                <div className="text-center text-sm font-semibold text-foreground mb-3">
+                                    {bloque.denticion === 'permanente' ? 'Permanentes' : 'Temporarios'}
+                                </div>
+                            )}
+                            {/* Arcada superior */}
+                            <div className="text-center text-xs text-muted-foreground mb-4 font-medium">SUPERIOR</div>
+                            <div className="flex justify-center gap-1.5 mb-2">
+                                {ladoDe(bloque.cuadrantes, 'superior', 'derecho').map(pieza => (
+                                    <Tooth key={pieza} pieza={pieza} state={piezas[pieza]} selected={selected} onSelect={handleSelect} />
+                                ))}
+                                <div className="w-px bg-border mx-3" />
+                                {ladoDe(bloque.cuadrantes, 'superior', 'izquierdo').map(pieza => (
+                                    <Tooth key={pieza} pieza={pieza} state={piezas[pieza]} selected={selected} onSelect={handleSelect} />
+                                ))}
+                            </div>
 
-                    {/* Línea media */}
-                    <div className="h-px bg-border my-6" />
+                            {/* Línea media */}
+                            <div className="h-px bg-border my-6" />
 
-                    {/* Arcada inferior */}
-                    <div className="flex justify-center gap-1.5 mb-2">
-                        {CUADRANTE_INFERIOR_DERECHO.map(pieza => (
-                            <Tooth key={pieza} pieza={pieza} state={piezas[pieza]} selected={selected} onSelect={handleSelect} />
-                        ))}
-                        <div className="w-px bg-border mx-3" />
-                        {CUADRANTE_INFERIOR_IZQUIERDO.map(pieza => (
-                            <Tooth key={pieza} pieza={pieza} state={piezas[pieza]} selected={selected} onSelect={handleSelect} />
-                        ))}
-                    </div>
-                    <div className="text-center text-xs text-muted-foreground mt-4 font-medium">INFERIOR</div>
+                            {/* Arcada inferior */}
+                            <div className="flex justify-center gap-1.5 mb-2">
+                                {ladoDe(bloque.cuadrantes, 'inferior', 'derecho').map(pieza => (
+                                    <Tooth key={pieza} pieza={pieza} state={piezas[pieza]} selected={selected} onSelect={handleSelect} />
+                                ))}
+                                <div className="w-px bg-border mx-3" />
+                                {ladoDe(bloque.cuadrantes, 'inferior', 'izquierdo').map(pieza => (
+                                    <Tooth key={pieza} pieza={pieza} state={piezas[pieza]} selected={selected} onSelect={handleSelect} />
+                                ))}
+                            </div>
+                            <div className="text-center text-xs text-muted-foreground mt-4 font-medium">INFERIOR</div>
+                        </div>
+                    ))}
                 </div>
             </div>
 
