@@ -1,6 +1,7 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getActor } from '@/lib/auth/actor'
+import { idsPacientesEnScope, puedeVerFichaPaciente } from '@/lib/pacientes/scope'
 import { cache } from 'react'
 
 // ============================================================
@@ -256,6 +257,47 @@ export const alcanceAgenda = cache(async () => {
     }
 })
 
+/**
+ * IDs de los pacientes que el profesional tiene permitido ver: aquellos con
+ * los que tuvo al menos un turno asignado. Acota listado y ficha.
+ * Devuelve `null` cuando no hay restricción (admin / superadmin).
+ * Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §9
+ */
+export const idsPacientesDelProfesional = cache(async (): Promise<string[] | null> => {
+    const { esProfesional, profesionalId } = await alcanceAgenda()
+    if (!esProfesional) return null
+
+    const supabase = getAdmin()
+    const tenantId = await getTenantId()
+    if (!tenantId || !profesionalId) return []
+
+    const { data, error } = await supabase
+        .from('turnos')
+        .select('paciente_id')
+        .eq('tenant_id', tenantId)
+        .eq('profesional_id', profesionalId)
+
+    if (error) {
+        console.error('idsPacientesDelProfesional error:', error)
+        return []
+    }
+    return idsPacientesEnScope(data ?? [])
+})
+
+/**
+ * ¿El usuario actual puede escribir/leer sobre este paciente?
+ * Admin/superadmin: siempre. Profesional: sólo sus pacientes (los de su agenda).
+ * Es el guard que usan las acciones de escritura clínica. (§8 y §9)
+ */
+export async function pacienteEnAlcance(pacienteId: string): Promise<boolean> {
+    const scope = await idsPacientesDelProfesional()
+    return puedeVerFichaPaciente({
+        esProfesional: scope !== null,
+        idsEnScope: scope ?? [],
+        pacienteId,
+    })
+}
+
 export const PACIENTE_COMPACT_FIELDS = `
     id,
     nro_historia_clinica,
@@ -312,6 +354,10 @@ export async function getTotalPacientesCount(): Promise<number> {
     const tenantId = await getTenantId()
     if (!tenantId) return 0
 
+    // El profesional sólo cuenta sus pacientes (los de su agenda).
+    const scope = await idsPacientesDelProfesional()
+    if (scope !== null) return scope.length
+
     const { count, error } = await supabase
         .from('pacientes')
         .select('*', { count: 'exact', head: true })
@@ -333,10 +379,17 @@ export async function getPacientes(limit: number = 50, offset: number = 0) {
     const effectiveLimit = limit > 0 ? limit : 50
     const { campos } = await origenPacientes()
 
-    const { data, error } = await supabase
+    // El profesional sólo lista a sus pacientes (los de su agenda).
+    const scope = await idsPacientesDelProfesional()
+    if (scope !== null && scope.length === 0) return []
+
+    let query = supabase
         .from('pacientes')
         .select(campos)
         .eq('tenant_id', tenantId)
+    if (scope !== null) query = query.in('id', scope)
+
+    const { data, error } = await query
         .order('apellido', { ascending: true })
         .range(offset, offset + effectiveLimit - 1)
 
@@ -398,12 +451,17 @@ export async function searchPacientes(searchTerm: string, limit: number = 20, co
 
     const { esProfesional, campos, camposCompactos } = await origenPacientes()
 
+    // El profesional sólo busca entre sus pacientes (los de su agenda).
+    const scope = await idsPacientesDelProfesional()
+    if (scope !== null && scope.length === 0) return []
+
     let query = supabase
         .from('pacientes')
         .select(compact ? camposCompactos : campos)
         .eq('tenant_id', tenantId)
         .order('apellido', { ascending: true })
         .limit(effectiveLimit)
+    if (scope !== null) query = query.in('id', scope)
 
     if (isNumeric && digitsOnly.length >= 2) {
         // Al profesional tampoco se le busca por DNI: no lo ve, y poder

@@ -189,12 +189,10 @@ export function Sidebar({ tenantId, userEmail, userRole, themeColor, logoConfig,
 
     const isProfesional = userRole === 'profesional'
 
-    // El listado de pacientes es de admin: sin listado no hay cartera que
-    // exportar. El profesional llega a una ficha desde un turno de su agenda.
+    // El profesional también ve Pacientes, pero acotado a los suyos y sin datos
+    // de contacto (lo aplican las queries y la ficha por rol).
     // Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §9
-    const itemsPrincipales = navItems
-        .slice(0, 4)
-        .filter(item => !(isProfesional && item.href === '/pacientes'))
+    const itemsPrincipales = navItems.slice(0, 4)
 
     useEffect(() => {
         if (!tenantId) return

@@ -1,5 +1,4 @@
-import { redirect } from 'next/navigation'
-import { getPacientes, searchPacientes, getTotalPacientesCount, getCurrentUsuario } from '@/lib/supabase/queries'
+import { getPacientes, searchPacientes, getTotalPacientesCount, origenPacientes } from '@/lib/supabase/queries'
 import { PacientesListView } from '@/components/pacientes/PacientesListView'
 
 export default async function PacientesPage({
@@ -7,12 +6,9 @@ export default async function PacientesPage({
 }: {
     searchParams?: Promise<{ q?: string }>
 }) {
-    // El listado completo de pacientes es de admin (§9). El profesional entra a
-    // la ficha desde su agenda.
-    const usuario = await getCurrentUsuario()
-    if (usuario?.rol === 'profesional') {
-        redirect('/agenda')
-    }
+    // El profesional también accede al listado, pero acotado a sus pacientes y
+    // sin datos de contacto; las queries ya aplican ese alcance por rol (§9).
+    const { esProfesional } = await origenPacientes()
 
     const resolvedParams = await searchParams
     const query = resolvedParams?.q?.trim() ?? ''
@@ -24,10 +20,11 @@ export default async function PacientesPage({
 
     return (
         <div className="space-y-6 max-w-5xl mx-auto">
-            <PacientesListView 
-                pacientes={initialPacientes} 
-                initialQuery={query} 
+            <PacientesListView
+                pacientes={initialPacientes}
+                initialQuery={query}
                 totalCount={totalCount}
+                esProfesional={esProfesional}
             />
         </div>
     )

@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 
-import { getAuthenticatedTenantId, COLUMNAS_CLINICAS_EDITABLES } from '@/lib/supabase/queries'
+import { getAuthenticatedTenantId, COLUMNAS_CLINICAS_EDITABLES, pacienteEnAlcance } from '@/lib/supabase/queries'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireActor, requireAdmin } from '@/lib/auth/actor'
 
@@ -163,6 +163,11 @@ export async function actualizarDatosClinicosPaciente(id: string, datos: {
     const { ok, actor, error: denied } = await requireActor()
     if (!ok) return { error: denied }
 
+    // Un profesional sólo escribe sobre sus pacientes (los de su agenda). (§9)
+    if (!(await pacienteEnAlcance(id))) {
+        return { error: 'No autorizado: el paciente no está en tu alcance' }
+    }
+
     const cambios = Object.fromEntries(
         Object.entries(datos)
             .filter(([columna]) => (COLUMNAS_CLINICAS_EDITABLES as readonly string[]).includes(columna))
@@ -296,6 +301,11 @@ export async function guardarOdontograma(pacienteId: string, pieza: string, esta
     const supabase = await createClient()
     const tenantId = await getTenantId()
     if (!tenantId) return { error: 'Tenant no encontrado' }
+
+    // Un profesional sólo escribe sobre sus pacientes (los de su agenda). (§9)
+    if (!(await pacienteEnAlcance(pacienteId))) {
+        return { error: 'No autorizado: el paciente no está en tu alcance' }
+    }
 
     // Upsert: update if same pieza+cara exists, insert otherwise
     const { error } = await supabase

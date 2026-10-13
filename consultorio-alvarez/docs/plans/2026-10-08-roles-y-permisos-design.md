@@ -296,3 +296,51 @@ Pruebas, cada una con una cuenta `profesional` real:
 9. Con `reserva_web_elige_profesional = false`, reservar desde la web y confirmar que el
    turno entra sin profesional y aparece para asignar.
 10. Con `true`, confirmar que Alvarez sigue funcionando igual que hoy.
+
+---
+
+## Addendum 2026-10-13 — El profesional accede a Pacientes (acotado)
+
+Cambia la decisión de §4 y §9 a pedido del cliente: el profesional **sí** ve la
+sección "Pacientes", pero acotada.
+
+- **Alcance**: sólo pacientes con los que tuvo al menos un turno asignado
+  (derivado de `turnos.profesional_id`). No ve la cartera completa.
+- **Datos**: sólo nombre y apellido (ya garantizado por `origenPacientes` →
+  columnas clínicas, sin teléfono/email/DNI).
+- **Acciones**: sólo ver y abrir la ficha para cargar lo clínico. No crea, no
+  edita demográficos, no elimina (ocultos en `PacientesListView`).
+- **Ficha por URL**: se bloquea abrir fichas de pacientes fuera de su alcance
+  (`notFound()` en `pacientes/[id]/page.tsx`).
+
+Implementación:
+- `src/lib/pacientes/scope.ts` (+ test) — lógica pura de alcance y guard.
+- `src/lib/supabase/queries.ts` — `idsPacientesDelProfesional()` y rama por rol
+  en `getPacientes` / `searchPacientes` / `getTotalPacientesCount`.
+- `src/app/(admin)/pacientes/page.tsx` — sin redirect; pasa `esProfesional`.
+- `src/app/(admin)/pacientes/[id]/page.tsx` — guard por fila.
+- `src/components/pacientes/PacientesListView.tsx` — oculta crear/editar/eliminar.
+- `src/components/layout/Sidebar.tsx` — muestra el link.
+
+### Escrituras clínicas acotadas por paciente (incluido)
+
+Antes, las escrituras clínicas corrían acotadas sólo por `tenant_id`: un
+profesional podía, invocando la acción a mano con un `paciente_id` ajeno de su
+mismo consultorio, escribirle. Ahora cada acción valida el alcance con el guard
+`pacienteEnAlcance()` (reusa `idsPacientesDelProfesional` + `puedeVerFichaPaciente`):
+
+- `actualizarDatosClinicosPaciente`, `guardarOdontograma` (`actions/pacientes.ts`).
+- `uploadPacienteAdjunto`, `deletePacienteAdjunto` (`actions/adjuntos.ts`) — el
+  delete resuelve el `paciente_id` real de la fila antes del guard.
+- `getEscaneosPacienteAction`, `crearEscaneo3DAction`, `eliminarEscaneo3DAction`,
+  `sincronizarMeditLinkAction` (`actions/escaneos-3d.ts`) — el delete además se
+  acota por `paciente_id`.
+- `pushOutboxChangesAction` (`actions/offline-sync.ts`): `pacientes UPDATE` y
+  `evoluciones INSERT/UPDATE` rechazan pacientes fuera de alcance; el `UPDATE` de
+  evolución se acota por `profesional_id` (como el DELETE).
+
+Admin/superadmin: `idsPacientesDelProfesional()` devuelve `null` → los guards son
+no-op, sin cambios de comportamiento.
+
+Verificación: `tsc` sin errores + suite unit (lógica pura de alcance). Falta QA
+manual con una cuenta `profesional` real (ver plan de pruebas).

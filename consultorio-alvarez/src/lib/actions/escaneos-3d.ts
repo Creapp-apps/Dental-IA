@@ -2,7 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getTenantId } from '@/lib/supabase/queries'
+import { getTenantId, pacienteEnAlcance } from '@/lib/supabase/queries'
 import { revalidatePath } from 'next/cache'
 
 export interface Archivo3D {
@@ -54,6 +54,11 @@ export interface Escaneo3D {
 export async function getEscaneosPacienteAction(pacienteId: string): Promise<{ escaneos: Escaneo3D[]; error?: string }> {
     const tenantId = await getTenantId()
     if (!tenantId) return { escaneos: [], error: 'Tenant no autenticado' }
+
+    // Un profesional sólo lee escaneos de sus pacientes (los de su agenda). (§9)
+    if (!(await pacienteEnAlcance(pacienteId))) {
+        return { escaneos: [], error: 'No autorizado: el paciente no está en tu alcance' }
+    }
 
     const admin = createAdminClient()
 
@@ -146,6 +151,11 @@ export async function crearEscaneo3DAction(params: {
     const tenantId = await getTenantId()
     if (!tenantId) return { error: 'Tenant no autenticado' }
 
+    // Un profesional sólo carga escaneos sobre sus pacientes (los de su agenda). (§9)
+    if (!(await pacienteEnAlcance(params.pacienteId))) {
+        return { error: 'No autorizado: el paciente no está en tu alcance' }
+    }
+
     const admin = createAdminClient()
 
     const payload = {
@@ -224,11 +234,17 @@ export async function eliminarEscaneo3DAction(escaneoId: string, pacienteId: str
     const tenantId = await getTenantId()
     if (!tenantId) return { success: false, error: 'Tenant no autenticado' }
 
+    // Un profesional sólo borra escaneos de sus pacientes. El delete además se
+    // acota por paciente_id para no borrar uno ajeno con un pacienteId válido. (§9)
+    if (!(await pacienteEnAlcance(pacienteId))) {
+        return { success: false, error: 'No autorizado: el paciente no está en tu alcance' }
+    }
+
     const admin = createAdminClient()
 
     try {
-        await admin.from('paciente_escaneos_3d').delete().eq('id', escaneoId).eq('tenant_id', tenantId)
-        await admin.from('paciente_adjuntos').delete().eq('id', escaneoId).eq('tenant_id', tenantId)
+        await admin.from('paciente_escaneos_3d').delete().eq('id', escaneoId).eq('paciente_id', pacienteId).eq('tenant_id', tenantId)
+        await admin.from('paciente_adjuntos').delete().eq('id', escaneoId).eq('paciente_id', pacienteId).eq('tenant_id', tenantId)
 
         revalidatePath(`/pacientes/${pacienteId}`)
         return { success: true }
@@ -249,6 +265,11 @@ export async function sincronizarMeditLinkAction(pacienteId: string): Promise<{
 }> {
     const tenantId = await getTenantId()
     if (!tenantId) return { success: false, casosAgregados: 0, error: 'Tenant no autenticado' }
+
+    // Un profesional sólo sincroniza escaneos de sus pacientes (los de su agenda). (§9)
+    if (!(await pacienteEnAlcance(pacienteId))) {
+        return { success: false, casosAgregados: 0, error: 'No autorizado: el paciente no está en tu alcance' }
+    }
 
     const admin = createAdminClient()
 

@@ -3,7 +3,8 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
-import { getProfesionales, getTiposTratamiento, getPacienteById, origenPacientes } from '@/lib/supabase/queries'
+import { getProfesionales, getTiposTratamiento, getPacienteById, origenPacientes, idsPacientesDelProfesional } from '@/lib/supabase/queries'
+import { puedeVerFichaPaciente } from '@/lib/pacientes/scope'
 import { getEscaneosPacienteAction } from '@/lib/actions/escaneos-3d'
 import { ArrowLeft } from 'lucide-react'
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
@@ -52,6 +53,14 @@ export default async function FichaPacientePage({
     params: Promise<{ id: string }>
 }) {
     const { id } = await params
+
+    // El profesional sólo abre fichas de pacientes que tuvo en su agenda,
+    // también si llega por URL directa (§9).
+    const scope = await idsPacientesDelProfesional()
+    if (!puedeVerFichaPaciente({ esProfesional: scope !== null, idsEnScope: scope ?? [], pacienteId: id })) {
+        notFound()
+    }
+
     const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos, escaneos3d } = await getPacienteCompleto(id)
     if (!p) notFound()
 

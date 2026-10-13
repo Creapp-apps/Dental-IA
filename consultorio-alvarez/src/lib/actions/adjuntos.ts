@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { extraerRuta, rutaTenant, BUCKETS_ADJUNTOS } from '@/lib/storage/rutas'
+import { pacienteEnAlcance } from '@/lib/supabase/queries'
 
 async function getTenantId(): Promise<string | null> {
     const supabase = await createClient()
@@ -32,6 +33,11 @@ export async function uploadPacienteAdjunto(formData: FormData): Promise<{ succe
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { error: 'No autenticado' }
+
+        // Un profesional sólo adjunta sobre sus pacientes (los de su agenda). (§9)
+        if (!(await pacienteEnAlcance(pacienteId))) {
+            return { error: 'No autorizado: el paciente no está en tu alcance' }
+        }
 
         const tenantId = await getTenantId()
         if (!tenantId) return { error: 'No autorizado / Tenant no encontrado' }
@@ -90,6 +96,17 @@ export async function deletePacienteAdjunto(id: string, urlArchivo: string): Pro
         const supabase = await createClient()
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return { error: 'No autenticado' }
+
+        // Un profesional sólo borra adjuntos de sus pacientes. Se resuelve el
+        // paciente real de la fila (no un parámetro) antes de aplicar el guard. (§9)
+        const { data: adjunto } = await supabase
+            .from('paciente_adjuntos')
+            .select('paciente_id')
+            .eq('id', id)
+            .single()
+        if (adjunto && !(await pacienteEnAlcance(adjunto.paciente_id))) {
+            return { error: 'No autorizado: el paciente no está en tu alcance' }
+        }
 
         // Se resuelve antes del delete: si el valor no es interpretable, la fila igual se borra,
         // pero el archivo queda registrado en el log en vez de perderse en silencio.

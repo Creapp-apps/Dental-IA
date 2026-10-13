@@ -34,9 +34,12 @@ interface PacientesListViewProps {
     pacientes: any[]
     initialQuery: string
     totalCount?: number
+    // El profesional ve el listado acotado a sus pacientes: sólo nombre y
+    // apellido, sin crear, editar ni eliminar. (§9)
+    esProfesional?: boolean
 }
 
-export function PacientesListView({ pacientes, initialQuery, totalCount }: PacientesListViewProps) {
+export function PacientesListView({ pacientes, initialQuery, totalCount, esProfesional = false }: PacientesListViewProps) {
     const [allLoadedPacientes, setAllLoadedPacientes] = useState<any[]>(pacientes)
     const [localDbResults, setLocalDbResults] = useState<any[]>([])
     const [inputQuery, setInputQuery] = useState(initialQuery)
@@ -238,12 +241,14 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
                         )}
                     </p>
                 </div>
-                <Link href="/pacientes/nuevo" prefetch={true} className="w-full sm:w-auto shrink-0">
-                    <GlassButton className="w-full sm:w-auto shrink-0 font-semibold cursor-pointer">
-                        <Plus className="h-4 w-4 mr-1.5" />
-                        Nuevo paciente
-                    </GlassButton>
-                </Link>
+                {!esProfesional && (
+                    <Link href="/pacientes/nuevo" prefetch={true} className="w-full sm:w-auto shrink-0">
+                        <GlassButton className="w-full sm:w-auto shrink-0 font-semibold cursor-pointer">
+                            <Plus className="h-4 w-4 mr-1.5" />
+                            Nuevo paciente
+                        </GlassButton>
+                    </Link>
+                )}
             </div>
 
             {/* Search */}
@@ -347,25 +352,28 @@ export function PacientesListView({ pacientes, initialQuery, totalCount }: Pacie
                                     )}
                                 </Link>
 
-                                {/* Acciones fuera del enlace */}
-                                <div className="flex items-center gap-1 opacity-90 sm:opacity-70 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
-                                    <Link
-                                        href={`/pacientes/${p.id}/editar`}
-                                        prefetch={true}
-                                        className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 active:scale-90"
-                                        title="Editar paciente"
-                                    >
-                                        <Pencil className="h-4 w-4" />
-                                    </Link>
-                                    <button
-                                        type="button"
-                                        onClick={(e) => handleEliminar(e, p.id, `${p.nombre} ${p.apellido}`)}
-                                        className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/15 active:scale-90 cursor-pointer"
-                                        title="Eliminar paciente"
-                                    >
-                                        <Trash className="h-4 w-4" />
-                                    </button>
-                                </div>
+                                {/* Acciones fuera del enlace. El profesional no
+                                    edita demográficos ni elimina pacientes. */}
+                                {!esProfesional && (
+                                    <div className="flex items-center gap-1 opacity-90 sm:opacity-70 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
+                                        <Link
+                                            href={`/pacientes/${p.id}/editar`}
+                                            prefetch={true}
+                                            className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 active:scale-90"
+                                            title="Editar paciente"
+                                        >
+                                            <Pencil className="h-4 w-4" />
+                                        </Link>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => handleEliminar(e, p.id, `${p.nombre} ${p.apellido}`)}
+                                            className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/15 active:scale-90 cursor-pointer"
+                                            title="Eliminar paciente"
+                                        >
+                                            <Trash className="h-4 w-4" />
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         )
                     })}

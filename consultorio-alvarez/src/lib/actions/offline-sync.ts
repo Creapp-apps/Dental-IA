@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAuthenticatedTenantId, PACIENTE_CLINICO_COLUMNAS, COLUMNAS_CLINICAS_EDITABLES } from '@/lib/supabase/queries'
+import { getAuthenticatedTenantId, PACIENTE_CLINICO_COLUMNAS, COLUMNAS_CLINICAS_EDITABLES, idsPacientesDelProfesional } from '@/lib/supabase/queries'
 import { getActor } from '@/lib/auth/actor'
 import { LocalPaciente, LocalTurno, LocalProfesional, LocalTratamiento, LocalObraSocial, SyncOutboxItem } from '@/lib/offline/db'
 import { esReintentable } from '@/lib/offline/outbox-errors'
@@ -379,6 +379,12 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
     const alcance = await alcanceDeSincronizacion()
     const results: PushResultItem[] = []
 
+    // Pacientes que el profesional tiene permitido tocar (los de su agenda).
+    // null = sin restricción (admin/superadmin). (§9)
+    const scopeIds = await idsPacientesDelProfesional()
+    const fueraDeAlcance = (pid?: string | null): boolean =>
+        scopeIds !== null && (!pid || !scopeIds.includes(pid))
+
     // Lo que sube un profesional pasa por el mismo filtro que lo que baja: este
     // camino escribe con service_role, así que RLS no lo frena y el permiso lo
     // hace cumplir el código. Diseño §8 y §9.
@@ -493,6 +499,12 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         continue
                     }
 
+                    // El profesional sólo corrige a sus pacientes (los de su agenda).
+                    if (fueraDeAlcance(item.entity_id)) {
+                        results.push(rechazo(item, 'No autorizado: el paciente no está en tu alcance'))
+                        continue
+                    }
+
                     const { error } = await admin
                         .from('pacientes')
                         .update({
@@ -504,6 +516,13 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                     results.push(resultado(item.id || 0, error))
                 }
             } else if (item.entity === 'evoluciones') {
+                // El profesional sólo carga/edita evoluciones de sus pacientes.
+                // El DELETE no trae paciente_id y ya se acota por profesional_id.
+                if ((item.operation === 'INSERT' || item.operation === 'UPDATE')
+                    && fueraDeAlcance(item.payload?.paciente_id)) {
+                    results.push(rechazo(item, 'No autorizado: el paciente no está en tu alcance'))
+                    continue
+                }
                 if (item.operation === 'INSERT') {
                     const payload = {
                         ...sanitizeEvolucionPayload(item.payload),
@@ -517,7 +536,8 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                     const { error } = await admin.from('historial_clinico').upsert(payload)
                     results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'UPDATE') {
-                    const { error } = await admin
+                    // Edita las propias; las del colega las edita el admin.
+                    let query = admin
                         .from('historial_clinico')
                         .update({
                             ...sanitizeEvolucionPayload(item.payload),
@@ -525,6 +545,12 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                         })
                         .eq('id', item.entity_id)
                         .eq('tenant_id', tenantId)
+
+                    if (alcance.esProfesional && alcance.profesionalId) {
+                        query = query.eq('profesional_id', alcance.profesionalId)
+                    }
+
+                    const { error } = await query
                     results.push(resultado(item.id || 0, error))
                 } else if (item.operation === 'DELETE') {
                     // Borra las propias; las del colega las borra el admin.
