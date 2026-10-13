@@ -402,9 +402,11 @@ export async function procesarMensajeAutonomo({
         ? `${tenant.direccion}${tenant.ciudad ? `, ${tenant.ciudad}` : ''}`
         : 'nuestro consultorio'
 
-    const baseUrl = tenant?.custom_domain 
-        ? `https://${tenant.custom_domain}` 
-        : `https://www.dentalva.ar`
+    // Si el tenant tiene dominio propio, se usa; si no, cae al dominio central SaaS
+    // (NO al de un consultorio concreto como dentalva.ar).
+    const baseUrl = tenant?.custom_domain
+        ? `https://${tenant.custom_domain}`
+        : `https://dentalia.com.ar`
     const reservaUrl = `${baseUrl}/reservar?slug=${tenant?.slug || 'alvarez'}`
 
     // ─────────────────────────────────────────────────────────────
