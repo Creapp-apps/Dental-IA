@@ -177,6 +177,17 @@ export async function POST(request: NextRequest) {
         // Instanciar cliente administrador para eludir RLS y operar en base de datos
         const admin = createAdminClient()
 
+        // Datos del consultorio para personalizar mensajes (multi-tenant, sin hardcodear Álvarez)
+        const { data: tenantInfo } = await admin
+            .from('tenants')
+            .select('nombre, direccion, ciudad')
+            .eq('id', tenantId)
+            .maybeSingle()
+        const nombreConsultorio = tenantInfo?.nombre || 'tu consultorio odontológico'
+        const direccionConsultorio = tenantInfo?.direccion
+            ? `${tenantInfo.direccion}${tenantInfo.ciudad ? `, ${tenantInfo.ciudad}` : ''}`
+            : null
+
         // ── PERSISTENCIA DEFENSIVA DE CONVERSACIÓN Y MENSAJE (Fase 1 Handoff Humano) ──
         let conversacionId: string | null = null
         let estadoConversacion = 'BOT'
@@ -659,7 +670,8 @@ export async function POST(request: NextRequest) {
                 })
 
                 try {
-                    const textoGuardia = `✅ *¡Turno de Urgencia Confirmado!*\n\nTe esperamos el día *${fecha} a las ${hora} hs* en Consultorio Álvarez.\n📍 Av. Rivadavia 1234.\n\nPor favor concurrí 5 minutos antes con tu DNI.\nCualquier consulta podés escribirnos directamente por este chat.`
+                    const lineaDireccion = direccionConsultorio ? `\n📍 ${direccionConsultorio}.` : ''
+                    const textoGuardia = `✅ *¡Turno de Urgencia Confirmado!*\n\nTe esperamos el día *${fecha} a las ${hora} hs* en ${nombreConsultorio}.${lineaDireccion}\n\nPor favor concurrí 5 minutos antes con tu DNI.\nCualquier consulta podés escribirnos directamente por este chat.`
                     const res = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
                         method: 'POST',
                         headers: {
@@ -746,7 +758,7 @@ export async function POST(request: NextRequest) {
                 const enviadoMenu = await enviarMenuPrincipalAutonomo(
                     waCreds,
                     cleanPhone,
-                    'Consultorio Odontológico',
+                    nombreConsultorio,
                     conversacionId ? { tenantId, conversacionId, accion: 'menu_principal_fallback' } : undefined
                 )
                 if (enviadoMenu) {
@@ -765,50 +777,5 @@ export async function POST(request: NextRequest) {
             stack: error.stack
         })
         return NextResponse.json({ success: false, error: error.message }, { status: 500 })
-    }
-}
-
-async function enviarAutoRespuestaMeta(toPhone: string) {
-    if (!process.env.META_WA_ACCESS_TOKEN || !process.env.META_WA_PHONE_NUMBER_ID) {
-        console.warn('⚠️ No se puede enviar auto-respuesta: Variables META_WA faltantes en entorno.')
-        return
-    }
-
-    const autoReplyText = `🤖*Consultorio Alvarez - Clinica Odontologica*
-⚠️Te informamos que este numero es exclusiva para el envío automático de *notificaciones de turnos*.⚠️
-
-🗓️En caso de requerir alguna información especifica o personalizada, podes comunicarte con Administración a través del siguiente numero de Whatsapp:
-
-📲 11-6103-9248
-
-Muchas Gracias!❤️🦷`
-
-    try {
-        const response = await fetch(`https://graph.facebook.com/v20.0/${process.env.META_WA_PHONE_NUMBER_ID}/messages`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${process.env.META_WA_ACCESS_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                recipient_type: 'individual',
-                to: toPhone,
-                type: 'text',
-                text: {
-                    preview_url: false,
-                    body: autoReplyText
-                }
-            })
-        })
-
-        const resData = await response.json()
-        if (!response.ok) {
-            console.error('❌ Error al enviar auto-respuesta Meta API:', JSON.stringify(resData, null, 2))
-        } else {
-            console.log(`✅ Auto-respuesta de Meta enviada con éxito a ${toPhone}`)
-        }
-    } catch (err) {
-        console.error('❌ Excepción al enviar auto-respuesta Meta API:', err)
     }
 }

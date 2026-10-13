@@ -179,7 +179,7 @@ export async function enviarMenuPrincipalWhatsApp(
     phoneNumberId: string,
     accessToken: string,
     toPhone: string,
-    nombreConsultorio: string = 'Consultorio Álvarez'
+    nombreConsultorio: string = 'tu consultorio odontológico'
 ): Promise<boolean> {
     const texto = `🦷 *${nombreConsultorio} — Asistente Digital*\n\n` +
         `¡Hola! ¿En qué te podemos ayudar hoy?\n` +

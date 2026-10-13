@@ -985,7 +985,8 @@ export async function procesarMensajeAutonomo({
             const fechaStr = fechaObj.toLocaleDateString('es-AR', { weekday: 'short', day: 'numeric', month: 'short', timeZone: 'America/Argentina/Buenos_Aires' })
             const prof = turnoHoy.profesional as any
 
-            encabezadoTurno = `👋 ¡Hola! Te recordamos que tu turno es el *${fechaStr} a las ${horaStr} hs* con el/la Dr/a. *${prof?.apellido || 'Álvarez'}*.\n\n`
+            const profLinea = prof?.apellido ? ` con el/la Dr/a. *${prof.apellido}*` : ''
+            encabezadoTurno = `👋 ¡Hola! Te recordamos que tu turno es el *${fechaStr} a las ${horaStr} hs*${profLinea}.\n\n`
         }
 
         const msgDireccion = `${encabezadoTurno}📍 *Ubicación de ${nombreClinica}*\n\n` +

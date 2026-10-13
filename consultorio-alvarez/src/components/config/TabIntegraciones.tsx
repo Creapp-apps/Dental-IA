@@ -136,13 +136,17 @@ function WizardWhatsApp({ currentConfig }: { currentConfig: any }) {
     const [webhookUrl, setWebhookUrl] = useState(currentConfig?.credentials?.webhook_url || '')
     const [whatsappNumber, setWhatsappNumber] = useState(currentConfig?.credentials?.whatsapp_number || '')
     const [domainUrl, setDomainUrl] = useState(currentConfig?.credentials?.domain_url || '')
+    const [phoneNumberId, setPhoneNumberId] = useState(currentConfig?.credentials?.phone_number_id || '')
+    const [accessToken, setAccessToken] = useState(currentConfig?.credentials?.access_token || '')
 
     function guardar() {
         startTransition(async () => {
             const data = await guardarIntegracion('whatsapp', {
                 webhook_url: webhookUrl,
                 whatsapp_number: whatsappNumber,
-                domain_url: domainUrl
+                domain_url: domainUrl,
+                phone_number_id: phoneNumberId.trim(),
+                access_token: accessToken.trim()
             })
             if (data.error) glassAlert.error({ title: 'Error', description: data.error })
             else glassAlert.success({ title: '¡WhatsApp conectado!', description: 'Credenciales guardadas con éxito.' })
@@ -198,6 +202,36 @@ function WizardWhatsApp({ currentConfig }: { currentConfig: any }) {
                         value={webhookUrl}
                         onChange={e => setWebhookUrl(e.target.value)}
                         placeholder="https://n8n.tu-dominio.com/webhook/..."
+                    />
+                </div>
+            </div>
+
+            <div className="bg-muted/30 rounded-xl p-4 space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <span className="bg-primary text-white h-5 w-5 rounded-full flex items-center justify-center text-xs">2</span>
+                    Credenciales Meta Cloud API
+                </h3>
+                <p className="text-sm text-muted-foreground ml-7">
+                    Necesarias para que el Asistente responda automáticamente por este número. Las obtenés en Meta Business → WhatsApp → Configuración de la API.
+                </p>
+            </div>
+
+            <div className="space-y-4">
+                <div className="space-y-1.5">
+                    <Label>Phone Number ID</Label>
+                    <Input
+                        value={phoneNumberId}
+                        onChange={e => setPhoneNumberId(e.target.value)}
+                        placeholder="Ej: 1283625998158469"
+                    />
+                </div>
+                <div className="space-y-1.5">
+                    <Label>Access Token (permanente)</Label>
+                    <Input
+                        type="password"
+                        value={accessToken}
+                        onChange={e => setAccessToken(e.target.value)}
+                        placeholder="EAAG..."
                     />
                 </div>
             </div>
