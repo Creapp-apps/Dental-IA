@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
-import { Phone, Mail, MapPin, CreditCard, AlertCircle, Cloud, CheckCircle2, Clock } from 'lucide-react'
+import { Phone, Mail, MapPin, CreditCard, AlertCircle, Cloud, CheckCircle2, Clock, Stethoscope } from 'lucide-react'
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
 import { EditarClinicoDialog } from '@/components/pacientes/EditarClinicoDialog'
 import { obtenerAlertasCriticas } from '@/lib/pacientes/antecedentes-salud'
@@ -25,9 +25,15 @@ interface PacientePerfilOptimisticProps {
      * editar también las notas internas desde la edición clínica acotada.
      */
     comparteClinica?: boolean
+    /**
+     * Lista de profesionales del tenant, para resolver el nombre del profesional
+     * asignado (paciente.profesional_id) en la tarjeta. Solo lectura: el asignado
+     * se cambia desde "Editar Información", que es admin-only.
+     */
+    profesionales?: any[]
 }
 
-export function PacientePerfilOptimistic({ initialPaciente, esProfesional = false, comparteClinica = false }: PacientePerfilOptimisticProps) {
+export function PacientePerfilOptimistic({ initialPaciente, esProfesional = false, comparteClinica = false, profesionales = [] }: PacientePerfilOptimisticProps) {
     const [paciente, setPaciente] = useState<any>(initialPaciente)
     const [hasPendingSync, setHasPendingSync] = useState(false)
     const [isSyncingNow, setIsSyncingNow] = useState(false)
@@ -117,6 +123,14 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
     const edad = p.fecha_nacimiento
         ? Math.floor((Date.now() - new Date(p.fecha_nacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
         : null
+    // Nombre del profesional asignado (solo lectura; se resuelve contra la lista
+    // del tenant para que refleje el cambio optimista si el admin lo reasigna).
+    const profAsignado = p.profesional_id
+        ? profesionales.find((pr: any) => pr.id === p.profesional_id)
+        : null
+    const nombreProfAsignado = profAsignado
+        ? `${profAsignado.nombre ?? ''} ${profAsignado.apellido ?? ''}`.trim()
+        : 'Sin asignar'
 
     return (
         <div className="space-y-4">
@@ -215,6 +229,7 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
                         </>
                     )}
                     <div className="h-px bg-border my-1" />
+                    <DatoFila label="Profesional" valor={nombreProfAsignado} icon={<Stethoscope className="h-3 w-3" />} />
                     <DatoFila label="Obra Social" valor={p.obra_social?.nombre ?? 'Particular'} icon={<CreditCard className="h-3 w-3" />} />
                     <DatoFila label="Plan" valor={p.plan_obra_social} />
                     {!esProfesional && p.n_afiliado && <DatoFila label="N° Afiliado" valor={p.n_afiliado} />}
