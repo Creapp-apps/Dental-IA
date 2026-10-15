@@ -6,6 +6,8 @@ import { Phone, Mail, MapPin, CreditCard, AlertCircle, Cloud, CheckCircle2, Cloc
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
 import { EditarClinicoDialog } from '@/components/pacientes/EditarClinicoDialog'
 import { asignarProfesional } from '@/lib/actions/pacientes'
+import { GlassSelect } from '@/components/ui/glass-select'
+import { cn } from '@/lib/utils'
 import { obtenerAlertasCriticas } from '@/lib/pacientes/antecedentes-salud'
 import { localDb, LocalPaciente } from '@/lib/offline/db'
 import { syncManager } from '@/lib/offline/sync-manager'
@@ -148,6 +150,14 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
     const nombreProfAsignado = profAsignado
         ? `${profAsignado.nombre ?? ''} ${profAsignado.apellido ?? ''}`.trim()
         : 'Sin asignar'
+    // Opciones del dropdown de reasignación (admin): "Sin asignar" + profesionales.
+    const opcionesProf = [
+        { value: '', label: 'Sin asignar' },
+        ...profesionales.map((pr: any) => ({
+            value: pr.id,
+            label: `${pr.nombre ?? ''} ${pr.apellido ?? ''}`.trim(),
+        })),
+    ]
 
     return (
         <div className="space-y-4">
@@ -253,19 +263,14 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
                             <span className="text-muted-foreground shrink-0 flex items-center gap-1">
                                 <Stethoscope className="h-3 w-3" />Profesional
                             </span>
-                            <select
-                                value={p.profesional_id ?? ''}
-                                disabled={asignandoProf}
-                                onChange={(e) => cambiarProfesional(e.target.value)}
-                                className="font-medium text-foreground text-right bg-transparent border border-border rounded-lg px-2 py-1 text-sm max-w-[60%] cursor-pointer hover:bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
-                            >
-                                <option value="">Sin asignar</option>
-                                {profesionales.map((pr: any) => (
-                                    <option key={pr.id} value={pr.id}>
-                                        {`${pr.nombre ?? ''} ${pr.apellido ?? ''}`.trim()}
-                                    </option>
-                                ))}
-                            </select>
+                            <div className={cn('w-[58%] min-w-0', asignandoProf && 'opacity-60 pointer-events-none')}>
+                                <GlassSelect
+                                    value={p.profesional_id ?? ''}
+                                    onChange={cambiarProfesional}
+                                    options={opcionesProf}
+                                    placeholder="Sin asignar"
+                                />
+                            </div>
                         </div>
                     )}
                     <DatoFila label="Obra Social" valor={p.obra_social?.nombre ?? 'Particular'} icon={<CreditCard className="h-3 w-3" />} />
