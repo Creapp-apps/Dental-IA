@@ -5,6 +5,7 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import { estadoEfectivo, fechaVencimiento } from '@/lib/presupuestos/vigencia'
 import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box, Plus, Zap, HeartPulse } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
@@ -292,7 +293,10 @@ function TabPresupuestos({
                 <p className="text-sm text-muted-foreground">Sin presupuestos registrados</p>
             ) : (
                 <div className="space-y-3">
-                    {presupuestos.map((p: any) => (
+                    {presupuestos.map((p: any) => {
+                        const estadoShow = estadoEfectivo(p)
+                        const venc = fechaVencimiento(p.fecha_presentacion, p.vigencia_dias)
+                        return (
                         <div key={p.id} className="glass-subtle rounded-xl p-4">
                             <div className="flex items-start justify-between gap-2 mb-2">
                                 <div>
@@ -300,13 +304,14 @@ function TabPresupuestos({
                                         <p className="text-sm font-semibold text-foreground">
                                             ${Number(p.monto_total).toLocaleString('es-AR')}
                                         </p>
-                                        <span className={cn('text-xs px-2 py-0.5 rounded-lg font-medium', PRESUPUESTO_BADGE[p.estado] ?? PRESUPUESTO_BADGE.BORRADOR)}>
-                                            {p.estado}
+                                        <span className={cn('text-xs px-2 py-0.5 rounded-lg font-medium', PRESUPUESTO_BADGE[estadoShow] ?? PRESUPUESTO_BADGE.BORRADOR)}>
+                                            {estadoShow === 'VENCIDO' ? 'Vencido' : estadoShow}
                                         </span>
                                     </div>
                                     <p className="text-xs text-muted-foreground mt-0.5">
                                         Dr. {p.profesional?.nombre} {p.profesional?.apellido}
                                         {p.fecha_presentacion && ` · Presentado: ${p.fecha_presentacion}`}
+                                        {venc && ` · ${estadoShow === 'VENCIDO' ? 'Venció' : 'Vence'}: ${venc}`}
                                     </p>
                                 </div>
                             </div>
@@ -327,7 +332,7 @@ function TabPresupuestos({
                                 </div>
                             )}
                         </div>
-                    ))}
+                    )})}
                 </div>
             )}
         </div>

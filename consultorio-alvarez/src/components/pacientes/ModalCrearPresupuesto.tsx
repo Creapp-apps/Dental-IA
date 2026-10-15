@@ -18,6 +18,7 @@ import { GlassDatePicker } from '@/components/ui/glass-date-picker'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { format } from 'date-fns'
 import { crearPresupuesto } from '@/lib/actions/presupuestos'
+import { VIGENCIA_DIAS_DEFAULT } from '@/lib/presupuestos/vigencia'
 
 /* ──────────── Custom Glass Select ──────────── */
 function GlassSelect({
@@ -105,7 +106,7 @@ export function ModalCrearPresupuesto({
     // Form state
     const [profId, setProfId] = useState(profesionales[0]?.id ?? '')
     const [fecha, setFecha] = useState(format(new Date(), 'yyyy-MM-dd'))
-    const [vigencia, setVigencia] = useState(30)
+    const [vigencia, setVigencia] = useState(VIGENCIA_DIAS_DEFAULT)
     const [notas, setNotas] = useState('')
     const [estado, setEstado] = useState('PRESENTADO')
     const [items, setItems] = useState<ItemPresupuesto[]>([])

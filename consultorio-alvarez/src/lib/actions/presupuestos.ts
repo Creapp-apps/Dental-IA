@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
+import { VIGENCIA_DIAS_DEFAULT } from '@/lib/presupuestos/vigencia'
 
 async function getTenantId() {
     return await getAuthenticatedTenantId()
@@ -40,7 +41,7 @@ export async function crearPresupuesto(data: {
                 estado: data.estado || 'PRESENTADO',
                 notas: data.notas,
                 fecha_presentacion: data.fecha_presentacion || new Date().toISOString().split('T')[0],
-                vigencia_dias: data.vigencia_dias || 30,
+                vigencia_dias: data.vigencia_dias || VIGENCIA_DIAS_DEFAULT,
                 monto_total: monto_total,
             })
             .select()
