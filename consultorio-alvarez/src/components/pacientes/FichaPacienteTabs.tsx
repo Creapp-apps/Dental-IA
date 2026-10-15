@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -16,6 +16,9 @@ import { TabEvoluciones } from '@/components/pacientes/TabEvoluciones'
 import { AntecedentesSaludTab } from '@/components/pacientes/AntecedentesSaludTab'
 import type { AntecedentesSalud } from '@/lib/pacientes/antecedentes-salud'
 import { ModalCrearPresupuesto } from '@/components/pacientes/ModalCrearPresupuesto'
+import { cambiarEstadoPresupuesto, eliminarPresupuesto } from '@/lib/actions/presupuestos'
+import { ConfirmModal } from '@/components/ui/confirm-modal'
+import { glassAlert } from '@/components/ui/glass-alert'
 import { type EstadoTurno } from '@/types'
 import { localDb, type LocalFichaReciente } from '@/lib/offline/db'
 
@@ -264,6 +267,37 @@ function TabPresupuestos({
     tiposTratamiento: any[]
 }) {
     const [isModalOpen, setIsModalOpen] = useState(false)
+    const [editTarget, setEditTarget] = useState<any | null>(null)
+    const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+    const [isPending, startTransition] = useTransition()
+
+    function abrirCrear() {
+        setEditTarget(null)
+        setIsModalOpen(true)
+    }
+
+    function abrirEditar(p: any) {
+        setEditTarget(p)
+        setIsModalOpen(true)
+    }
+
+    function accionEstado(id: string, estado: 'APROBADO' | 'RECHAZADO') {
+        startTransition(async () => {
+            const r = await cambiarEstadoPresupuesto(id, estado)
+            if (r.error) glassAlert.error({ title: 'Error', description: r.error })
+            else glassAlert.success({ title: estado === 'APROBADO' ? 'Presupuesto aprobado' : 'Presupuesto rechazado' })
+        })
+    }
+
+    function onConfirmDelete() {
+        if (!confirmDeleteId) return
+        startTransition(async () => {
+            const r = await eliminarPresupuesto(confirmDeleteId)
+            setConfirmDeleteId(null)
+            if (r.error) glassAlert.error({ title: 'Error al eliminar', description: r.error })
+            else glassAlert.success({ title: 'Presupuesto eliminado' })
+        })
+    }
 
     return (
         <div className="glass rounded-2xl shadow-glass p-5">
@@ -273,7 +307,7 @@ function TabPresupuestos({
                     Presupuestos ({presupuestos.length})
                 </h3>
                 <button
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={abrirCrear}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-primary text-primary-foreground hover:bg-primary/90 text-xs font-medium rounded-lg shadow-sm transition-colors w-full sm:w-auto justify-center"
                 >
                     <Plus className="h-3.5 w-3.5" />
@@ -281,12 +315,23 @@ function TabPresupuestos({
                 </button>
             </div>
             
-            <ModalCrearPresupuesto 
-                open={isModalOpen} 
-                onOpenChange={setIsModalOpen} 
+            <ModalCrearPresupuesto
+                open={isModalOpen}
+                onOpenChange={(o) => { setIsModalOpen(o); if (!o) setEditTarget(null) }}
                 pacienteId={pacienteId}
                 profesionales={profesionales}
                 tiposTratamiento={tiposTratamiento}
+                presupuestoEditar={editTarget}
+            />
+
+            <ConfirmModal
+                open={!!confirmDeleteId}
+                onOpenChange={(o) => { if (!o) setConfirmDeleteId(null) }}
+                title="Eliminar presupuesto"
+                description="Se eliminará el presupuesto y todos sus ítems. Esta acción no se puede deshacer."
+                confirmText="Eliminar"
+                onConfirm={onConfirmDelete}
+                isPending={isPending}
             />
             
             {presupuestos.length === 0 ? (
@@ -331,6 +376,31 @@ function TabPresupuestos({
                                     ))}
                                 </div>
                             )}
+
+                            <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-border/40">
+                                {estadoShow === 'PRESENTADO' && (
+                                    <>
+                                        <button onClick={() => accionEstado(p.id, 'APROBADO')} disabled={isPending}
+                                            className="text-xs px-2.5 py-1 rounded-lg font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50">
+                                            Aprobar
+                                        </button>
+                                        <button onClick={() => accionEstado(p.id, 'RECHAZADO')} disabled={isPending}
+                                            className="text-xs px-2.5 py-1 rounded-lg font-medium bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 transition-colors disabled:opacity-50">
+                                            Rechazar
+                                        </button>
+                                    </>
+                                )}
+                                {estadoShow !== 'APROBADO' && estadoShow !== 'RECHAZADO' && (
+                                    <button onClick={() => abrirEditar(p)} disabled={isPending}
+                                        className="text-xs px-2.5 py-1 rounded-lg font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50">
+                                        Editar
+                                    </button>
+                                )}
+                                <button onClick={() => setConfirmDeleteId(p.id)} disabled={isPending}
+                                    className="text-xs px-2.5 py-1 rounded-lg font-medium text-muted-foreground hover:text-red-600 dark:hover:text-red-400 hover:bg-red-500/10 transition-colors disabled:opacity-50 ml-auto">
+                                    Eliminar
+                                </button>
+                            </div>
                         </div>
                     )})}
                 </div>
