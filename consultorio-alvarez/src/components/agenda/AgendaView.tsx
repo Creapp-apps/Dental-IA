@@ -3384,6 +3384,12 @@ function TurnoDetailModal({
                                 Cancelar
                             </GlassButton>
                         )}
+                        {!['ATENDIDO', 'CANCELADO', 'AUSENTE'].includes(estado) && (
+                            <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border border-orange-500/25 hover:border-orange-500/50 hover:bg-orange-500/10 text-orange-400"
+                                onClick={() => { onCambiarEstado(turno.id, 'AUSENTE'); onOpenChange(false); }} disabled={isPending}>
+                                No vino
+                            </GlassButton>
+                        )}
                         {estado === 'ATENDIDO' && (
                             <GlassButton size="sm" variant="glass" className="h-8 text-xs px-3 border border-white/15 hover:bg-white/10 text-slate-200"
                                 onClick={() => { onCambiarEstado(turno.id, 'PENDIENTE'); onOpenChange(false); }} disabled={isPending}>
