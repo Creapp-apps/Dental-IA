@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useTransition } from 'react'
 import { format } from 'date-fns'
 import { Phone, Mail, MapPin, CreditCard, AlertCircle, Cloud, CheckCircle2, Clock, Stethoscope } from 'lucide-react'
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
 import { EditarClinicoDialog } from '@/components/pacientes/EditarClinicoDialog'
+import { asignarProfesional } from '@/lib/actions/pacientes'
 import { obtenerAlertasCriticas } from '@/lib/pacientes/antecedentes-salud'
 import { localDb, LocalPaciente } from '@/lib/offline/db'
 import { syncManager } from '@/lib/offline/sync-manager'
@@ -37,6 +38,22 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
     const [paciente, setPaciente] = useState<any>(initialPaciente)
     const [hasPendingSync, setHasPendingSync] = useState(false)
     const [isSyncingNow, setIsSyncingNow] = useState(false)
+    const [asignandoProf, startAsignar] = useTransition()
+
+    // Reasignación rápida del profesional de cabecera (solo admin). Actualiza
+    // optimista la tarjeta y persiste con la acción asignarProfesional.
+    function cambiarProfesional(nuevoId: string) {
+        const valor = nuevoId || null
+        setPaciente((prev: any) => ({ ...prev, profesional_id: valor }))
+        startAsignar(async () => {
+            const res = await asignarProfesional(initialPaciente.id, valor)
+            if (res?.error) {
+                // Si falla, revertir al valor que tenía el servidor.
+                setPaciente((prev: any) => ({ ...prev, profesional_id: initialPaciente.profesional_id ?? null }))
+                alert(`No se pudo reasignar el profesional: ${res.error}`)
+            }
+        })
+    }
 
     // 1. Hidratación reactiva con datos de la base local IndexedDB
     useEffect(() => {
@@ -229,7 +246,28 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
                         </>
                     )}
                     <div className="h-px bg-border my-1" />
-                    <DatoFila label="Profesional" valor={nombreProfAsignado} icon={<Stethoscope className="h-3 w-3" />} />
+                    {esProfesional ? (
+                        <DatoFila label="Profesional" valor={nombreProfAsignado} icon={<Stethoscope className="h-3 w-3" />} />
+                    ) : (
+                        <div className="flex items-center justify-between gap-2">
+                            <span className="text-muted-foreground shrink-0 flex items-center gap-1">
+                                <Stethoscope className="h-3 w-3" />Profesional
+                            </span>
+                            <select
+                                value={p.profesional_id ?? ''}
+                                disabled={asignandoProf}
+                                onChange={(e) => cambiarProfesional(e.target.value)}
+                                className="font-medium text-foreground text-right bg-transparent border border-border rounded-lg px-2 py-1 text-sm max-w-[60%] cursor-pointer hover:bg-muted/30 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-60"
+                            >
+                                <option value="">Sin asignar</option>
+                                {profesionales.map((pr: any) => (
+                                    <option key={pr.id} value={pr.id}>
+                                        {`${pr.nombre ?? ''} ${pr.apellido ?? ''}`.trim()}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                    )}
                     <DatoFila label="Obra Social" valor={p.obra_social?.nombre ?? 'Particular'} icon={<CreditCard className="h-3 w-3" />} />
                     <DatoFila label="Plan" valor={p.plan_obra_social} />
                     {!esProfesional && p.n_afiliado && <DatoFila label="N° Afiliado" valor={p.n_afiliado} />}

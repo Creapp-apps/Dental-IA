@@ -340,6 +340,29 @@ export async function actualizarPaciente(id: string, formData: {
     return { success: true }
 }
 
+// Reasignación rápida del profesional de cabecera desde la tarjeta de la ficha.
+// Solo admin (requireAdmin): el profesional ve el dato pero no lo cambia. Actualiza
+// únicamente profesional_id para no pisar el resto (p. ej. obra_social).
+export async function asignarProfesional(pacienteId: string, profesionalId: string | null) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+
+    const supabase = await createClient()
+    const tenantId = actor.tenantId
+
+    const { error } = await supabase
+        .from('pacientes')
+        .update({ profesional_id: profesionalId || null })
+        .eq('id', pacienteId)
+        .eq('tenant_id', tenantId)
+
+    if (error) return { error: error.message }
+
+    revalidatePath('/pacientes')
+    revalidatePath(`/pacientes/${pacienteId}`)
+    return { success: true }
+}
+
 export async function eliminarPaciente(id: string) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }

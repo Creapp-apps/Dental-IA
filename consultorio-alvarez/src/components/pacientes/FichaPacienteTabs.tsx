@@ -118,13 +118,13 @@ export function FichaPacienteTabs({
     return (
         <div className="space-y-4">
             {/* Tab bar */}
-            <div className="flex gap-1 glass rounded-xl p-1 shadow-glass overflow-x-auto custom-scrollbar">
+            <div className="flex flex-wrap gap-1 glass rounded-xl p-1 shadow-glass">
                 {TABS.map(t => (
                     <button
                         key={t.id}
                         onClick={() => setTab(t.id)}
                         className={cn(
-                            'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all flex-1 justify-center cursor-pointer shrink-0 whitespace-nowrap',
+                            'flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-all justify-center cursor-pointer shrink-0 whitespace-nowrap',
                             tab === t.id
                                 ? 'bg-primary text-primary-foreground shadow-sm'
                                 : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
