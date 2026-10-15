@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedTenantId } from '@/lib/supabase/queries'
 import { requireAdmin } from '@/lib/auth/actor'
 import { revalidatePath } from 'next/cache'
+import { parsearLineasTratamientos, filtrarNuevos } from '@/lib/tratamientos/importar-tratamientos'
 
 // Configurar el consultorio es sólo de admin, y cada operación por id se acota
 // al consultorio del actor, para que un id ajeno no sea alcanzable aunque se
@@ -382,4 +383,43 @@ export async function eliminarTipoTratamiento(id: string) {
     if (error) return { error: error.message }
     revalidatePath('/configuracion')
     return { success: true }
+}
+
+/**
+ * Carga rápida de tipos de tratamiento desde un pegado de texto (una prestación
+ * por línea, con precio opcional "Nombre ; 1500"). Omite duplicados por nombre
+ * (los ya existentes y los repetidos dentro del pegado). Sólo admin.
+ */
+export async function importarTiposTratamiento(texto: string) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = await createClient()
+    const tenantId = actor.tenantId
+
+    const lineas = parsearLineasTratamientos(texto)
+    if (lineas.length === 0) return { error: 'No se reconocieron tratamientos en el texto.' }
+
+    const { data: existentesData } = await supabase
+        .from('tipos_tratamiento')
+        .select('nombre')
+        .eq('tenant_id', tenantId)
+    const existentes = (existentesData ?? []).map((t: any) => t.nombre as string)
+
+    const { nuevos, omitidos } = filtrarNuevos(lineas, existentes)
+    if (nuevos.length === 0) {
+        return { success: true, creados: 0, omitidos: omitidos.length }
+    }
+
+    const filas = nuevos.map(l => ({
+        tenant_id: tenantId,
+        nombre: l.nombre,
+        duracion_minutos: 30,
+        precio_referencia: l.precio_referencia ?? null,
+        color: '#3b82f6',
+    }))
+    const { error } = await supabase.from('tipos_tratamiento').insert(filas)
+    if (error) return { error: error.message }
+
+    revalidatePath('/configuracion')
+    return { success: true, creados: nuevos.length, omitidos: omitidos.length }
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition, useMemo } from 'react'
+import { useState, useTransition, useMemo, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ChevronDown, Plus, Trash2 } from 'lucide-react'
 import {
@@ -17,7 +17,8 @@ import { Textarea } from '@/components/ui/textarea'
 import { GlassDatePicker } from '@/components/ui/glass-date-picker'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { format } from 'date-fns'
-import { crearPresupuesto } from '@/lib/actions/presupuestos'
+import { crearPresupuesto, actualizarPresupuesto } from '@/lib/actions/presupuestos'
+import { VIGENCIA_DIAS_DEFAULT } from '@/lib/presupuestos/vigencia'
 
 /* ──────────── Custom Glass Select ──────────── */
 function GlassSelect({
@@ -83,6 +84,8 @@ interface ModalCrearPresupuestoProps {
     pacienteId: string
     profesionales: any[]
     tiposTratamiento: any[]
+    /** Presupuesto a editar (con sus items). Si viene, el modal entra en modo edición. */
+    presupuestoEditar?: any | null
 }
 
 interface ItemPresupuesto {
@@ -98,17 +101,46 @@ export function ModalCrearPresupuesto({
     onOpenChange,
     pacienteId,
     profesionales,
-    tiposTratamiento
+    tiposTratamiento,
+    presupuestoEditar = null
 }: ModalCrearPresupuestoProps) {
     const [isPending, startTransition] = useTransition()
+    const esEdicion = !!presupuestoEditar
     
     // Form state
     const [profId, setProfId] = useState(profesionales[0]?.id ?? '')
     const [fecha, setFecha] = useState(format(new Date(), 'yyyy-MM-dd'))
-    const [vigencia, setVigencia] = useState(30)
+    const [vigencia, setVigencia] = useState(VIGENCIA_DIAS_DEFAULT)
     const [notas, setNotas] = useState('')
     const [estado, setEstado] = useState('PRESENTADO')
     const [items, setItems] = useState<ItemPresupuesto[]>([])
+
+    // Al abrir: precargar desde el presupuesto a editar, o resetear para crear.
+    useEffect(() => {
+        if (!open) return
+        if (presupuestoEditar) {
+            setProfId(presupuestoEditar.profesional_id ?? profesionales[0]?.id ?? '')
+            setFecha(presupuestoEditar.fecha_presentacion ?? format(new Date(), 'yyyy-MM-dd'))
+            setVigencia(presupuestoEditar.vigencia_dias ?? VIGENCIA_DIAS_DEFAULT)
+            setNotas(presupuestoEditar.notas ?? '')
+            setEstado(presupuestoEditar.estado ?? 'PRESENTADO')
+            setItems((presupuestoEditar.items ?? []).map((it: any) => ({
+                id: crypto.randomUUID(),
+                tipo_tratamiento_id: it.tipo_tratamiento_id ?? '',
+                pieza_dental: it.pieza_dental ?? '',
+                cantidad: it.cantidad ?? 1,
+                precio_unitario: Number(it.precio_unitario ?? 0),
+            })))
+        } else {
+            setProfId(profesionales[0]?.id ?? '')
+            setFecha(format(new Date(), 'yyyy-MM-dd'))
+            setVigencia(VIGENCIA_DIAS_DEFAULT)
+            setNotas('')
+            setEstado('PRESENTADO')
+            setItems([])
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, presupuestoEditar])
 
     // Derived states
     const montoTotal = useMemo(() => {
@@ -189,15 +221,14 @@ export function ModalCrearPresupuesto({
                 }))
             }
 
-            const result = await crearPresupuesto(dataToSave)
+            const result = esEdicion
+                ? await actualizarPresupuesto(presupuestoEditar.id, dataToSave)
+                : await crearPresupuesto(dataToSave)
 
             if (result.error) {
-                glassAlert.error({ title: 'Error al crear presupuesto', description: result.error })
+                glassAlert.error({ title: esEdicion ? 'Error al actualizar presupuesto' : 'Error al crear presupuesto', description: result.error })
             } else {
-                glassAlert.success({ title: 'Presupuesto creado con éxito' })
-                // Reset form
-                setItems([])
-                setNotas('')
+                glassAlert.success({ title: esEdicion ? 'Presupuesto actualizado' : 'Presupuesto creado con éxito' })
                 onOpenChange(false)
             }
         })
@@ -207,7 +238,7 @@ export function ModalCrearPresupuesto({
         <GlassDialog open={open} onOpenChange={onOpenChange}>
             <GlassDialogContent className="max-w-2xl">
                 <GlassDialogHeader>
-                    <GlassDialogTitle>Crear Presupuesto</GlassDialogTitle>
+                    <GlassDialogTitle>{esEdicion ? 'Editar Presupuesto' : 'Crear Presupuesto'}</GlassDialogTitle>
                 </GlassDialogHeader>
 
                 <div className="space-y-4 py-2 custom-scrollbar max-h-[70vh] overflow-y-auto px-1">
@@ -358,7 +389,7 @@ export function ModalCrearPresupuesto({
                             Cancelar
                         </GlassButton>
                         <GlassButton onClick={handleSave} loading={isPending} className="flex-1 sm:flex-none">
-                            Guardar Presupuesto
+                            {esEdicion ? 'Guardar Cambios' : 'Guardar Presupuesto'}
                         </GlassButton>
                     </div>
                 </div>
