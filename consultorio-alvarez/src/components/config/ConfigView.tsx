@@ -14,7 +14,7 @@ import {
     crearProfesional, actualizarProfesional, toggleProfesionalEstado, eliminarProfesional,
     crearObraSocial, toggleObraSocial, actualizarObraSocial, eliminarObraSocial,
     crearTipoTratamiento, toggleTipoTratamiento,
-    actualizarTipoTratamiento, eliminarTipoTratamiento,
+    actualizarTipoTratamiento, eliminarTipoTratamiento, importarTiposTratamiento,
 } from '@/lib/actions/config'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
@@ -377,6 +377,8 @@ function TabTratamientos({ tiposTratamiento }: { tiposTratamiento: any[] }) {
     const [showTratForm, setShowTratForm] = useState(false)
     const [editingTratId, setEditingTratId] = useState<string | null>(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+    const [showImport, setShowImport] = useState(false)
+    const [textoImport, setTextoImport] = useState('')
 
     const PRESET_COLORS = [
         '#3b82f6', // Azul
@@ -444,6 +446,23 @@ function TabTratamientos({ tiposTratamiento }: { tiposTratamiento: any[] }) {
         })
     }
 
+    function importarLista() {
+        if (!textoImport.trim()) {
+            glassAlert.error({ title: 'Pegá la lista', description: 'Ingresá al menos un tratamiento (uno por línea).' })
+            return
+        }
+        startTransition(async () => {
+            const r = await importarTiposTratamiento(textoImport)
+            if (r.error) { glassAlert.error({ title: 'Error al importar', description: r.error }); return }
+            glassAlert.success({
+                title: 'Importación completa',
+                description: `${r.creados} creado(s)${r.omitidos ? `, ${r.omitidos} omitido(s) (ya existían o repetidos)` : ''}.`,
+            })
+            setTextoImport('')
+            setShowImport(false)
+        })
+    }
+
     return (
         <div className="space-y-6">
             <div className="glass rounded-2xl shadow-glass border border-border/60 p-6 space-y-6">
@@ -465,21 +484,62 @@ function TabTratamientos({ tiposTratamiento }: { tiposTratamiento: any[] }) {
                             </p>
                         </div>
                     </div>
-                    <GlassButton 
-                        size="sm" 
-                        onClick={() => {
-                            if (showTratForm) {
-                                setShowTratForm(false)
-                                setEditingTratId(null)
-                            } else {
-                                abrirNuevoTratamiento()
-                            }
-                        }}
-                    >
-                        {showTratForm ? <X className="h-4 w-4 mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
-                        {showTratForm ? 'Cancelar' : 'Nuevo Tratamiento'}
-                    </GlassButton>
+                    <div className="flex flex-wrap gap-2">
+                        <GlassButton
+                            size="sm"
+                            variant="outline"
+                            onClick={() => { setShowImport(s => !s); setShowTratForm(false); setEditingTratId(null) }}
+                        >
+                            {showImport ? <X className="h-4 w-4 mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                            {showImport ? 'Cancelar' : 'Importar lista'}
+                        </GlassButton>
+                        <GlassButton
+                            size="sm"
+                            onClick={() => {
+                                if (showTratForm) {
+                                    setShowTratForm(false)
+                                    setEditingTratId(null)
+                                } else {
+                                    setShowImport(false)
+                                    abrirNuevoTratamiento()
+                                }
+                            }}
+                        >
+                            {showTratForm ? <X className="h-4 w-4 mr-1.5" /> : <Plus className="h-4 w-4 mr-1.5" />}
+                            {showTratForm ? 'Cancelar' : 'Nuevo Tratamiento'}
+                        </GlassButton>
+                    </div>
                 </div>
+
+                {/* Importar lista (carga rápida) */}
+                <AnimatePresence>
+                    {showImport && (
+                        <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: 'auto' }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden"
+                        >
+                            <div className="p-5 rounded-2xl bg-card/90 border border-primary/30 shadow-md space-y-3">
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-primary">Importar lista de tratamientos</h4>
+                                <p className="text-xs text-muted-foreground">
+                                    Pegá un tratamiento por línea. El precio es opcional: <code className="px-1 rounded bg-primary/10">Nombre ; 1500</code>. Se omiten los que ya existen.
+                                </p>
+                                <textarea
+                                    value={textoImport}
+                                    onChange={e => setTextoImport(e.target.value)}
+                                    rows={8}
+                                    placeholder={'CONSULTA\nCARIES CHICA ; 4000\nLIMPIEZA SIMPLE ; 6000'}
+                                    className="w-full rounded-xl border border-border bg-background/60 p-3 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-2 focus:ring-primary/40"
+                                />
+                                <div className="flex justify-end gap-2">
+                                    <GlassButton size="sm" variant="outline" onClick={() => { setShowImport(false); setTextoImport('') }} disabled={isPending}>Cancelar</GlassButton>
+                                    <GlassButton size="sm" onClick={importarLista} loading={isPending}>Importar</GlassButton>
+                                </div>
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
 
                 {/* Formulario de Alta / Edición animado */}
                 <AnimatePresence>
