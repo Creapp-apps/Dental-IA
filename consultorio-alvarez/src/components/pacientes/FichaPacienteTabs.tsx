@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { estadoEfectivo, fechaVencimiento } from '@/lib/presupuestos/vigencia'
-import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box, Plus, Zap, HeartPulse } from 'lucide-react'
+import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box, Plus, Zap, HeartPulse, Printer } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
 import type { OdontogramaTipo } from '@/lib/pacientes/odontograma'
@@ -378,6 +378,14 @@ function TabPresupuestos({
                             )}
 
                             <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-border/40">
+                                <a
+                                    href={`/pacientes/${pacienteId}/presupuesto/${p.id}/imprimir`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-xs px-2.5 py-1 rounded-lg font-medium bg-muted/40 text-foreground hover:bg-muted/70 transition-colors inline-flex items-center gap-1"
+                                >
+                                    <Printer className="h-3.5 w-3.5" /> Imprimir / PDF
+                                </a>
                                 {estadoShow === 'PRESENTADO' && (
                                     <>
                                         <button onClick={() => accionEstado(p.id, 'APROBADO')} disabled={isPending}
