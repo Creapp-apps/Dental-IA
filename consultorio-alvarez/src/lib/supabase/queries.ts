@@ -172,6 +172,7 @@ const PACIENTE_SELECT_FIELDS = `
     alergias,
     medicacion_actual,
     antecedentes,
+    antecedentes_salud,
     notas_internas,
     registro_completo,
     foto_url,
@@ -200,6 +201,7 @@ export const PACIENTE_CLINICO_COLUMNAS = `
     alergias,
     medicacion_actual,
     antecedentes,
+    antecedentes_salud,
     registro_completo,
     foto_url,
     odontograma_tipo,
@@ -216,6 +218,12 @@ export const COLUMNAS_CLINICAS_EDITABLES = [
 ] as const
 
 const PACIENTE_CLINICO_FIELDS = `${PACIENTE_CLINICO_COLUMNAS}, obra_social:obras_sociales(id, nombre)`
+
+// Igual que PACIENTE_CLINICO_COLUMNAS pero sumando notas_internas. Sólo se usa
+// cuando el tenant comparte la info clínica entre profesionales (flag
+// compartir_clinica_entre_profesionales). El contacto sigue sin exponerse.
+export const PACIENTE_CLINICO_COLUMNAS_CON_NOTAS = `${PACIENTE_CLINICO_COLUMNAS}, notas_internas`
+const PACIENTE_CLINICO_FIELDS_CON_NOTAS = `${PACIENTE_CLINICO_COLUMNAS_CON_NOTAS}, obra_social:obras_sociales(id, nombre)`
 
 const PACIENTE_CLINICO_COMPACT_FIELDS = `
     id,
@@ -238,9 +246,13 @@ const PACIENTE_EN_TURNO_CLINICO_FIELDS = 'id, nombre, apellido, obra_social_id'
 export const origenPacientes = cache(async () => {
     const actor = await getActor()
     const esProfesional = actor?.rol === 'profesional' && !actor.esSuperadmin
+    // Si el consultorio comparte la info clínica, el profesional también ve las
+    // notas internas (sigue sin ver el contacto).
+    const comparteClinica = esProfesional ? await tenantComparteClinica() : false
+    const camposClinicos = comparteClinica ? PACIENTE_CLINICO_FIELDS_CON_NOTAS : PACIENTE_CLINICO_FIELDS
     return {
         esProfesional,
-        campos: esProfesional ? PACIENTE_CLINICO_FIELDS : PACIENTE_SELECT_FIELDS,
+        campos: esProfesional ? camposClinicos : PACIENTE_SELECT_FIELDS,
         camposCompactos: esProfesional ? PACIENTE_CLINICO_COMPACT_FIELDS : PACIENTE_COMPACT_FIELDS,
         camposEnTurno: esProfesional ? PACIENTE_EN_TURNO_CLINICO_FIELDS : PACIENTE_EN_TURNO_FIELDS,
     }
@@ -261,14 +273,40 @@ export const alcanceAgenda = cache(async () => {
 })
 
 /**
+ * ¿El consultorio comparte la info clínica de los pacientes entre todos sus
+ * profesionales? Cuando está activo, el rol profesional ve y edita la ficha
+ * clínica (incluidas las notas internas) de cualquier paciente del tenant; la
+ * agenda sigue acotada y el contacto nunca se comparte.
+ * Flag `tenants.compartir_clinica_entre_profesionales` (pedido de Curadent).
+ */
+export const tenantComparteClinica = cache(async (): Promise<boolean> => {
+    const tenantId = await getTenantId()
+    if (!tenantId) return false
+    const supabase = getAdmin()
+    const { data, error } = await supabase
+        .from('tenants')
+        .select('compartir_clinica_entre_profesionales')
+        .eq('id', tenantId)
+        .maybeSingle()
+    if (error) { console.error('tenantComparteClinica:', error); return false }
+    return data?.compartir_clinica_entre_profesionales === true
+})
+
+/**
  * IDs de los pacientes que el profesional tiene permitido ver: aquellos con
- * los que tuvo al menos un turno asignado. Acota listado y ficha.
- * Devuelve `null` cuando no hay restricción (admin / superadmin).
+ * los que tuvo al menos un turno asignado + sus pacientes de cabecera. Acota
+ * listado y ficha. Devuelve `null` cuando no hay restricción (admin /
+ * superadmin, o tenant que comparte la info clínica).
  * Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §9
  */
 export const idsPacientesDelProfesional = cache(async (): Promise<string[] | null> => {
     const { esProfesional, profesionalId } = await alcanceAgenda()
     if (!esProfesional) return null
+
+    // Si el consultorio comparte la info clínica entre profesionales, no se
+    // acota el acceso a pacientes: el profesional ve/edita la ficha de todos.
+    // La agenda sigue acotada (alcanceAgenda, camino aparte).
+    if (await tenantComparteClinica()) return null
 
     const supabase = getAdmin()
     const tenantId = await getTenantId()

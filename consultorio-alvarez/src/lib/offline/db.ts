@@ -21,6 +21,7 @@ export interface LocalPaciente {
     alergias?: string | null
     medicacion_actual?: string | null
     antecedentes?: string | null
+    antecedentes_salud?: any
     notas_internas?: string | null
     registro_completo?: boolean | null
     foto_url?: string | null

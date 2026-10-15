@@ -1,7 +1,7 @@
 'use server'
 
 import { createAdminClient } from '@/lib/supabase/admin'
-import { getAuthenticatedTenantId, PACIENTE_CLINICO_COLUMNAS, COLUMNAS_CLINICAS_EDITABLES, idsPacientesDelProfesional } from '@/lib/supabase/queries'
+import { getAuthenticatedTenantId, PACIENTE_CLINICO_COLUMNAS, PACIENTE_CLINICO_COLUMNAS_CON_NOTAS, COLUMNAS_CLINICAS_EDITABLES, idsPacientesDelProfesional, tenantComparteClinica } from '@/lib/supabase/queries'
 import { getActor } from '@/lib/auth/actor'
 import { autorEvolucion } from '@/lib/pacientes/scope'
 import { LocalPaciente, LocalTurno, LocalProfesional, LocalTratamiento, LocalObraSocial, SyncOutboxItem } from '@/lib/offline/db'
@@ -16,10 +16,14 @@ import { esReintentable } from '@/lib/offline/outbox-errors'
 async function alcanceDeSincronizacion() {
     const actor = await getActor()
     const esProfesional = actor?.rol === 'profesional' && !actor.esSuperadmin
+    // Si el consultorio comparte la info clínica, el profesional también baja
+    // las notas internas (sigue sin bajar el contacto).
+    const comparteClinica = esProfesional ? await tenantComparteClinica() : false
+    const columnasClinicas = comparteClinica ? PACIENTE_CLINICO_COLUMNAS_CON_NOTAS : PACIENTE_CLINICO_COLUMNAS
     return {
         esProfesional,
         profesionalId: actor?.profesionalId ?? null,
-        columnasPaciente: esProfesional ? PACIENTE_CLINICO_COLUMNAS : '*',
+        columnasPaciente: esProfesional ? columnasClinicas : '*',
         pacienteEnTurno: esProfesional
             ? 'nombre, apellido'
             : 'nombre, apellido, dni, telefono',
