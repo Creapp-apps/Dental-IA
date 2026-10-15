@@ -210,10 +210,8 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
                 } else if (nuevoEstado === 'CANCELADO') {
                     console.log(`[ACTION LOG] Ejecutando notificarTurnoPorWhatsApp con "turno_cancelado"`)
                     await notificarTurnoPorWhatsApp(turnoId, 'turno_cancelado')
-                } else if (nuevoEstado === 'AUSENTE') {
-                    console.log(`[ACTION LOG] Ejecutando notificarTurnoPorWhatsApp con "aviso_ausencia"`)
-                    await notificarTurnoPorWhatsApp(turnoId, 'aviso_ausencia')
                 }
+                // AUSENTE ("No vino") es un registro interno: no se notifica al paciente.
             } catch (waErr) {
                 console.error('[ACTION LOG] Error al enviar WhatsApp en cambiarEstadoTurno:', waErr)
             }

@@ -18,7 +18,7 @@ async function getPacienteCompleto(id: string) {
     // corresponden al rol: al profesional, sin datos de contacto (§8).
     // El resto sale con el cliente con sesión, donde RLS ya acota lo que ve
     // cada uno: los turnos de esta ficha, por ejemplo, son los suyos (§9).
-    const [pacienteRes, turnosRes, historialRes, odontogramaRes, presupuestosRes, adjuntosRes, escaneosRes] = await Promise.all([
+    const [pacienteRes, turnosRes, historialRes, odontogramaRes, presupuestosRes, adjuntosRes, escaneosRes, ausenciasRes] = await Promise.all([
         getPacienteById(id),
         supabase.from('turnos').select(`
             *, profesional:profesionales(nombre, apellido),
@@ -34,6 +34,9 @@ async function getPacienteCompleto(id: string) {
         `).eq('paciente_id', id).order('created_at', { ascending: false }),
         supabase.from('paciente_adjuntos').select('*').eq('paciente_id', id).order('created_at', { ascending: false }),
         getEscaneosPacienteAction(id),
+        // Total de ausencias ("No vino") en toda la historia del paciente, no solo
+        // en los últimos 20 turnos que se listan. RLS acota igual que el listado.
+        supabase.from('turnos').select('id', { count: 'exact', head: true }).eq('paciente_id', id).eq('estado', 'AUSENTE'),
     ])
 
     return {
@@ -44,6 +47,7 @@ async function getPacienteCompleto(id: string) {
         presupuestos: presupuestosRes.data ?? [],
         adjuntos: adjuntosRes.data ?? [],
         escaneos3d: escaneosRes.escaneos ?? [],
+        ausencias: ausenciasRes.count ?? 0,
     }
 }
 
@@ -61,7 +65,7 @@ export default async function FichaPacientePage({
         notFound()
     }
 
-    const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos, escaneos3d } = await getPacienteCompleto(id)
+    const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos, escaneos3d, ausencias } = await getPacienteCompleto(id)
     if (!p) notFound()
 
     const { esProfesional } = await origenPacientes()
@@ -103,13 +107,14 @@ export default async function FichaPacientePage({
             {/* Layout: Profile sidebar + Tabbed content */}
             <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
                 {/* ── Left: Profile card con soporte reactivo Local-First / Optimistic ── */}
-                <PacientePerfilOptimistic initialPaciente={p} esProfesional={esProfesional} comparteClinica={comparteClinica} profesionales={profesionales} />
+                <PacientePerfilOptimistic initialPaciente={p} esProfesional={esProfesional} comparteClinica={comparteClinica} profesionales={profesionales} ausencias={ausencias} />
 
                 {/* ── Right: Tabbed content ── */}
                 <FichaPacienteTabs
                     pacienteId={p.id}
                     tenantId={p.tenant_id}
                     turnos={turnos}
+                    ausencias={ausencias}
                     historial={historial}
                     odontograma={odontograma}
                     presupuestos={presupuestos}

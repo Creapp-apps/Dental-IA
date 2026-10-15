@@ -39,6 +39,7 @@ interface FichaPacienteTabsProps {
     pacienteId: string
     tenantId: string
     turnos: any[]
+    ausencias?: number
     historial: any[]
     odontograma: any[]
     presupuestos: any[]
@@ -57,6 +58,7 @@ export function FichaPacienteTabs({
     pacienteId,
     tenantId,
     turnos,
+    ausencias = 0,
     historial,
     odontograma,
     presupuestos,
@@ -155,7 +157,7 @@ export function FichaPacienteTabs({
                 >
                     {tab === 'consulta' && <TabConsulta motivoConsulta={motivoConsulta} />}
                     {tab === 'antecedentes_salud' && <AntecedentesSaludTab pacienteId={pacienteId} inicial={antecedentesSalud} />}
-                    {tab === 'turnos' && <TabTurnos turnos={effectiveTurnos} />}
+                    {tab === 'turnos' && <TabTurnos turnos={effectiveTurnos} ausencias={ausencias} />}
                     {tab === 'evoluciones' && (
                         <TabEvoluciones
                             pacienteId={pacienteId}
@@ -208,12 +210,19 @@ function TabConsulta({ motivoConsulta }: { motivoConsulta: string | null }) {
 }
 
 /* ──────────── Tab: Turnos ──────────── */
-function TabTurnos({ turnos }: { turnos: any[] }) {
+function TabTurnos({ turnos, ausencias = 0 }: { turnos: any[]; ausencias?: number }) {
     return (
         <div className="glass rounded-2xl shadow-glass p-5">
-            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-3">
-                <CalendarDays className="h-4 w-4 text-muted-foreground" />
-                Turnos ({turnos.length})
+            <h3 className="text-sm font-semibold text-foreground flex items-center justify-between gap-2 mb-3">
+                <span className="flex items-center gap-2">
+                    <CalendarDays className="h-4 w-4 text-muted-foreground" />
+                    Turnos ({turnos.length})
+                </span>
+                {ausencias > 0 && (
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
+                        {ausencias} {ausencias === 1 ? 'ausencia' : 'ausencias'} (no vino)
+                    </span>
+                )}
             </h3>
             {turnos.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Sin turnos registrados</p>

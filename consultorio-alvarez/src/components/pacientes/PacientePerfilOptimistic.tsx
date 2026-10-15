@@ -34,9 +34,11 @@ interface PacientePerfilOptimisticProps {
      * se cambia desde "Editar Información", que es admin-only.
      */
     profesionales?: any[]
+    /** Total de ausencias ("No vino") en toda la historia del paciente. */
+    ausencias?: number
 }
 
-export function PacientePerfilOptimistic({ initialPaciente, esProfesional = false, comparteClinica = false, profesionales = [] }: PacientePerfilOptimisticProps) {
+export function PacientePerfilOptimistic({ initialPaciente, esProfesional = false, comparteClinica = false, profesionales = [], ausencias = 0 }: PacientePerfilOptimisticProps) {
     const [paciente, setPaciente] = useState<any>(initialPaciente)
     const [hasPendingSync, setHasPendingSync] = useState(false)
     const [isSyncingNow, setIsSyncingNow] = useState(false)
@@ -236,6 +238,18 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
                             </span>
                         )}
                     </div>
+
+                    {ausencias > 0 && (
+                        <div className="mt-2">
+                            <span
+                                className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20"
+                                title="Veces que el paciente no se presentó a un turno"
+                            >
+                                <AlertCircle className="w-3 h-3 text-orange-500" />
+                                {ausencias} {ausencias === 1 ? 'ausencia' : 'ausencias'}
+                            </span>
+                        </div>
+                    )}
                 </div>
 
                 <div className="space-y-2.5 text-sm">
