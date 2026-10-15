@@ -4,6 +4,8 @@ import { useState, useEffect } from 'react'
 import { format } from 'date-fns'
 import { Phone, Mail, MapPin, CreditCard, AlertCircle, Cloud, CheckCircle2, Clock } from 'lucide-react'
 import { EditarPacienteBtn } from '@/components/pacientes/EditarPacienteBtn'
+import { EditarClinicoDialog } from '@/components/pacientes/EditarClinicoDialog'
+import { obtenerAlertasCriticas } from '@/lib/pacientes/antecedentes-salud'
 import { localDb, LocalPaciente } from '@/lib/offline/db'
 import { syncManager } from '@/lib/offline/sync-manager'
 import { useUrlFirmada } from '@/lib/storage/url-firmada'
@@ -18,9 +20,14 @@ interface PacientePerfilOptimisticProps {
      * Diseño: docs/plans/2026-10-08-roles-y-permisos-design.md §8 y §12
      */
     esProfesional?: boolean
+    /**
+     * El consultorio comparte la info clínica entre profesionales: habilita
+     * editar también las notas internas desde la edición clínica acotada.
+     */
+    comparteClinica?: boolean
 }
 
-export function PacientePerfilOptimistic({ initialPaciente, esProfesional = false }: PacientePerfilOptimisticProps) {
+export function PacientePerfilOptimistic({ initialPaciente, esProfesional = false, comparteClinica = false }: PacientePerfilOptimisticProps) {
     const [paciente, setPaciente] = useState<any>(initialPaciente)
     const [hasPendingSync, setHasPendingSync] = useState(false)
     const [isSyncingNow, setIsSyncingNow] = useState(false)
@@ -102,6 +109,8 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
     }, [initialPaciente])
 
     const p = paciente
+    // Respuestas críticas de la anamnesis ("Antecedentes de Salud") para resaltar.
+    const alertasSalud = obtenerAlertasCriticas(p.antecedentes_salud)
     // foto_url guarda una ruta (o una URL vieja hasta migrar): se firma para mostrarla.
     const { url: fotoUrl } = useUrlFirmada('avatars', p.foto_url)
     const iniciales = `${p.nombre?.charAt(0) || ''}${p.apellido?.charAt(0) || ''}`
@@ -124,6 +133,21 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
                         </div>
                     </div>
                     <EditarPacienteBtn pacienteId={p.id} label="Completar información" size="sm" className="bg-red-500/15 text-red-600 dark:text-red-400 border border-red-500/30 hover:bg-red-500/25 shrink-0" />
+                </div>
+            )}
+
+            {/* Alertas críticas de la anamnesis (Antecedentes de Salud) */}
+            {alertasSalud.length > 0 && (
+                <div className="glass rounded-xl p-3.5 border-l-4 border-red-500 shadow-glass bg-red-500/5 dark:bg-red-500/10">
+                    <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5 shrink-0" />
+                        <div className="min-w-0">
+                            <p className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">⚠️ Alertas de salud</p>
+                            <ul className="text-sm text-foreground list-disc pl-4 space-y-0.5">
+                                {alertasSalud.map((a, i) => <li key={i}>{a}</li>)}
+                            </ul>
+                        </div>
+                    </div>
                 </div>
             )}
 
@@ -199,6 +223,20 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
                 {!esProfesional && (
                     <div className="mt-4 pt-3 border-t border-border">
                         <EditarPacienteBtn pacienteId={p.id} label="Editar Información" className="w-full text-xs justify-center h-8" />
+                    </div>
+                )}
+
+                {esProfesional && (
+                    <div className="mt-4 pt-3 border-t border-border">
+                        <EditarClinicoDialog
+                            pacienteId={p.id}
+                            valores={{
+                                motivo_consulta: p.motivo_consulta,
+                                notas_internas: p.notas_internas,
+                            }}
+                            comparteClinica={comparteClinica}
+                            onSaved={(cambios) => setPaciente((prev: any) => ({ ...prev, ...cambios }))}
+                        />
                     </div>
                 )}
             </div>

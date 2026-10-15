@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { createClient } from '@/lib/supabase/server'
-import { getProfesionales, getTiposTratamiento, getPacienteById, origenPacientes, idsPacientesDelProfesional, alcanceAgenda } from '@/lib/supabase/queries'
+import { getProfesionales, getTiposTratamiento, getPacienteById, origenPacientes, idsPacientesDelProfesional, alcanceAgenda, tenantComparteClinica } from '@/lib/supabase/queries'
 import { puedeVerFichaPaciente } from '@/lib/pacientes/scope'
 import { getEscaneosPacienteAction } from '@/lib/actions/escaneos-3d'
 import { ArrowLeft } from 'lucide-react'
@@ -67,6 +67,9 @@ export default async function FichaPacientePage({
     const { esProfesional } = await origenPacientes()
     // El id del profesional logueado, para fijar la autoría de sus evoluciones.
     const { profesionalId: miProfesionalId } = await alcanceAgenda()
+    // ¿El consultorio comparte la info clínica entre profesionales? Habilita la
+    // edición de notas internas en la edición clínica acotada del profesional.
+    const comparteClinica = await tenantComparteClinica()
 
     // Cargar catálogos filtrados estrictamente por el tenant_id del consultorio
     const [profesionales, tiposTratamiento] = await Promise.all([
@@ -100,7 +103,7 @@ export default async function FichaPacientePage({
             {/* Layout: Profile sidebar + Tabbed content */}
             <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
                 {/* ── Left: Profile card con soporte reactivo Local-First / Optimistic ── */}
-                <PacientePerfilOptimistic initialPaciente={p} esProfesional={esProfesional} />
+                <PacientePerfilOptimistic initialPaciente={p} esProfesional={esProfesional} comparteClinica={comparteClinica} />
 
                 {/* ── Right: Tabbed content ── */}
                 <FichaPacienteTabs
@@ -113,6 +116,7 @@ export default async function FichaPacientePage({
                     adjuntos={adjuntos}
                     escaneos3d={escaneos3d}
                     motivoConsulta={p.motivo_consulta}
+                    antecedentesSalud={p.antecedentes_salud ?? null}
                     profesionales={profesionales}
                     tiposTratamiento={tiposTratamiento}
                     esProfesional={esProfesional}

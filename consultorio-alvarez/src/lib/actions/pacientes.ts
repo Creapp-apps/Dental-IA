@@ -4,9 +4,10 @@ import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 
-import { getAuthenticatedTenantId, COLUMNAS_CLINICAS_EDITABLES, pacienteEnAlcance } from '@/lib/supabase/queries'
+import { getAuthenticatedTenantId, COLUMNAS_CLINICAS_EDITABLES, pacienteEnAlcance, tenantComparteClinica } from '@/lib/supabase/queries'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { requireActor, requireAdmin } from '@/lib/auth/actor'
+import { derivarCamposClinicos, type AntecedentesSalud } from '@/lib/pacientes/antecedentes-salud'
 
 async function getTenantId() {
     return await getAuthenticatedTenantId()
@@ -159,18 +160,27 @@ export async function actualizarDatosClinicosPaciente(id: string, datos: {
     alergias?: string | null
     medicacion_actual?: string | null
     antecedentes?: string | null
+    notas_internas?: string | null
 }) {
     const { ok, actor, error: denied } = await requireActor()
     if (!ok) return { error: denied }
 
-    // Un profesional sólo escribe sobre sus pacientes (los de su agenda). (§9)
+    // El profesional escribe sobre sus pacientes (los de su agenda); si el
+    // consultorio comparte la info clínica, sobre cualquier paciente del tenant.
+    // pacienteEnAlcance ya contempla ese flag. (§9)
     if (!(await pacienteEnAlcance(id))) {
         return { error: 'No autorizado: el paciente no está en tu alcance' }
     }
 
+    // notas_internas sólo es escribible por el profesional cuando el consultorio
+    // comparte la info clínica entre profesionales. Si no, se ignora.
+    const columnasPermitidas: readonly string[] = (await tenantComparteClinica())
+        ? [...COLUMNAS_CLINICAS_EDITABLES, 'notas_internas']
+        : COLUMNAS_CLINICAS_EDITABLES
+
     const cambios = Object.fromEntries(
         Object.entries(datos)
-            .filter(([columna]) => (COLUMNAS_CLINICAS_EDITABLES as readonly string[]).includes(columna))
+            .filter(([columna]) => columnasPermitidas.includes(columna))
             .map(([columna, valor]) => [columna, valor === '' ? null : valor])
     )
 
@@ -188,6 +198,51 @@ export async function actualizarDatosClinicosPaciente(id: string, datos: {
     if (error) return { error: error.message }
 
     revalidatePath(`/pacientes/${id}`)
+    return { success: true }
+}
+
+/**
+ * Guarda la anamnesis ("Antecedentes de Salud") del paciente y, en el mismo
+ * update, deriva alergias / medicacion_actual / antecedentes desde ella: la
+ * anamnesis es la única fuente de esos tres campos. Mismo guard que la edición
+ * clínica (admin siempre; profesional según alcance / flag de compartir).
+ */
+export async function guardarAntecedentesSalud(pacienteId: string, data: AntecedentesSalud) {
+    const { ok, actor, error: denied } = await requireActor()
+    if (!ok) return { error: denied }
+
+    if (!(await pacienteEnAlcance(pacienteId))) {
+        return { error: 'No autorizado: el paciente no está en tu alcance' }
+    }
+
+    const quienId = actor.profesionalId ?? actor.userId ?? null
+    const derivados = derivarCamposClinicos(data)
+
+    const anamnesis: AntecedentesSalud = {
+        ...data,
+        consentimiento: data.consentimiento
+            ? { ...data.consentimiento, cargado_por: data.consentimiento.cargado_por ?? quienId }
+            : undefined,
+        actualizado_en: new Date().toISOString(),
+        actualizado_por: quienId,
+    }
+
+    const admin = createAdminClient()
+    const { error } = await admin
+        .from('pacientes')
+        .update({
+            antecedentes_salud: anamnesis,
+            alergias: derivados.alergias,
+            medicacion_actual: derivados.medicacion_actual,
+            antecedentes: derivados.antecedentes,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', pacienteId)
+        .eq('tenant_id', actor.tenantId)
+
+    if (error) return { error: error.message }
+
+    revalidatePath(`/pacientes/${pacienteId}`)
     return { success: true }
 }
 
@@ -260,6 +315,12 @@ export async function actualizarPaciente(id: string, formData: {
         ...formData,
         obra_social_id: finalObraSocialId
     }
+
+    // alergias / medicacion_actual / antecedentes son propiedad de la anamnesis
+    // ("Antecedentes de Salud"): este formulario no los escribe para no pisarlos.
+    delete (payload as any).alergias
+    delete (payload as any).medicacion_actual
+    delete (payload as any).antecedentes
 
     // Clean form data — remove empty strings
     const cleanData = Object.fromEntries(

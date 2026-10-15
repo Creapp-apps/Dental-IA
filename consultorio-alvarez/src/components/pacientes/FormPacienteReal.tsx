@@ -696,16 +696,26 @@ export function FormPacienteReal({ obrasSociales, paciente, profesionales = [] }
                 className="glass rounded-2xl shadow-glass p-5 space-y-4 relative z-10"
             >
                 <h3 className="text-sm font-semibold text-foreground">Datos clínicos</h3>
+                <div className="glass-subtle rounded-xl px-3 py-2.5 text-xs text-muted-foreground border border-border/50">
+                    Las alergias, la medicación y los antecedentes se gestionan desde la sección
+                    <strong className="text-foreground"> Antecedentes de Salud</strong> de la ficha (fuente única).
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                     <Field label="Alergias">
-                        <Input {...register('alergias')} placeholder="Penicilina, Latex..." />
+                        <div className="rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm min-h-9">
+                            {paciente?.alergias || <span className="text-muted-foreground">—</span>}
+                        </div>
                     </Field>
                     <Field label="Medicación actual">
-                        <Input {...register('medicacion_actual')} placeholder="Ibuprofeno 400mg..." />
+                        <div className="rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm min-h-9">
+                            {paciente?.medicacion_actual || <span className="text-muted-foreground">—</span>}
+                        </div>
                     </Field>
                 </div>
                 <Field label="Antecedentes">
-                    <Textarea {...register('antecedentes')} rows={2} placeholder="Diabetes, hipertensión..." />
+                    <div className="rounded-lg border border-border/50 bg-muted/30 px-3 py-2 text-sm min-h-9 whitespace-pre-wrap">
+                        {paciente?.antecedentes || <span className="text-muted-foreground">—</span>}
+                    </div>
                 </Field>
                 <Field label="Notas internas">
                     <Textarea {...register('notas_internas')} rows={2} placeholder="Solo visible para el equipo..." />

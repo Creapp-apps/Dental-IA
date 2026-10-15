@@ -5,19 +5,22 @@ import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
-import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box, Plus, Zap } from 'lucide-react'
+import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box, Plus, Zap, HeartPulse } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
 import type { OdontogramaTipo } from '@/lib/pacientes/odontograma'
 import { TabAdjuntos } from '@/components/pacientes/TabAdjuntos'
 import { TabEscaneos3D } from '@/components/pacientes/TabEscaneos3D'
 import { TabEvoluciones } from '@/components/pacientes/TabEvoluciones'
+import { AntecedentesSaludTab } from '@/components/pacientes/AntecedentesSaludTab'
+import type { AntecedentesSalud } from '@/lib/pacientes/antecedentes-salud'
 import { ModalCrearPresupuesto } from '@/components/pacientes/ModalCrearPresupuesto'
 import { type EstadoTurno } from '@/types'
 import { localDb, type LocalFichaReciente } from '@/lib/offline/db'
 
 const TABS = [
     { id: 'consulta', label: 'Consulta', icon: Stethoscope },
+    { id: 'antecedentes_salud', label: 'Antecedentes de Salud', icon: HeartPulse },
     { id: 'turnos', label: 'Turnos', icon: CalendarDays },
     { id: 'evoluciones', label: 'Evoluciones', icon: FileText },
     { id: 'odontograma', label: 'Odontograma', icon: ClipboardList },
@@ -38,6 +41,7 @@ interface FichaPacienteTabsProps {
     adjuntos: any[]
     escaneos3d?: any[]
     motivoConsulta: string | null
+    antecedentesSalud?: AntecedentesSalud | null
     profesionales: any[]
     tiposTratamiento: any[]
     esProfesional?: boolean
@@ -55,6 +59,7 @@ export function FichaPacienteTabs({
     adjuntos,
     escaneos3d = [],
     motivoConsulta,
+    antecedentesSalud = null,
     profesionales,
     tiposTratamiento,
     esProfesional = false,
@@ -145,6 +150,7 @@ export function FichaPacienteTabs({
                     transition={{ duration: 0.2 }}
                 >
                     {tab === 'consulta' && <TabConsulta motivoConsulta={motivoConsulta} />}
+                    {tab === 'antecedentes_salud' && <AntecedentesSaludTab pacienteId={pacienteId} inicial={antecedentesSalud} />}
                     {tab === 'turnos' && <TabTurnos turnos={effectiveTurnos} />}
                     {tab === 'evoluciones' && (
                         <TabEvoluciones
