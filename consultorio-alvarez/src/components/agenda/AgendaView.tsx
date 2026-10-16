@@ -9,7 +9,7 @@ import {
     startOfMonth, endOfMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell, CalendarDays, ChevronUp, ChevronDown, Search, RefreshCw, AlertCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell, CalendarDays, ChevronUp, ChevronDown, Search, RefreshCw, AlertCircle, Globe } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { GlassButton } from '@/components/ui/glass-button'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -2918,6 +2918,9 @@ function TurnoCalendarCard({
 }: TurnoCalendarCardProps) {
     const estado = turno.estado as EstadoTurno
     const isST = turno.es_sobreturno === true
+    // Reserva hecha por el paciente desde la web: marcador persistente (no depende
+    // del estado) para poder verificar que el profesional sea el correcto.
+    const esWeb = turno.origen === 'ONLINE'
 
     const handleDragStart = (e: React.DragEvent) => {
         e.dataTransfer.setData('text/plain', turno.id)
@@ -2950,7 +2953,8 @@ function TurnoCalendarCard({
             className={cn(
                 "absolute rounded-lg shadow-sm overflow-hidden cursor-grab active:cursor-grabbing hover:shadow-xl hover:z-50 transition-all select-none group will-change-transform transform-gpu flex flex-col justify-center",
                 height < 32 ? "px-1.5 py-0" : height < 50 ? "px-1.5 py-0.5" : "p-1.5",
-                isST ? "animate-pulse-subtle" : ""
+                isST ? "animate-pulse-subtle" : "",
+                esWeb ? "ring-2 ring-violet-500/70" : ""
             )}
             style={{
                 top: `${top}px`,
@@ -2994,6 +2998,15 @@ function TurnoCalendarCard({
                     : { type: 'spring', stiffness: 300, damping: 25 }
             }
         >
+            {esWeb && (
+                <span
+                    className="absolute top-0.5 right-0.5 z-20 inline-flex items-center gap-0.5 rounded bg-violet-600/90 text-white text-[8px] font-bold px-1 py-0.5 shadow-sm pointer-events-none"
+                    title="Turno reservado por el paciente desde la web — verificá el profesional"
+                >
+                    <Globe className="h-2 w-2" />
+                    WEB
+                </span>
+            )}
             {height < 65 ? (
                 vistaActiva === 'hoy' ? (
                     <div className="flex items-center justify-between w-full min-w-0 gap-2 h-full py-0.5">
@@ -3258,6 +3271,7 @@ function TurnoDetailModal({
     if (!turno) return null
     const estado = turno.estado as EstadoTurno
     const isST = turno.es_sobreturno === true
+    const esWeb = turno.origen === 'ONLINE'
 
     const handleSendReminder = async () => {
         setIsSendingReminder(true)
@@ -3304,6 +3318,15 @@ function TurnoDetailModal({
                         )}
                     </DialogTitle>
                 </DialogHeader>
+
+                {esWeb && (
+                    <div className="flex items-start gap-2 rounded-xl border border-violet-500/40 bg-violet-500/15 px-3 py-2.5 text-xs text-violet-200">
+                        <Globe className="h-4 w-4 shrink-0 mt-0.5 text-violet-300" />
+                        <span>
+                            <strong className="font-semibold">Reservado online por el paciente.</strong> Verificá que el profesional sea el correcto.
+                        </span>
+                    </div>
+                )}
 
                 <div className="space-y-4 py-4 text-sm">
                     {/* Paciente details block */}

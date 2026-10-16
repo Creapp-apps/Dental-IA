@@ -65,6 +65,7 @@ export async function crearProfesional(data: {
     nombre: string; apellido: string; especialidad?: string;
     matricula?: string; email: string; color_agenda?: string;
     avatar_url?: string; password?: string;
+    aclaracion_web?: string;
     rol?: RolConsultorio;
 }) {
     const { ok, actor, error: denied } = await requireAdmin()
@@ -103,6 +104,7 @@ export async function crearProfesional(data: {
                 color_agenda: data.color_agenda || '#2563eb',
                 foto_url: data.avatar_url || null,
                 avatar_url: data.avatar_url || null,
+                aclaracion_web: data.aclaracion_web || null,
                 activo: true
             })
             .select('id')

@@ -344,6 +344,11 @@ function StepProfessional({
                                         Dr/a. {p.nombre} {p.apellido}
                                     </p>
                                     <p className={cn("text-xs transition-colors", isSelected ? 'text-white/80' : 'text-gray-400')}>{p.especialidad}</p>
+                                    {(p as any).aclaracion_web && (
+                                        <p className={cn("text-xs font-medium mt-0.5 transition-colors", isSelected ? 'text-white' : 'text-teal-700')}>
+                                            {(p as any).aclaracion_web}
+                                        </p>
+                                    )}
                                 </div>
                                 {isSelected && (
                                     <div className="h-5 w-5 rounded-full flex items-center justify-center bg-white shrink-0" style={{ color: 'var(--landing-primary, #0d9488)' }}>
