@@ -708,7 +708,7 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
     const [showForm, setShowForm] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
     const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
-    const [form, setForm] = useState({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '', rol: 'profesional' })
+    const [form, setForm] = useState({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '', aclaracion_web: '', rol: 'profesional' })
 
     // Avatar states
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
@@ -716,7 +716,7 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
     const [selectedImage, setSelectedImage] = useState<string | null>(null)
 
     function abrirNuevo() {
-        setForm({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '', rol: 'profesional' })
+        setForm({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '', aclaracion_web: '', rol: 'profesional' })
         setAvatarPreview(null)
         setEditingId(null)
         setShowForm(true)
@@ -732,6 +732,7 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
             password: '',
             color_agenda: p.color_agenda || '#2563eb',
             avatar_url: p.avatar_url || p.foto_url || '',
+            aclaracion_web: p.aclaracion_web || '',
             rol: p.usuarios?.[0]?.rol === 'admin' ? 'admin' : 'profesional'
         })
         setAvatarPreview(p.avatar_url || p.foto_url || null)
@@ -901,6 +902,19 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                                 {editingId && !profesionales.find(p => p.id === editingId)?.usuarios?.length && (
                                     <> Este profesional todavía no tiene cuenta de acceso, así que el rol se aplica recién cuando se le cree una.</>
                                 )}
+                            </p>
+                        </Field>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3">
+                        <Field label="Aclaración para la reserva web">
+                            <Input
+                                value={form.aclaracion_web}
+                                onChange={e => setForm(f => ({ ...f, aclaracion_web: e.target.value }))}
+                                placeholder="Ej: También conocido como Pedro"
+                            />
+                            <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
+                                Se muestra junto al nombre del profesional cuando el paciente reserva
+                                por la web. Útil para evitar confusiones cuando lo conocen por otro nombre.
                             </p>
                         </Field>
                     </div>
