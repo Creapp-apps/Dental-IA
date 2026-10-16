@@ -709,19 +709,40 @@ export async function POST(request: NextRequest) {
                 const parts = buttonPayload.replace('CONFIRMAR_GUARDIA_', '').split('_')
                 const fecha = parts[0] || ''
                 const hora = parts[1] || ''
+                // Formatear la fecha cruda YYYY-MM-DD a algo legible en español.
+                let fechaLegible = fecha
+                try {
+                    const d = new Date(`${fecha}T12:00:00-03:00`)
+                    if (!isNaN(d.getTime())) {
+                        const f = d.toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'America/Argentina/Buenos_Aires' })
+                        fechaLegible = f.charAt(0).toUpperCase() + f.slice(1)
+                    }
+                } catch {}
 
+                // RC11: la selección de guardia NO crea un turno en la agenda todavía;
+                // por eso no afirmamos que está "confirmado". Dejamos la urgencia
+                // registrada y la pasamos a un humano para que agende el turno real.
+                if (conversacionId) {
+                    await admin.from('whatsapp_conversaciones')
+                        .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                        .eq('id', conversacionId)
+                }
                 await admin.from('notificaciones').insert({
                     tenant_id: tenantId,
-                    titulo: '✅ Turno de Urgencia Confirmado',
-                    mensaje: `El paciente (+${cleanPhone}) confirmó turno de guardia para el ${fecha} a las ${hora} hs.`,
-                    tipo: 'turno_confirmado',
+                    titulo: '🚨 Urgencia — agendar turno prioritario',
+                    mensaje: `El paciente (+${cleanPhone}) eligió el horario de guardia ${fechaLegible} a las ${hora} hs. Confirmar y cargar el turno en la agenda.`,
+                    tipo: 'turno_reprogramado',
                     referencia_id: conversacionId || '',
                     leida: false
                 })
+                try {
+                    const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                    await sendPushToRole('admin', tenantId, '🚨 Urgencia a agendar', `Paciente (+${cleanPhone}) eligió guardia ${fechaLegible} ${hora} hs.`, '/mensajes')
+                } catch {}
 
                 try {
                     const lineaDireccion = direccionConsultorio ? `\n📍 ${direccionConsultorio}.` : ''
-                    const textoGuardia = `✅ *¡Turno de Urgencia Confirmado!*\n\nTe esperamos el día *${fecha} a las ${hora} hs* en ${nombreConsultorio}.${lineaDireccion}\n\nPor favor concurrí 5 minutos antes con tu DNI.\nCualquier consulta podés escribirnos directamente por este chat.`
+                    const textoGuardia = `🚨 *¡Recibimos tu urgencia!*\n\nReservamos tu lugar para el *${fechaLegible} a las ${hora} hs* en ${nombreConsultorio}.${lineaDireccion}\n\nUna recepcionista te va a *confirmar el turno* por este chat a la brevedad. Por favor concurrí 5 minutos antes con tu DNI.`
                     const res = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
                         method: 'POST',
                         headers: {
@@ -807,6 +828,42 @@ export async function POST(request: NextRequest) {
                 if (autoRes.handled) {
                     console.log(`[WA WEBHOOK] Mensaje auto-resuelto por bot: ${autoRes.action}`)
                     return NextResponse.json({ success: true })
+                }
+
+                // RC13: evitar el loop de menú. Si en los últimos 15 minutos el bot
+                // ya respondió con el menú de fallback 2+ veces a esta conversación,
+                // no insistimos: derivamos a un humano (el bot no entendió).
+                if (conversacionId) {
+                    const desde = new Date(Date.now() - 15 * 60 * 1000).toISOString()
+                    const { count: fallbacksRecientes } = await admin
+                        .from('whatsapp_mensajes')
+                        .select('id', { count: 'exact', head: true })
+                        .eq('conversacion_id', conversacionId)
+                        .eq('remitente', 'bot')
+                        .contains('metadata', { accion: 'menu_principal_fallback' })
+                        .gte('created_at', desde)
+
+                    if ((fallbacksRecientes ?? 0) >= 2) {
+                        console.log(`[WA WEBHOOK] ${fallbacksRecientes} fallbacks recientes en ${conversacionId}. Derivando a humano en vez de repetir menú.`)
+                        await admin.from('whatsapp_conversaciones')
+                            .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                            .eq('id', conversacionId)
+                        await admin.from('notificaciones').insert({
+                            tenant_id: tenantId,
+                            titulo: '💬 El bot no pudo ayudar — derivar',
+                            mensaje: `Paciente (+${cleanPhone}) escribió varias veces sin que el bot lo entienda. Último: "${(textBody || buttonTextFallback || '').slice(0, 120)}"`,
+                            tipo: 'turno_reprogramado',
+                            referencia_id: conversacionId || '',
+                            leida: false
+                        })
+                        if (waCreds) {
+                            await enviarTextoWhatsApp(waCreds, cleanPhone,
+                                `Disculpá, no estoy logrando ayudarte por acá 🙏 Ya avisé a una persona de nuestro equipo para que te responda a la brevedad por este chat.`,
+                                conversacionId ? { tenantId, conversacionId, accion: 'derivado_por_loop' } : undefined
+                            )
+                        }
+                        return NextResponse.json({ success: true })
+                    }
                 }
 
                 console.log(`[WA WEBHOOK] Enviando Menú Principal interactivo autónomo a ${from}...`)
