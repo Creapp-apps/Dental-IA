@@ -842,7 +842,7 @@ export function NuevoTurnoModal({
                                     value={profId}
                                     onChange={setProfId}
                                     placeholder="Seleccionar..."
-                                    options={profesionales.map(p => ({ value: p.id, label: `Dr. ${p.nombre} ${p.apellido}` }))}
+                                    options={profesionales.map(p => ({ value: p.id, label: `Dr. ${p.nombre} ${p.apellido}${p.aclaracion_web ? ` — ${p.aclaracion_web}` : ''}` }))}
                                 />
                             )}
                         </div>

@@ -906,15 +906,17 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                         </Field>
                     </div>
                     <div className="grid grid-cols-1 gap-3">
-                        <Field label="Aclaración para la reserva web">
+                        <Field label="Distinción del profesional">
                             <Input
                                 value={form.aclaracion_web}
                                 onChange={e => setForm(f => ({ ...f, aclaracion_web: e.target.value }))}
                                 placeholder="Ej: También conocido como Pedro"
                             />
                             <p className="text-[11px] text-muted-foreground mt-1 leading-snug">
-                                Se muestra junto al nombre del profesional cuando el paciente reserva
-                                por la web. Útil para evitar confusiones cuando lo conocen por otro nombre.
+                                Un texto corto para distinguir a este profesional de otro con nombre o
+                                apellido parecido. Se muestra junto a su nombre tanto en la reserva web
+                                (para que el paciente no elija mal) como en la agenda (para que el equipo
+                                no lo confunda).
                             </p>
                         </Field>
                     </div>
