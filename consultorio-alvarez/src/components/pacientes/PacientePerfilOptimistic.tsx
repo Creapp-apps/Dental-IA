@@ -45,6 +45,9 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
     const [hasPendingSync, setHasPendingSync] = useState(false)
     const [isSyncingNow, setIsSyncingNow] = useState(false)
     const [asignandoProf, startAsignar] = useTransition()
+    // Conteo de ausencias desde el cache Dexie (ventana -90d), como respaldo offline
+    // del conteo histórico que llega del server. null = aún no cargado.
+    const [ausenciasLocal, setAusenciasLocal] = useState<{ total: number; confirmadas: number } | null>(null)
 
     // Reasignación rápida del profesional de cabecera (solo admin). Actualiza
     // optimista la tarjeta y persiste con la acción asignarProfesional.
@@ -137,6 +140,21 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
         }
     }, [initialPaciente])
 
+    // Respaldo offline del conteo de ausencias: se calcula desde los turnos
+    // cacheados en Dexie. El server (prop ausencias) es el histórico completo y
+    // tiene prioridad; esto cubre la navegación offline.
+    useEffect(() => {
+        const id = initialPaciente?.id
+        if (!id) return
+        let vivo = true
+        localDb.turnos.where('paciente_id').equals(id).toArray().then((ts) => {
+            if (!vivo) return
+            const aus = ts.filter(t => t.estado === 'AUSENTE')
+            setAusenciasLocal({ total: aus.length, confirmadas: aus.filter(t => t.fue_confirmado).length })
+        }).catch(() => {})
+        return () => { vivo = false }
+    }, [initialPaciente?.id])
+
     const p = paciente
     // Respuestas críticas de la anamnesis ("Antecedentes de Salud") para resaltar.
     const alertasSalud = obtenerAlertasCriticas(p.antecedentes_salud)
@@ -146,6 +164,11 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
     const edad = p.fecha_nacimiento
         ? Math.floor((Date.now() - new Date(p.fecha_nacimiento).getTime()) / (365.25 * 24 * 60 * 60 * 1000))
         : null
+    // Ausencias a mostrar: el server (histórico completo) manda cuando trae datos;
+    // si viene en 0 (p. ej. navegación offline), se cae al conteo local de Dexie.
+    const usarServerAusencias = ausencias > 0
+    const ausenciasShow = usarServerAusencias ? ausencias : (ausenciasLocal?.total ?? 0)
+    const ausenciasConfirmadasShow = usarServerAusencias ? ausenciasConfirmadas : (ausenciasLocal?.confirmadas ?? 0)
     // Nombre del profesional asignado (solo lectura; se resuelve contra la lista
     // del tenant para que refleje el cambio optimista si el admin lo reasigna).
     const profAsignado = p.profesional_id
@@ -241,15 +264,15 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
                         )}
                     </div>
 
-                    {ausencias > 0 && (
+                    {ausenciasShow > 0 && (
                         <div className="mt-2">
                             <span
                                 className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20"
                                 title="Veces que el paciente no se presentó a un turno"
                             >
                                 <AlertCircle className="w-3 h-3 text-orange-500" />
-                                {ausencias} {ausencias === 1 ? 'ausencia' : 'ausencias'}
-                                {ausenciasConfirmadas > 0 && ` · ${ausenciasConfirmadas} confirmó y no vino`}
+                                {ausenciasShow} {ausenciasShow === 1 ? 'ausencia' : 'ausencias'}
+                                {ausenciasConfirmadasShow > 0 && ` · ${ausenciasConfirmadasShow} confirmó y no vino`}
                             </span>
                         </div>
                     )}
