@@ -39,6 +39,8 @@ export interface LocalTurno {
     fecha_inicio: string
     fecha_fin: string
     estado: 'PENDIENTE' | 'CONFIRMADO' | 'EN_SALA' | 'ATENDIDO' | 'CANCELADO' | 'AUSENTE'
+    /** Constancia de que el turno estuvo confirmado alguna vez (migración 035). */
+    fue_confirmado?: boolean
     prioridad_override?: string | null
     notas?: string | null
     origen?: string

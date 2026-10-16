@@ -40,6 +40,7 @@ interface FichaPacienteTabsProps {
     tenantId: string
     turnos: any[]
     ausencias?: number
+    ausenciasConfirmadas?: number
     historial: any[]
     odontograma: any[]
     presupuestos: any[]
@@ -59,6 +60,7 @@ export function FichaPacienteTabs({
     tenantId,
     turnos,
     ausencias = 0,
+    ausenciasConfirmadas = 0,
     historial,
     odontograma,
     presupuestos,
@@ -157,7 +159,7 @@ export function FichaPacienteTabs({
                 >
                     {tab === 'consulta' && <TabConsulta motivoConsulta={motivoConsulta} />}
                     {tab === 'antecedentes_salud' && <AntecedentesSaludTab pacienteId={pacienteId} inicial={antecedentesSalud} />}
-                    {tab === 'turnos' && <TabTurnos turnos={effectiveTurnos} ausencias={ausencias} />}
+                    {tab === 'turnos' && <TabTurnos turnos={effectiveTurnos} ausencias={ausencias} ausenciasConfirmadas={ausenciasConfirmadas} />}
                     {tab === 'evoluciones' && (
                         <TabEvoluciones
                             pacienteId={pacienteId}
@@ -210,7 +212,23 @@ function TabConsulta({ motivoConsulta }: { motivoConsulta: string | null }) {
 }
 
 /* ──────────── Tab: Turnos ──────────── */
-function TabTurnos({ turnos, ausencias = 0 }: { turnos: any[]; ausencias?: number }) {
+// Etiqueta de asistencia según el resultado final del turno y si llegó a estar
+// confirmado alguna vez (fue_confirmado). null = no mostrar nada extra.
+function etiquetaAsistencia(estado: string, fueConfirmado: boolean): { texto: string; clase: string } | null {
+    if (estado === 'ATENDIDO') {
+        return fueConfirmado
+            ? { texto: 'Confirmó y vino', clase: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' }
+            : { texto: 'Vino', clase: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' }
+    }
+    if (estado === 'AUSENTE') {
+        return fueConfirmado
+            ? { texto: 'Confirmó y no vino', clase: 'bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/20' }
+            : { texto: 'No vino', clase: 'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/20' }
+    }
+    return null
+}
+
+function TabTurnos({ turnos, ausencias = 0, ausenciasConfirmadas = 0 }: { turnos: any[]; ausencias?: number; ausenciasConfirmadas?: number }) {
     return (
         <div className="glass rounded-2xl shadow-glass p-5">
             <h3 className="text-sm font-semibold text-foreground flex items-center justify-between gap-2 mb-3">
@@ -220,7 +238,8 @@ function TabTurnos({ turnos, ausencias = 0 }: { turnos: any[]; ausencias?: numbe
                 </span>
                 {ausencias > 0 && (
                     <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-orange-500/10 text-orange-600 dark:text-orange-400 border border-orange-500/20">
-                        {ausencias} {ausencias === 1 ? 'ausencia' : 'ausencias'} (no vino)
+                        {ausencias} {ausencias === 1 ? 'ausencia' : 'ausencias'}
+                        {ausenciasConfirmadas > 0 && ` · ${ausenciasConfirmadas} confirmó y no vino`}
                     </span>
                 )}
             </h3>
@@ -246,7 +265,17 @@ function TabTurnos({ turnos, ausencias = 0 }: { turnos: any[]; ausencias?: numbe
                                     {' · Dr. '}{t.profesional?.nombre} {t.profesional?.apellido}
                                 </p>
                             </div>
-                            <StatusBadge status={t.estado as EstadoTurno} className="shrink-0" />
+                            <div className="flex flex-col items-end gap-1 shrink-0">
+                                <StatusBadge status={t.estado as EstadoTurno} />
+                                {(() => {
+                                    const et = etiquetaAsistencia(t.estado, !!t.fue_confirmado)
+                                    return et ? (
+                                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium border whitespace-nowrap', et.clase)}>
+                                            {et.texto}
+                                        </span>
+                                    ) : null
+                                })()}
+                            </div>
                         </div>
                     ))}
                 </div>

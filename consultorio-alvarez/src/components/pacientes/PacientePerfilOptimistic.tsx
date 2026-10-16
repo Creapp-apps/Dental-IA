@@ -36,9 +36,11 @@ interface PacientePerfilOptimisticProps {
     profesionales?: any[]
     /** Total de ausencias ("No vino") en toda la historia del paciente. */
     ausencias?: number
+    /** De esas ausencias, cuántas habían sido confirmadas ("confirmó y no vino"). */
+    ausenciasConfirmadas?: number
 }
 
-export function PacientePerfilOptimistic({ initialPaciente, esProfesional = false, comparteClinica = false, profesionales = [], ausencias = 0 }: PacientePerfilOptimisticProps) {
+export function PacientePerfilOptimistic({ initialPaciente, esProfesional = false, comparteClinica = false, profesionales = [], ausencias = 0, ausenciasConfirmadas = 0 }: PacientePerfilOptimisticProps) {
     const [paciente, setPaciente] = useState<any>(initialPaciente)
     const [hasPendingSync, setHasPendingSync] = useState(false)
     const [isSyncingNow, setIsSyncingNow] = useState(false)
@@ -247,6 +249,7 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
                             >
                                 <AlertCircle className="w-3 h-3 text-orange-500" />
                                 {ausencias} {ausencias === 1 ? 'ausencia' : 'ausencias'}
+                                {ausenciasConfirmadas > 0 && ` · ${ausenciasConfirmadas} confirmó y no vino`}
                             </span>
                         </div>
                     )}
