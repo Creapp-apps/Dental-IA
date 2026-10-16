@@ -4,7 +4,7 @@ import { useState, useTransition, useEffect, useMemo, useRef } from 'react'
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ChevronDown, CalendarIcon, Clock, Zap, UserPlus, Loader2 } from 'lucide-react'
+import { ChevronDown, CalendarIcon, Clock, Zap, UserPlus, Loader2, AlertTriangle } from 'lucide-react'
 import {
     GlassDialog,
     GlassDialogContent,
@@ -18,7 +18,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Calendar } from '@/components/ui/calendar'
 import { GlassDatePicker } from '@/components/ui/glass-date-picker'
-import { crearTurno, editarTurno, getOcupacionProfesionalDia } from '@/lib/actions/turnos'
+import { crearTurno, editarTurno, getOcupacionProfesionalDia, resumenAsistenciaPaciente } from '@/lib/actions/turnos'
 import { crearPaciente, searchPacientesAction } from '@/lib/actions/pacientes'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { type PrioridadTratamiento, PRIORIDAD_LABEL } from '@/types'
@@ -116,6 +116,9 @@ export function NuevoTurnoModal({
     const [isLoadingOcupacion, setIsLoadingOcupacion] = useState(false)
     const [pacienteId, setPacienteId] = useState('')
     const [pacienteSeleccionado, setPacienteSeleccionado] = useState<any>(null)
+    // Resumen de asistencia del paciente elegido (ausencias / último no vino), para
+    // avisar al cargar el turno. null = sin datos cargados aún.
+    const [resumenAsistencia, setResumenAsistencia] = useState<{ ausencias: number; ausenciasConfirmadas: number; ultimo: any } | null>(null)
     const [pacienteSearch, setPacienteSearch] = useState('')
     const [searchedPacientes, setSearchedPacientes] = useState<any[]>([])
     const [isSearchingPacientes, setIsSearchingPacientes] = useState(false)
@@ -218,6 +221,21 @@ export function NuevoTurnoModal({
             clearTimeout(timer)
         }
     }, [pacienteSearch, pacientes])
+
+    // Al elegir un paciente existente, traer su resumen de asistencia para avisar
+    // si suele faltar. En modo "paciente nuevo" no aplica.
+    useEffect(() => {
+        if (!pacienteId || modoNuevoPaciente) {
+            setResumenAsistencia(null)
+            return
+        }
+        let vivo = true
+        resumenAsistenciaPaciente(pacienteId).then((r) => {
+            if (!vivo) return
+            if (r && !('error' in r)) setResumenAsistencia(r)
+        }).catch(() => { /* aviso best-effort: si falla, no se muestra */ })
+        return () => { vivo = false }
+    }, [pacienteId, modoNuevoPaciente])
 
     // Resetear formulario ÚNICAMENTE cuando el modal pasa de cerrado a abierto o cambia el turno a editar
     useEffect(() => {
@@ -750,6 +768,32 @@ export function NuevoTurnoModal({
                                         <span className="mr-1">✓</span> Paciente seleccionado
                                     </p>
                                 )}
+                                {(() => {
+                                    if (!resumenAsistencia) return null
+                                    const { ausencias, ausenciasConfirmadas, ultimo } = resumenAsistencia
+                                    const ultimoNoVino = ultimo?.estado === 'AUSENTE'
+                                    if (ausencias === 0 && !ultimoNoVino) return null
+                                    return (
+                                        <div className="mt-2 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs text-orange-700 dark:text-orange-300 flex items-start gap-2">
+                                            <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5 text-orange-500" />
+                                            <div className="space-y-0.5">
+                                                {ausencias > 0 && (
+                                                    <p className="font-medium">
+                                                        Faltó {ausencias} {ausencias === 1 ? 'vez' : 'veces'}
+                                                        {ausenciasConfirmadas > 0 && ` · ${ausenciasConfirmadas} habiendo confirmado`}
+                                                    </p>
+                                                )}
+                                                {ultimoNoVino && (
+                                                    <p>
+                                                        El último turno no vino
+                                                        {ultimo?.fecha_inicio && ` (${format(parseISO(ultimo.fecha_inicio), "d MMM yyyy", { locale: es })})`}
+                                                        {ultimo?.fue_confirmado && ' — había confirmado'}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )
+                                })()}
                             </>
                         )}
                     </div>
