@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
+import { notFound } from 'next/navigation'
 import { resolveTenant } from '@/lib/tenant'
 import { getLandingConfigPublica } from '@/lib/actions/landing'
 import { DEFAULT_LANDING_CONFIG } from '@/lib/types/landing'
@@ -15,8 +16,9 @@ export async function generateMetadata(props: {
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
     const tenant = await resolveTenant(searchParams?.slug || rawHost)
-    const slug = tenant?.slug || searchParams?.slug || 'alvarez'
-    const config = await getLandingConfigPublica(slug)
+    // Blindaje multi-tenant: sin tenant resuelto NO asumimos 'alvarez'.
+    const slug = tenant?.slug
+    const config = slug ? await getLandingConfigPublica(slug) : null
 
     const title = slug === 'curadent'
         ? 'Curadent - Reservar Turno'
@@ -42,7 +44,12 @@ export default async function ReservarPage(props: {
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
     const tenant = await resolveTenant(searchParams?.slug || rawHost)
-    const slug = tenant?.slug || searchParams?.slug || process.env.NEXT_PUBLIC_TENANT_SLUG || 'alvarez'
+    // Blindaje multi-tenant: si no se resuelve un consultorio real, mostramos 404
+    // en vez de caer por default a 'alvarez' (evita que un turno entre en otra agenda).
+    if (!tenant?.slug) {
+        notFound()
+    }
+    const slug = tenant.slug
     const config = (await getLandingConfigPublica(slug)) ?? { id: '', tenant_id: '', ...DEFAULT_LANDING_CONFIG }
 
     return (
