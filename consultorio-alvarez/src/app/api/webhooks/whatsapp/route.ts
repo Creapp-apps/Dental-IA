@@ -177,6 +177,22 @@ export async function POST(request: NextRequest) {
         // Instanciar cliente administrador para eludir RLS y operar en base de datos
         const admin = createAdminClient()
 
+        // ── DEDUPE POR wa_message_id (RC3) ──
+        // Meta reintenta la entrega del webhook; si ya procesamos este message id,
+        // no lo reprocesamos (evita respuestas y acciones duplicadas).
+        if (messageId) {
+            const { data: yaProcesado } = await admin
+                .from('whatsapp_mensajes')
+                .select('id')
+                .eq('tenant_id', tenantId)
+                .eq('wa_message_id', messageId)
+                .maybeSingle()
+            if (yaProcesado) {
+                console.log(`[WA WEBHOOK] Mensaje ${messageId} ya procesado antes. Ignorado por dedupe.`)
+                return NextResponse.json({ success: true, message: 'Duplicate message ignored' })
+            }
+        }
+
         // Datos del consultorio para personalizar mensajes (multi-tenant, sin hardcodear Álvarez)
         const { data: tenantInfo } = await admin
             .from('tenants')
@@ -267,6 +283,14 @@ export async function POST(request: NextRequest) {
             console.warn('[WA WEBHOOK] Advertencia de persistencia (tablas pendientes o error no bloqueante):', persistErr)
         }
 
+        // ── RC2: Eventos NO accionables no disparan respuesta del bot ──
+        // Reacciones (👍/❤️), stickers y eventos de sistema/errores quedan
+        // registrados en el inbox pero NO generan ninguna respuesta automática.
+        if (type === 'reaction' || type === 'sticker' || type === 'system' || type === 'unsupported' || message.errors) {
+            console.log(`[WA WEBHOOK] Evento no accionable (tipo "${type}"). Persistido sin responder.`)
+            return NextResponse.json({ success: true, message: 'Non-actionable event, no reply' })
+        }
+
         let turnoIdToUpdate = ''
         let respuestaPaciente: 'CONFIRMAR' | 'CANCELAR' | 'REPROGRAMAR' | null = null
 
@@ -317,31 +341,7 @@ export async function POST(request: NextRequest) {
                         normalized.includes('confirm') ||
                         (normalized.startsWith('si ') && normalized.length <= 15);
 
-                    const matchesCancel = 
-                        normalized === 'no' || 
-                        normalized === 'no cancelar' ||
-                        normalized === 'cancelar' ||
-                        normalized === 'cancelo' ||
-                        normalized.includes('cancel') ||
-                        normalized.includes('no asisto') ||
-                        normalized.includes('no voy') ||
-                        normalized.includes('suspender') ||
-                        normalized.includes('dar de baja') ||
-                        normalized.includes('no puedo ir') ||
-                        normalized.includes('no llego') ||
-                        normalized.includes('se me complica') ||
-                        normalized.includes('reposo') ||
-                        normalized.includes('accidente') ||
-                        normalized.includes('antibiotico') ||
-                        normalized.includes('infeccion') ||
-                        normalized.includes('lastime') ||
-                        normalized.includes('enfermo') ||
-                        normalized.includes('enferma') ||
-                        normalized.includes('fiebre') ||
-                        normalized.includes('imposible ir') ||
-                        (normalized.startsWith('no ') && normalized.length <= 15);
-
-                    const matchesReprogram = 
+                    const matchesReprogram =
                         normalized.includes('reprogram') ||
                         normalized.includes('cambi') ||
                         normalized.includes('modif') ||
@@ -353,15 +353,30 @@ export async function POST(request: NextRequest) {
                         normalized.includes('re programar') ||
                         normalized.includes('reprogramar el turno');
 
+                    // RC1: CANCELAR solo con lenguaje EXPLÍCITO de cancelación.
+                    // Los síntomas / excusas ("fiebre", "no llego", "se me complica",
+                    // "accidente", etc.) NO cancelan acá: caen al auto-flow que ofrece
+                    // botones para que el paciente elija (sin acción en falso).
+                    // "no cancelar" / "cancelar para reprogramar" NO cuentan como cancelar.
+                    const matchesCancel =
+                        !matchesReprogram && (
+                            normalized === 'no' ||
+                            normalized === 'no asisto' ||
+                            normalized === 'no, cancelar' ||
+                            normalized.includes('anular') ||
+                            normalized.includes('dar de baja') ||
+                            (normalized.includes('cancel') && !normalized.includes('no cancel'))
+                        );
+
                     if (matchesConfirm) {
                         turnoIdToUpdate = lastRem.turno_id
                         respuestaPaciente = 'CONFIRMAR'
-                    } else if (matchesCancel) {
-                        turnoIdToUpdate = lastRem.turno_id
-                        respuestaPaciente = 'CANCELAR'
                     } else if (matchesReprogram) {
                         turnoIdToUpdate = lastRem.turno_id
                         respuestaPaciente = 'REPROGRAMAR'
+                    } else if (matchesCancel) {
+                        turnoIdToUpdate = lastRem.turno_id
+                        respuestaPaciente = 'CANCELAR'
                     }
                 }
             }

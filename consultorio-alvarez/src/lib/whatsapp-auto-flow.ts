@@ -688,9 +688,13 @@ export async function procesarMensajeAutonomo({
     }
 
     // ─────────────────────────────────────────────────────────────
-    // PARCHE 3: CANCELACIÓN / REPROGRAMACIÓN POR SALUD O FUERZA MAYOR
+    // PARCHE 3 (RC1): POSIBLE IMPEDIMENTO / PEDIDO DE CAMBIO DE TURNO
+    // NUNCA cancelamos desde texto libre. Si el paciente menciona que no
+    // puede asistir o pide cancelar/cambiar, ofrecemos botones para que
+    // elija explícitamente, o derivamos a un humano. La cancelación solo
+    // ocurre si toca el botón Cancelar (payload CANCELAR_TURNO_<id>).
     // ─────────────────────────────────────────────────────────────
-    const esImpedimentoSalud = 
+    const mencionaImpedimento =
         normText.includes('accidente') ||
         normText.includes('reposo') ||
         normText.includes('antibiotico') ||
@@ -700,45 +704,60 @@ export async function procesarMensajeAutonomo({
         normText.includes('enferma') ||
         normText.includes('imposible ir') ||
         normText.includes('no puedo asistir') ||
-        normText.includes('no voy a poder ir') ||
+        normText.includes('no voy a poder') ||
         normText.includes('no llego') ||
+        normText.includes('no voy a llegar') ||
+        normText.includes('no voy a ir') ||
+        normText.includes('no puedo ir') ||
         normText.includes('se me complica') ||
         normText.includes('fiebre') ||
         normText.includes('operaron') ||
         normText.includes('cancelar el turno') ||
+        normText.includes('cancelar mi turno') ||
         normText.includes('podrias cancelar')
 
-    if (esImpedimentoSalud) {
-        console.log(`[WA AUTO-FLOW] Motivo de fuerza mayor o salud detectado en ${cleanPhone}. Buscando turno activo...`)
+    if (mencionaImpedimento) {
+        console.log(`[WA AUTO-FLOW] Posible impedimento/pedido de cambio en ${cleanPhone}. Ofreciendo opciones (sin acción automática).`)
         const turnoActivo = await buscarProximoTurnoPaciente(tenantId, cleanPhone, null)
 
         if (turnoActivo) {
-            await admin.from('turnos').update({ estado: 'CANCELADO' }).eq('id', turnoActivo.id)
-            await admin.from('recordatorios').update({
-                estado_envio: 'RESPONDIDO',
-                respuesta_paciente: 'CANCELAR',
-                fecha_respuesta: new Date().toISOString()
-            }).eq('turno_id', turnoActivo.id)
-
-            await admin.from('notificaciones').insert({
-                tenant_id: tenantId,
-                titulo: '🏥 Turno Cancelado por Motivo de Salud',
-                mensaje: `El paciente (+${cleanPhone}) canceló su turno: "${textBody.slice(0, 100)}"`,
-                tipo: 'turno_cancelado',
-                referencia_id: turnoActivo.id,
-                leida: false
+            const fechaTurno = new Date(turnoActivo.fecha_inicio).toLocaleString('es-AR', {
+                weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+                timeZone: 'America/Argentina/Buenos_Aires'
             })
-
-            const msgSalud = `Entendido totalmente 🙏\n\n` +
-                `Ya cancelamos tu turno para que puedas hacer reposo y recuperarte tranquilamente.\n\n` +
-                `Cuando estés mejor, volvé a escribirnos por este chat y te ayudamos a coordinar una nueva fecha. ¡Que te mejores pronto! ❤️🦷`
-
-            await enviarTextoWhatsApp(creds, cleanPhone, msgSalud, {
-                ...trackingBase,
-                accion: 'cancelacion_empatica_salud'
-            })
-            return { handled: true, action: 'cancelacion_empatica_salud' }
+            await enviarBotonesWhatsApp(
+                creds,
+                cleanPhone,
+                `Entendemos 🙏 Vemos que tenés un turno el *${fechaTurno} hs*.\n\n¿Qué querés hacer con ese turno?`,
+                [
+                    { id: `REPROGRAMAR_TURNO_${turnoActivo.id}`, title: '🔄 Reprogramar' },
+                    { id: `CANCELAR_TURNO_${turnoActivo.id}`, title: '❌ Cancelar' },
+                    { id: `CONFIRMAR_TURNO_${turnoActivo.id}`, title: '✅ Mantenerlo' },
+                ],
+                { ...trackingBase, accion: 'impedimento_ofrece_opciones' }
+            )
+            return { handled: true, action: 'impedimento_ofrece_opciones' }
         }
+
+        // Sin turno identificado: derivamos a un humano, sin afirmar nada en falso.
+        if (conversacionId) {
+            await admin.from('whatsapp_conversaciones').update({
+                estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+            }).eq('id', conversacionId)
+        }
+        await admin.from('notificaciones').insert({
+            tenant_id: tenantId,
+            titulo: '📩 Paciente quiere cambiar o cancelar un turno',
+            mensaje: `Paciente (+${cleanPhone}) escribió: "${textBody.slice(0, 120)}"`,
+            tipo: 'turno_reprogramado',
+            referencia_id: conversacionId || '',
+            leida: false
+        })
+        await enviarTextoWhatsApp(creds, cleanPhone,
+            `Recibimos tu mensaje 🙏 Un asesor de recepción te va a contactar a la brevedad por este chat para ayudarte con tu turno.`,
+            { ...trackingBase, accion: 'impedimento_derivado_humano' }
+        )
+        return { handled: true, action: 'impedimento_derivado_humano' }
     }
 
     // ─────────────────────────────────────────────────────────────
