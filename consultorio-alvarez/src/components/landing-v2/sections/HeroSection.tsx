@@ -154,7 +154,15 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
                 className="relative w-full h-[500px] md:h-[580px] overflow-hidden"
             >
                 {/* BACKGROUND CAROUSEL */}
-                <div className="absolute inset-0 w-full h-full z-0">
+                {/* Máscara de desvanecido en el borde inferior: la imagen se funde a
+                    transparente y deja ver el fondo + mesh (igual que la sección de
+                    abajo), evitando la línea de corte recta. */}
+                <div
+                    className="absolute inset-0 w-full h-full z-0"
+                    style={{
+                        WebkitMaskImage: 'linear-gradient(to bottom, black 58%, transparent 96%)',
+                        maskImage: 'linear-gradient(to bottom, black 58%, transparent 96%)',
+                    }}>
                     <div
                         className="flex h-full w-full transition-transform duration-1000 ease-out"
                         style={{ transform: `translateX(-${currentSlide * 100}%)` }}
@@ -185,11 +193,6 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
                     style={{ background: 'linear-gradient(to bottom, var(--landing-bg-hero, #f0fdfa), transparent)' }}
                 />
                 
-                {/* Bottom Fade to Web Background */}
-                <div 
-                    className="absolute bottom-0 left-0 right-0 h-40 pointer-events-none z-10"
-                    style={{ background: 'linear-gradient(to top, var(--landing-bg-hero, #f0fdfa), transparent)' }}
-                />
 
                 {/* OVERLAY CARD (Left-aligned, white, rounded) */}
                 <div className="absolute left-6 md:left-20 lg:left-32 top-[55%] md:top-[50%] -translate-y-1/2 z-20 w-[calc(100%-3rem)] sm:w-auto sm:max-w-md">

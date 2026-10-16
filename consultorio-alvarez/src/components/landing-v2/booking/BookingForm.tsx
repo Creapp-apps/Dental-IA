@@ -272,6 +272,11 @@ function StepProfessional({
     professionals: Professional[]
     loading: boolean
 }) {
+    // Profesional pendiente de confirmación: al tocar uno, se abre un modal para
+    // verificar (foto grande + nombre) que es el profesional correcto antes de
+    // avanzar. Evita reservar con el profesional equivocado por confusión.
+    const [pendingPro, setPendingPro] = useState<Professional | null>(null)
+
     if (loading) {
         return (
             <div className="flex flex-col items-center justify-center py-12">
@@ -319,7 +324,7 @@ function StepProfessional({
                     return (
                         <button
                             key={p.id}
-                            onClick={() => onSelect(p.id)}
+                            onClick={() => setPendingPro(p)}
                             className={cn(
                                 'text-left rounded-xl border-2 p-4 transition-all hover:shadow-sm cursor-pointer',
                                 isSelected
@@ -360,6 +365,62 @@ function StepProfessional({
                     )
                 })}
             </div>
+
+            {/* Modal central de confirmación de profesional */}
+            {pendingPro && (
+                <div
+                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+                    onClick={() => setPendingPro(null)}
+                >
+                    <div
+                        className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl"
+                        onClick={(e) => e.stopPropagation()}
+                    >
+                        <div
+                            className="mx-auto mb-5 h-28 w-28 relative overflow-hidden rounded-full flex items-center justify-center text-4xl font-bold text-white shadow-lg ring-4 ring-slate-100"
+                            style={{ backgroundColor: (pendingPro as any).color || '#0d9488' }}
+                        >
+                            {((pendingPro as any).avatar_url || (pendingPro as any).foto_url) ? (
+                                /* eslint-disable-next-line @next/next/no-img-element */
+                                <img src={(pendingPro as any).avatar_url || (pendingPro as any).foto_url} alt={`Dr/a. ${pendingPro.nombre}`} className="w-full h-full object-cover" />
+                            ) : (
+                                `${pendingPro.nombre[0]}${pendingPro.apellido[0]}`
+                            )}
+                        </div>
+
+                        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">Confirmá tu profesional</p>
+                        <h3 className="text-2xl font-extrabold text-slate-900 leading-tight">
+                            Dr/a. {pendingPro.nombre} {pendingPro.apellido}
+                        </h3>
+                        {pendingPro.especialidad && (
+                            <p className="text-sm text-slate-500 mt-1">{pendingPro.especialidad}</p>
+                        )}
+                        {(pendingPro as any).aclaracion_web && (
+                            <p className="text-sm font-semibold text-teal-700 mt-2">{(pendingPro as any).aclaracion_web}</p>
+                        )}
+
+                        <p className="text-sm text-slate-600 mt-5">
+                            ¿Querés sacar el turno con este profesional?
+                        </p>
+
+                        <div className="mt-6 flex flex-col gap-2.5">
+                            <button
+                                onClick={() => { const id = pendingPro.id; setPendingPro(null); onSelect(id) }}
+                                className="w-full rounded-xl px-5 py-3 text-sm font-bold text-white shadow-md transition-all hover:scale-[1.02] active:scale-95 cursor-pointer"
+                                style={{ backgroundColor: 'var(--landing-primary, #0d9488)' }}
+                            >
+                                Sí, con Dr/a. {pendingPro.nombre}
+                            </button>
+                            <button
+                                onClick={() => setPendingPro(null)}
+                                className="w-full rounded-xl px-5 py-3 text-sm font-semibold text-slate-600 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
+                            >
+                                Elegir otro
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
