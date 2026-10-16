@@ -29,7 +29,7 @@ export function FooterSection({
     const hours = config?.footer_hours || defaultHours
 
     return (
-        <footer className="relative z-10 border-t border-gray-200/50 bg-white/80 backdrop-blur-sm">
+        <footer className="relative z-10 bg-gradient-to-b from-transparent to-white/70 backdrop-blur-sm">
             <div className="max-w-5xl mx-auto px-6 sm:px-10 py-14">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-10 text-center md:text-left">
                     {/* Brand */}
