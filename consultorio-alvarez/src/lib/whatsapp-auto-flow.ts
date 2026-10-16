@@ -906,65 +906,12 @@ export async function procesarMensajeAutonomo({
         }
     }
 
-    // ─────────────────────────────────────────────────────────────
-    // 2. RADAR AMPLIO: SACAR TURNO / DISPONIBILIDAD CONVERSACIONAL
-    // ─────────────────────────────────────────────────────────────
-    const pideTurno = 
-        normText.includes('sacar turno') ||
-        normText.includes('pedir turno') ||
-        normText.includes('quiero turno') ||
-        normText.includes('nuevo turno') ||
-        normText.includes('agendar') ||
-        normText.includes('consulta') ||
-        normText.includes('turno') ||
-        normText.includes('lugar') ||
-        normText.includes('atenderme') ||
-        normText.includes('hacerme ver') ||
-        normText.includes('horario disponible') ||
-        buttonPayload === 'SACAR_TURNO_NUEVO' ||
-        buttonPayload === 'MENU_TURNOS'
-
-    if (pideTurno) {
-        console.log(`[WA AUTO-FLOW] Petición de turno conversacional por ${cleanPhone}...`)
-        
-        // Obtener los 3 primeros slots reales sin superposición
-        const slotsCandidatos = await obtenerProximosTresSlots(tenant?.slug || 'alvarez')
-
-        if (slotsCandidatos.length > 0) {
-            const listaTxt = slotsCandidatos.map((s, idx) => `${idx + 1}️⃣ *${s.fechaLegible}*`).join('\n')
-            
-            const textoPropuesta = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
-                `Para que elijas el que más cómodo te quede, estos son los primeros horarios disponibles más cercanos:\n\n` +
-                `${listaTxt}\n\n` +
-                `👇 *Tocá el botón del horario que prefieras:*`
-
-            const botonesSlots = slotsCandidatos.map(s => ({
-                id: s.payload,
-                title: s.btnTitulo
-            }))
-
-            await enviarBotonesWhatsApp(creds, cleanPhone, textoPropuesta, botonesSlots, {
-                ...trackingBase,
-                accion: 'ofrecidos_slots_conversacionales'
-            })
-            return { handled: true, action: 'ofrecidos_slots_conversacionales' }
-        } else {
-            // Fallback si no hay slots en los próximos días
-            const msgSinSlots = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
-                `En este momento los primeros días están completos. Podés ver las semanas siguientes en nuestro portal digital:\n` +
-                `👉 ${reservaUrl}\n\n` +
-                `O si tenés dolor, podés activar la guardia de urgencia:`
-
-            await enviarBotonesWhatsApp(creds, cleanPhone, msgSinSlots, [
-                { id: 'ACTIVAR_GUARDIA_URGENCIA', title: '🚨 Tengo Urgencia' },
-                { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-            ], { ...trackingBase, accion: 'sin_slots_link_portal' })
-            return { handled: true, action: 'sin_slots_link_portal' }
-        }
-    }
+    // (RC6) El radar de "pedir turno" se movió DESPUÉS de las FAQ y de
+    // "consultar mi turno", para que preguntas como "cuándo es mi turno",
+    // "cuánto sale" o "dónde quedan" no terminen ofreciendo slots nuevos.
 
     // ─────────────────────────────────────────────────────────────
-    // 3. INTENCIÓN: CONSULTAR "¿CUÁNDO ES MI TURNO?" O "¿A QUÉ HORA?"
+    // 2. INTENCIÓN: CONSULTAR "¿CUÁNDO ES MI TURNO?" O "¿A QUÉ HORA?"
     // ─────────────────────────────────────────────────────────────
     const pideConsultarTurno = 
         normText.includes('a que hora') ||
@@ -1032,6 +979,9 @@ export async function procesarMensajeAutonomo({
         normText.includes('pasar la direccion') ||
         normText.includes('pasarias la direccion') ||
         normText.includes('ir hoy al turno') ||
+        normText.includes('en que lugar') ||
+        normText.includes('que lugar') ||
+        normText.includes('como llegar') ||
         buttonPayload === 'FAQ_UBICACION' ||
         buttonPayload === 'MENU_INFO_GENERAL'
 
@@ -1129,6 +1079,65 @@ export async function procesarMensajeAutonomo({
             { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
         ], { ...trackingBase, accion: 'faq_precios' })
         return { handled: true, action: 'faq_precios' }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 6.A (RC6) RADAR: SACAR TURNO / DISPONIBILIDAD CONVERSACIONAL
+    // Se evalúa DESPUÉS de "consultar mi turno" y de las FAQ, así una
+    // pregunta por un turno existente o por precio/obra social/ubicación no
+    // dispara la oferta de slots nuevos. Se quitó 'lugar' (va a Ubicación).
+    // ─────────────────────────────────────────────────────────────
+    const pideTurno =
+        normText.includes('sacar turno') ||
+        normText.includes('pedir turno') ||
+        normText.includes('quiero turno') ||
+        normText.includes('nuevo turno') ||
+        normText.includes('agendar') ||
+        normText.includes('consulta') ||
+        normText.includes('turno') ||
+        normText.includes('atenderme') ||
+        normText.includes('hacerme ver') ||
+        normText.includes('horario disponible') ||
+        buttonPayload === 'SACAR_TURNO_NUEVO' ||
+        buttonPayload === 'MENU_TURNOS'
+
+    if (pideTurno) {
+        console.log(`[WA AUTO-FLOW] Petición de turno conversacional por ${cleanPhone}...`)
+
+        // Obtener los 3 primeros slots reales sin superposición
+        const slotsCandidatos = await obtenerProximosTresSlots(tenant?.slug || 'alvarez')
+
+        if (slotsCandidatos.length > 0) {
+            const listaTxt = slotsCandidatos.map((s, idx) => `${idx + 1}️⃣ *${s.fechaLegible}*`).join('\n')
+
+            const textoPropuesta = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+                `Para que elijas el que más cómodo te quede, estos son los primeros horarios disponibles más cercanos:\n\n` +
+                `${listaTxt}\n\n` +
+                `👇 *Tocá el botón del horario que prefieras:*`
+
+            const botonesSlots = slotsCandidatos.map(s => ({
+                id: s.payload,
+                title: s.btnTitulo
+            }))
+
+            await enviarBotonesWhatsApp(creds, cleanPhone, textoPropuesta, botonesSlots, {
+                ...trackingBase,
+                accion: 'ofrecidos_slots_conversacionales'
+            })
+            return { handled: true, action: 'ofrecidos_slots_conversacionales' }
+        } else {
+            // Fallback si no hay slots en los próximos días
+            const msgSinSlots = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+                `En este momento los primeros días están completos. Podés ver las semanas siguientes en nuestro portal digital:\n` +
+                `👉 ${reservaUrl}\n\n` +
+                `O si tenés dolor, podés activar la guardia de urgencia:`
+
+            await enviarBotonesWhatsApp(creds, cleanPhone, msgSinSlots, [
+                { id: 'ACTIVAR_GUARDIA_URGENCIA', title: '🚨 Tengo Urgencia' },
+                { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
+            ], { ...trackingBase, accion: 'sin_slots_link_portal' })
+            return { handled: true, action: 'sin_slots_link_portal' }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
