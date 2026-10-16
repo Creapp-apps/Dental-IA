@@ -514,6 +514,14 @@ export async function notificarTurnoPorWhatsApp(
             return
         }
 
+        // RC10: no enviar recordatorios de turnos cuya fecha ya pasó (evita
+        // "te recordamos tu turno del [fecha vencida]"). Solo aplica a recordatorios
+        // proactivos; las respuestas a acciones del paciente no se bloquean.
+        if (templateName === 'solicitud_turnos' && new Date(turno.fecha_inicio).getTime() < Date.now()) {
+            console.log(`[WA LOG] ⏭️ Turno ${turnoId} ya pasó (${turno.fecha_inicio}). No se envía recordatorio.`)
+            return
+        }
+
         const waCreds = await getWhatsAppCredentialsForTenant(turno.tenant_id)
         if (!waCreds) {
             console.log(`[WA LOG] ⚠️ No hay credenciales de WhatsApp configuradas o activas para el consultorio ${turno.tenant_id}.`)
@@ -553,7 +561,7 @@ export async function notificarTurnoPorWhatsApp(
         if (templateName === 'aviso_ausencia') {
             // Cuerpo: Hola {{1}}! Notamos que no pudiste asistir a tu turno de hoy a las {{2}} con el Dr. {{3}}... (3 params)
             parameters = [
-                { type: 'text', text: pct.nombre },
+                { type: 'text', text: (pct.nombre || '').trim() },
                 { type: 'text', text: horaStr },
                 { type: 'text', text: nombreProf }
             ]
@@ -564,8 +572,8 @@ export async function notificarTurnoPorWhatsApp(
                 tratamiento = tratamiento.toUpperCase()
             }
             parameters = [
-                { type: 'text', text: pct.nombre },
-                { type: 'text', text: tratamiento },
+                { type: 'text', text: (pct.nombre || '').trim() },
+                { type: 'text', text: tratamiento.trim() },
                 { type: 'text', text: fechaStrFormatted },
                 { type: 'text', text: horaStr },
                 { type: 'text', text: nombreProf }
@@ -574,7 +582,7 @@ export async function notificarTurnoPorWhatsApp(
             // templateName: 'turno_cancelado' | 'turno_reprogramado' (4 params)
             // Cuerpo: Hola {{1}}! ... turno para el dia {{2}} a las {{3}} con el Dr. {{4}}...
             parameters = [
-                { type: 'text', text: pct.nombre },
+                { type: 'text', text: (pct.nombre || '').trim() },
                 { type: 'text', text: fechaStrFormatted },
                 { type: 'text', text: horaStr },
                 { type: 'text', text: nombreProf }
@@ -779,7 +787,7 @@ export async function enviarRecordatorioManual(turnoId: string) {
                         {
                             type: 'body',
                             parameters: [
-                                { type: 'text', text: pct.nombre },
+                                { type: 'text', text: (pct.nombre || '').trim() },
                                 { type: 'text', text: fechaStrFormatted },
                                 { type: 'text', text: horaStr },
                                 { type: 'text', text: nombreProf }

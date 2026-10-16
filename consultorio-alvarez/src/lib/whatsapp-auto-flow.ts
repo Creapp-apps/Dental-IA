@@ -626,8 +626,13 @@ export async function procesarMensajeAutonomo({
     // ─────────────────────────────────────────────────────────────
     // PARCHE 1: ACUSE DE RECIBO INTELIGENTE DE FOTOS / ESTUDIOS
     // ─────────────────────────────────────────────────────────────
-    if (textBody.includes('[Foto adjunta]') || textBody.includes('📷') || (normText.includes('foto') && (normText.includes('envio') || normText.includes('adjunt') || normText.includes('mando')))) {
-        console.log(`[WA AUTO-FLOW] Foto o estudio recibido de ${cleanPhone}. Acusando recibo y alertando recepción...`)
+    if (
+        textBody.includes('[Foto adjunta]') || textBody.includes('📷') ||
+        textBody.includes('[Documento adjunto]') || textBody.includes('📄') ||
+        textBody.includes('[Video adjunto]') || textBody.includes('🎥') ||
+        (normText.includes('foto') && (normText.includes('envio') || normText.includes('adjunt') || normText.includes('mando')))
+    ) {
+        console.log(`[WA AUTO-FLOW] Archivo (foto/estudio/documento) recibido de ${cleanPhone}. Acusando recibo y alertando recepción...`)
         
         if (conversacionId) {
             await admin.from('whatsapp_conversaciones').update({
@@ -650,8 +655,8 @@ export async function procesarMensajeAutonomo({
             await sendPushToRole('admin', tenantId, '📸 Foto Clínica Recibida', `Paciente +${cleanPhone} envió una foto por WhatsApp.`, '/mensajes')
         } catch (e) {}
 
-        const msgFoto = `¡Foto recibida correctamente! 📸✨\n\n` +
-            `Ya la adjuntamos a tu ficha médica para que el equipo odontológico pueda verla y evaluarla.\n` +
+        const msgFoto = `¡Recibido correctamente! 📎✨\n\n` +
+            `Ya lo adjuntamos a tu ficha para que el equipo odontológico pueda verlo y evaluarlo.\n` +
             `Un profesional o asesor de nuestro equipo te responderá a la brevedad por este medio.`
 
         await enviarTextoWhatsApp(creds, cleanPhone, msgFoto, {

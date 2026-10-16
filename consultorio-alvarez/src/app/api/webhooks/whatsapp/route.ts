@@ -169,7 +169,10 @@ export async function POST(request: NextRequest) {
         } else if (type === 'video') {
             textBody = message.video?.caption?.trim() || '🎥 [Video adjunto]'
         } else if (type === 'document') {
-            textBody = message.document?.filename || '📄 [Documento adjunto]'
+            // No usamos el nombre del archivo como texto de intención: evita que una
+            // fecha en el nombre (ej. "comprobante-15-10-2026.pdf") se interprete
+            // como un DNI o dispare flujos equivocados.
+            textBody = '📄 [Documento adjunto]'
         }
 
         console.log(`📱 Mensaje recibido de ${from}. Tipo: ${type}. Payload: "${buttonPayload}". Texto: "${textBody}". Fallback de botón: "${buttonTextFallback}"`)
