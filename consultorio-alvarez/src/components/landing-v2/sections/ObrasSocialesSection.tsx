@@ -46,9 +46,9 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                         initial={{ opacity: 0, y: 20 }}
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true, margin: "-100px" }}
-                        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-500/15 text-teal-300 border border-teal-500/30 text-xs font-semibold uppercase tracking-wider mb-6"
+                        className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-teal-50 text-teal-700 border border-teal-200 text-xs font-semibold uppercase tracking-wider mb-6"
                     >
-                        <ShieldCheck className="h-4 w-4 text-teal-400" />
+                        <ShieldCheck className="h-4 w-4 text-teal-600" />
                         Coberturas Médicas
                     </motion.div>
                     
@@ -57,7 +57,7 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true, margin: "-100px" }}
                         transition={{ delay: 0.1 }}
-                        className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-white leading-tight"
+                        className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 leading-tight"
                     >
                         Obras Sociales y Prepagas
                     </motion.h2>
@@ -66,7 +66,7 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                         whileInView={{ opacity: 1, y: 0 }}
                         viewport={{ once: true, margin: "-100px" }}
                         transition={{ delay: 0.2 }}
-                        className="mt-4 text-base sm:text-lg leading-relaxed text-slate-300 font-medium max-w-lg mx-auto"
+                        className="mt-4 text-base sm:text-lg leading-relaxed text-slate-600 font-medium max-w-lg mx-auto"
                     >
                         {config?.coberturas_subtitulo || 'Trabajamos con las principales coberturas del país para brindarte la mejor atención médica sin preocupaciones.'}
                     </motion.p>
@@ -83,31 +83,31 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                                 whileInView={{ opacity: 1, y: 0 }}
                                 viewport={{ once: true, margin: "-50px" }}
                                 transition={{ delay: Math.min(index * 0.1, 0.5) }}
-                                className="group relative rounded-3xl border border-white/15 bg-white/10 p-8 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-teal-400/50 hover:bg-white/15 shadow-2xl flex flex-col h-full"
+                                className="group relative rounded-3xl border border-slate-200 bg-white/70 p-8 backdrop-blur-xl transition-all duration-300 hover:-translate-y-1.5 hover:border-teal-400/60 hover:bg-white/90 shadow-xl flex flex-col h-full"
                             >
                                 <div className="flex items-center gap-4 mb-6">
-                                    <div className="h-12 w-12 rounded-2xl bg-white/10 border border-white/15 flex items-center justify-center text-teal-300 group-hover:scale-105 group-hover:bg-teal-500/20 group-hover:text-teal-200 transition-all duration-300">
+                                    <div className="h-12 w-12 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-600 group-hover:scale-105 group-hover:bg-teal-100 group-hover:text-teal-700 transition-all duration-300">
                                         <ShieldCheck className="h-6 w-6" />
                                     </div>
-                                    <h3 className="text-xl font-extrabold text-white group-hover:text-teal-300 transition-colors">
+                                    <h3 className="text-xl font-extrabold text-slate-900 group-hover:text-teal-600 transition-colors">
                                         {obra.nombre}
                                     </h3>
                                 </div>
                                 
                                 {planes.length > 0 ? (
-                                    <div className="flex flex-wrap gap-2 mt-auto pt-4 border-t border-white/10">
+                                    <div className="flex flex-wrap gap-2 mt-auto pt-4 border-t border-slate-200">
                                         {planes.map((plan: string, i: number) => (
-                                            <span 
-                                                key={i} 
-                                                className="inline-flex items-center rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-slate-200 border border-white/10"
+                                            <span
+                                                key={i}
+                                                className="inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 border border-slate-200"
                                             >
                                                 {plan}
                                             </span>
                                         ))}
                                     </div>
                                 ) : (
-                                    <div className="mt-auto pt-4 border-t border-white/10">
-                                        <p className="text-xs text-slate-400 font-medium italic">Todos los planes</p>
+                                    <div className="mt-auto pt-4 border-t border-slate-200">
+                                        <p className="text-xs text-slate-500 font-medium italic">Todos los planes</p>
                                     </div>
                                 )}
                             </motion.div>
@@ -122,7 +122,7 @@ export function ObrasSocialesSection({ config, obrasSociales }: ObrasSocialesSec
                             whileInView={{ opacity: 1, y: 0 }}
                             viewport={{ once: true }}
                             onClick={() => setShowModal(true)}
-                            className="inline-flex items-center gap-2 rounded-full bg-white/15 border border-white/20 px-8 py-3.5 text-sm font-bold text-white hover:bg-white/25 hover:scale-105 active:scale-95 cursor-pointer shadow-xl backdrop-blur-md transition-all"
+                            className="inline-flex items-center gap-2 rounded-full bg-slate-900 border border-slate-900 px-8 py-3.5 text-sm font-bold text-white hover:bg-slate-800 hover:scale-105 active:scale-95 cursor-pointer shadow-xl transition-all"
                         >
                             Ver todas las obras sociales ({obrasSociales.length})
                         </motion.button>
