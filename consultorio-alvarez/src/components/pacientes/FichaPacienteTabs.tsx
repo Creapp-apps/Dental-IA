@@ -76,6 +76,9 @@ export function FichaPacienteTabs({
 }: FichaPacienteTabsProps) {
     const [tab, setTab] = useState<TabId>('consulta')
     const [cachedData, setCachedData] = useState<LocalFichaReciente | null>(null)
+    // Respaldo offline del conteo de ausencias desde Dexie (ventana -90d). El
+    // histórico completo llega del server (props) y tiene prioridad.
+    const [ausenciasLocal, setAusenciasLocal] = useState<{ total: number; confirmadas: number } | null>(null)
 
     // Cargar ficha desde IndexedDB si estamos offline o como respaldo instantáneo
     useEffect(() => {
@@ -85,6 +88,18 @@ export function FichaPacienteTabs({
                 setCachedData(cached)
             }
         }).catch((err) => console.warn('Error leyendo ficha desde IndexedDB:', err))
+    }, [pacienteId])
+
+    // Conteo local de ausencias (respaldo offline del server).
+    useEffect(() => {
+        if (!pacienteId) return
+        let vivo = true
+        localDb.turnos.where('paciente_id').equals(pacienteId).toArray().then((ts) => {
+            if (!vivo) return
+            const aus = ts.filter(t => t.estado === 'AUSENTE')
+            setAusenciasLocal({ total: aus.length, confirmadas: aus.filter(t => t.fue_confirmado).length })
+        }).catch(() => {})
+        return () => { vivo = false }
     }, [pacienteId])
 
     // Guardar o actualizar la ficha en IndexedDB automáticamente (Stale-While-Revalidate)
@@ -111,6 +126,10 @@ export function FichaPacienteTabs({
             }).catch(err => console.warn('Error guardando ficha en IndexedDB:', err))
         }
     }, [pacienteId, turnos, historial, odontograma, presupuestos, adjuntos, escaneos3d])
+
+    const usarServerAusencias = ausencias > 0
+    const ausenciasShow = usarServerAusencias ? ausencias : (ausenciasLocal?.total ?? 0)
+    const ausenciasConfirmadasShow = usarServerAusencias ? ausenciasConfirmadas : (ausenciasLocal?.confirmadas ?? 0)
 
     const effectiveTurnos = (turnos && turnos.length > 0) ? turnos : (cachedData?.turnos ?? [])
     const effectiveHistorial = (historial && historial.length > 0) ? historial : (cachedData?.historial ?? [])
@@ -159,7 +178,7 @@ export function FichaPacienteTabs({
                 >
                     {tab === 'consulta' && <TabConsulta motivoConsulta={motivoConsulta} />}
                     {tab === 'antecedentes_salud' && <AntecedentesSaludTab pacienteId={pacienteId} inicial={antecedentesSalud} />}
-                    {tab === 'turnos' && <TabTurnos turnos={effectiveTurnos} ausencias={ausencias} ausenciasConfirmadas={ausenciasConfirmadas} />}
+                    {tab === 'turnos' && <TabTurnos turnos={effectiveTurnos} ausencias={ausenciasShow} ausenciasConfirmadas={ausenciasConfirmadasShow} />}
                     {tab === 'evoluciones' && (
                         <TabEvoluciones
                             pacienteId={pacienteId}
