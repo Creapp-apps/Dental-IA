@@ -10,14 +10,18 @@ export interface TriageItem {
     prioridad_agenda: number
 }
 
+// Palabras que indican dolor/urgencia odontológica real. Se quitaron términos
+// demasiado amplios o ambiguos que generaban falsos positivos: "muela" (pedido
+// rutinario de turno), "golpe"/"accidente" (suelen ser logística para no asistir,
+// atendidos por el flujo de impedimento) y "bracket"/"alambre" (molestia leve).
 const PALABRAS_CLAVE_URGENCIA = [
     'urgencia',
     'urgente',
     'guardia',
-    'dolor',
-    'muela',
-    'duele',
     'emergencia',
+    'dolor',
+    'duele',
+    'me duele',
     'sangre',
     'sangrado',
     'fractura',
@@ -29,11 +33,12 @@ const PALABRAS_CLAVE_URGENCIA = [
     'flemon',
     'hinchado',
     'hinchazon',
-    'bracket',
-    'alambre',
-    'accidente',
-    'golpe',
-    'calmante'
+    'absceso',
+    'pus',
+    'calmante',
+    'no aguanto',
+    'no soporto',
+    'punzante'
 ]
 
 /**

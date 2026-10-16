@@ -14,7 +14,7 @@ import {
     enviarMenuTriageWhatsApp, 
     enviarTipsYPropuestaTurno 
 } from '@/lib/whatsapp-guardia'
-import { procesarMensajeAutonomo, enviarMenuPrincipalAutonomo } from '@/lib/whatsapp-auto-flow'
+import { procesarMensajeAutonomo, enviarMenuPrincipalAutonomo, enviarTextoWhatsApp } from '@/lib/whatsapp-auto-flow'
 
 
 // GET: Webhook Verification (Meta Verification Challenge)
@@ -548,6 +548,35 @@ export async function POST(request: NextRequest) {
 
             const waCreds = await getWhatsAppCredentialsForTenant(tenantId)
 
+            // RC4: deriva una urgencia/dolor a un humano cuando NO hay triage
+            // configurado. Nunca dejamos un dolor en el menú genérico ni en silencio.
+            const derivarUrgenciaAHumano = async (motivoTexto: string) => {
+                if (conversacionId) {
+                    await admin.from('whatsapp_conversaciones')
+                        .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                        .eq('id', conversacionId)
+                }
+                await admin.from('notificaciones').insert({
+                    tenant_id: tenantId,
+                    titulo: '🚨 Urgencia / Dolor — atención inmediata',
+                    mensaje: `Paciente (+${cleanPhone}): "${(motivoTexto || '').slice(0, 120)}"`,
+                    tipo: 'turno_reprogramado',
+                    referencia_id: conversacionId || '',
+                    leida: false
+                })
+                try {
+                    const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                    await sendPushToRole('admin', tenantId, '🚨 Urgencia odontológica', `Paciente (+${cleanPhone}) reporta dolor/urgencia por WhatsApp.`, '/mensajes')
+                    await sendPushToRole('profesional', tenantId, '🚨 Urgencia odontológica', `Paciente (+${cleanPhone}) reporta dolor/urgencia por WhatsApp.`, '/mensajes')
+                } catch {}
+                if (waCreds) {
+                    await enviarTextoWhatsApp(waCreds, cleanPhone,
+                        `🚨 Recibimos tu urgencia. Un profesional de nuestro equipo te va a contactar lo antes posible por este chat.\n\nSi el dolor es muy intenso o hay sangrado que no cede, por favor acercate a una guardia médica.`,
+                        conversacionId ? { tenantId, conversacionId, accion: 'urgencia_derivada_humano' } : undefined
+                    )
+                }
+            }
+
             // 2. Si el paciente presiona el botón "🚨 Urgencia / Guardia"
             if (buttonPayload === 'ACTIVAR_GUARDIA_URGENCIA' && waCreds) {
                 console.log(`[WA WEBHOOK] Paciente ${from} activó protocolo de Guardia por botón Quick Reply.`)
@@ -580,6 +609,9 @@ export async function POST(request: NextRequest) {
                     )
                     return NextResponse.json({ success: true })
                 }
+                // RC4: sin triage configurado, no caemos al menú: derivamos la urgencia.
+                await derivarUrgenciaAHumano('Activó el botón de Urgencia / Guardia')
+                return NextResponse.json({ success: true })
             }
 
             // 3. Si el paciente solicita hablar con una recepcionista
@@ -751,6 +783,11 @@ export async function POST(request: NextRequest) {
                         return NextResponse.json({ success: true })
                     }
                 }
+                // RC4: urgencia/dolor SIN triage configurado (o si falló el envío) no
+                // debe terminar en el menú genérico: se deriva a un humano con acuse.
+                console.log(`[WA WEBHOOK] Urgencia de ${from} sin triage disponible. Derivando a humano.`)
+                await derivarUrgenciaAHumano(textToAnalyze)
+                return NextResponse.json({ success: true })
             }
 
             // 8. Procesamiento conversacional autónomo (DNI, Turnos, FAQs de Ubicación/Precios/Obras Sociales, Menús)
