@@ -17,14 +17,12 @@ import type { LandingConfig } from '@/lib/types/landing'
 
 gsap.registerPlugin(ScrollTrigger)
 
-function getBackground(progress: number, bgHero = '#f0fdfa', bgDark = '#0b1525'): string {
-    if (progress < 0.50) {
-        return bgHero
-    } else if (progress < 0.75) {
-        return bgDark
-    } else {
-        return bgHero
-    }
+function getBackground(_progress: number, bgHero = '#f0fdfa', _bgDark = '#0b1525'): string {
+    // Fondo UNIFICADO: una sola base clara durante todo el scroll. El movimiento
+    // de color lo aporta el MeshGradient (orbes difusos). Antes conmutaba
+    // claro→oscuro→claro por scroll, lo que generaba cortes rectos y dejaba
+    // texto blanco (secciones Profesionales / Obras Sociales) sobre fondo claro.
+    return bgHero
 }
 
 interface LandingPageClientProps {
