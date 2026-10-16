@@ -441,7 +441,7 @@ export async function procesarMensajeAutonomo({
     const baseUrl = tenant?.custom_domain
         ? `https://${tenant.custom_domain}`
         : `https://dentalia.com.ar`
-    const reservaUrl = `${baseUrl}/reservar?slug=${tenant?.slug || 'alvarez'}`
+    const reservaUrl = `${baseUrl}/reservar?slug=${tenant?.slug || ''}`
 
     // ─────────────────────────────────────────────────────────────
     // ESTADO CONVERSACIONAL EN CURSO (Máquina de estados de reserva)
@@ -464,7 +464,7 @@ export async function procesarMensajeAutonomo({
         
         // Llamar a crearReservaPublica
         const resultado = await crearReservaPublica({
-            tenantSlug: tenant?.slug || 'alvarez',
+            tenantSlug: tenant?.slug || '',
             fecha: estadoActivo.fecha,
             hora: estadoActivo.hora,
             profesionalId: null, // Asignación automática inteligente
@@ -608,7 +608,7 @@ export async function procesarMensajeAutonomo({
         const fechaLegible = `${diasAbrev[dateObj.getDay()]} ${diaNum} de ${meses[m - 1]} a las ${hora} hs`
 
         const resultado = await crearReservaPublica({
-            tenantSlug: tenant?.slug || 'alvarez',
+            tenantSlug: tenant?.slug || '',
             fecha,
             hora,
             profesionalId: null,
@@ -1151,7 +1151,7 @@ export async function procesarMensajeAutonomo({
         console.log(`[WA AUTO-FLOW] Petición de turno conversacional por ${cleanPhone}...`)
 
         // Obtener los 3 primeros slots reales sin superposición
-        const slotsCandidatos = await obtenerProximosTresSlots(tenant?.slug || 'alvarez')
+        const slotsCandidatos = await obtenerProximosTresSlots(tenant?.slug || '')
 
         if (slotsCandidatos.length > 0) {
             const listaTxt = slotsCandidatos.map((s, idx) => `${idx + 1}️⃣ *${s.fechaLegible}*`).join('\n')
