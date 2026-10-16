@@ -662,9 +662,49 @@ export async function procesarMensajeAutonomo({
     }
 
     // ─────────────────────────────────────────────────────────────
+    // PARCHE 2.A (RC5): NÚMERO EQUIVOCADO / OPT-OUT
+    // El contacto dice que el número no corresponde o que no pidió turno.
+    // No seguimos con flujos automáticos: derivamos a un humano para corregir
+    // el contacto y dejamos de responder automáticamente a esta conversación.
+    // ─────────────────────────────────────────────────────────────
+    const esNumeroEquivocado =
+        normText.includes('numero equivocado') ||
+        normText.includes('numero incorrecto') ||
+        normText.includes('se confundieron de numero') ||
+        normText.includes('se equivocaron de numero') ||
+        normText.includes('equivocaron de numero') ||
+        normText.includes('esta mal el telefono') ||
+        normText.includes('esta mal el numero') ||
+        normText.includes('no pedi ningun turno') ||
+        normText.includes('no pedi turno') ||
+        normText.includes('no soy ')
+
+    if (esNumeroEquivocado) {
+        console.log(`[WA AUTO-FLOW] Posible número equivocado / opt-out de ${cleanPhone}. Derivando a humano.`)
+        if (conversacionId) {
+            await admin.from('whatsapp_conversaciones').update({
+                estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+            }).eq('id', conversacionId)
+        }
+        await admin.from('notificaciones').insert({
+            tenant_id: tenantId,
+            titulo: '⚠️ Número equivocado — verificar contacto',
+            mensaje: `El contacto (+${cleanPhone}) indica que el número no corresponde: "${textBody.slice(0, 120)}". Revisar/corregir el teléfono del paciente para no seguir contactándolo.`,
+            tipo: 'turno_reprogramado',
+            referencia_id: conversacionId || '',
+            leida: false
+        })
+        await enviarTextoWhatsApp(creds, cleanPhone,
+            `¡Gracias por avisar y disculpá la molestia! 🙏 Le pasamos esto a una persona de nuestro equipo para corregir el contacto.`,
+            { ...trackingBase, accion: 'numero_equivocado_derivado' }
+        )
+        return { handled: true, action: 'numero_equivocado_derivado' }
+    }
+
+    // ─────────────────────────────────────────────────────────────
     // PARCHE 2: CORTESÍA Y AGRADECIMIENTOS (Cierre cálido sin loops)
     // ─────────────────────────────────────────────────────────────
-    const esAgradecimiento = 
+    const esAgradecimiento =
         normText === 'gracias' ||
         normText === 'muchas gracias' ||
         normText === 'muchas gracias!' ||
