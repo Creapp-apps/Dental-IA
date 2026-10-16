@@ -154,6 +154,35 @@ export async function crearTurno(formData: {
     return { data }
 }
 
+// Resumen de asistencia de un paciente para avisar al cargar un nuevo turno:
+// cuántas veces faltó, cuántas de esas habiendo confirmado, y si su último turno
+// pasado fue una ausencia. Read-only, acotado al tenant.
+export async function resumenAsistenciaPaciente(pacienteId: string) {
+    const { ok, actor, error: denied } = await requireActor()
+    if (!ok) return { error: denied }
+
+    const admin = createAdminClient()
+    const tenantId = actor.tenantId
+    const ahora = new Date().toISOString()
+
+    const [ausenciasRes, ausConfirmadasRes, ultimoRes] = await Promise.all([
+        admin.from('turnos').select('id', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId).eq('paciente_id', pacienteId).eq('estado', 'AUSENTE'),
+        admin.from('turnos').select('id', { count: 'exact', head: true })
+            .eq('tenant_id', tenantId).eq('paciente_id', pacienteId).eq('estado', 'AUSENTE').eq('fue_confirmado', true),
+        // Último turno ya transcurrido (fecha pasada), para saber cómo le fue la última vez.
+        admin.from('turnos').select('estado, fecha_inicio, fue_confirmado')
+            .eq('tenant_id', tenantId).eq('paciente_id', pacienteId).lt('fecha_inicio', ahora)
+            .order('fecha_inicio', { ascending: false }).limit(1).maybeSingle(),
+    ])
+
+    return {
+        ausencias: ausenciasRes.count ?? 0,
+        ausenciasConfirmadas: ausConfirmadasRes.count ?? 0,
+        ultimo: ultimoRes.data ?? null,
+    }
+}
+
 export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
     const { ok, actor, error: denied } = await requireActor()
     if (!ok) return { error: denied }
