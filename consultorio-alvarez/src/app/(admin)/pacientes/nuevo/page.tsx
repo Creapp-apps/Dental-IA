@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getObrasSociales, getCurrentUsuario } from '@/lib/supabase/queries'
+import { getObrasSociales, getCurrentUsuario, getProfesionales } from '@/lib/supabase/queries'
 import { FormPacienteReal } from '@/components/pacientes/FormPacienteReal'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -11,7 +11,10 @@ export default async function NuevoPacientePage() {
         redirect('/agenda')
     }
 
-    const obrasSociales = await getObrasSociales()
+    const [obrasSociales, profesionales] = await Promise.all([
+        getObrasSociales(),
+        getProfesionales(true),
+    ])
 
     return (
         <div className="space-y-6 max-w-2xl mx-auto">
@@ -21,7 +24,7 @@ export default async function NuevoPacientePage() {
                 </Link>
                 <h1 className="text-2xl font-bold text-foreground">Nuevo paciente</h1>
             </div>
-            <FormPacienteReal obrasSociales={obrasSociales} />
+            <FormPacienteReal obrasSociales={obrasSociales} profesionales={profesionales} />
         </div>
     )
 }
