@@ -31,6 +31,8 @@ import {
     Loader2,
     CreditCard,
     ShieldCheck,
+    Users,
+    X,
 } from 'lucide-react'
 import { glassAlert } from '@/components/ui/glass-alert'
 
@@ -277,6 +279,12 @@ function StepProfessional({
     // verificar (foto grande + nombre) que es el profesional correcto antes de
     // avanzar. Evita reservar con el profesional equivocado por confusión.
     const [pendingPro, setPendingPro] = useState<Professional | null>(null)
+    // Modal con la cartilla completa cuando hay muchos profesionales (se muestran
+    // 3 inline + botón "Ver todos" para no armar una lista vertical interminable).
+    const [showAllPros, setShowAllPros] = useState(false)
+    const MAX_INLINE_PROS = 3
+    const prosInline = professionals.slice(0, MAX_INLINE_PROS)
+    const hayMasPros = professionals.length > MAX_INLINE_PROS
 
     if (loading) {
         return (
@@ -319,7 +327,7 @@ function StepProfessional({
                     </div>
                 </button>
 
-                {professionals.map((p) => {
+                {prosInline.map((p) => {
                     const isSelected = selected === p.id
                     const initials = `${p.nombre[0]}${p.apellido[0]}`
                     return (
@@ -365,7 +373,80 @@ function StepProfessional({
                         </button>
                     )
                 })}
+
+                {hayMasPros && (
+                    <button
+                        type="button"
+                        onClick={() => setShowAllPros(true)}
+                        className="rounded-xl border-2 border-dashed border-white/20 p-3.5 text-sm font-semibold text-white/90 hover:border-white/40 hover:bg-white/5 transition-all cursor-pointer flex items-center justify-center gap-2"
+                    >
+                        <Users className="h-4 w-4" />
+                        Ver todos los profesionales ({professionals.length})
+                    </button>
+                )}
             </div>
+
+            {/* Modal con la cartilla completa de profesionales */}
+            {typeof document !== 'undefined' && createPortal(
+                <AnimatePresence>
+                    {showAllPros && (
+                        <motion.div
+                            className="fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            onClick={() => setShowAllPros(false)}
+                        >
+                            <motion.div
+                                className="w-full max-w-md rounded-3xl bg-white shadow-2xl flex flex-col max-h-[85vh] overflow-hidden"
+                                initial={{ opacity: 0, scale: 0.92, y: 18 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.92, y: 18 }}
+                                transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
+                                <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100 shrink-0">
+                                    <h3 className="text-base font-extrabold text-slate-900">Todos los profesionales disponibles</h3>
+                                    <button
+                                        onClick={() => setShowAllPros(false)}
+                                        className="p-2 -mr-2 rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
+                                        aria-label="Cerrar"
+                                    >
+                                        <X className="h-5 w-5" />
+                                    </button>
+                                </div>
+                                <div className="overflow-y-auto px-4 py-4 flex flex-col gap-2.5">
+                                    {professionals.map((p) => (
+                                        <button
+                                            key={p.id}
+                                            onClick={() => { setShowAllPros(false); setPendingPro(p) }}
+                                            className="text-left rounded-2xl border border-slate-200 p-3.5 hover:border-slate-300 hover:bg-slate-50 transition-all cursor-pointer flex items-center gap-3"
+                                        >
+                                            <div
+                                                className="h-11 w-11 relative overflow-hidden rounded-full flex items-center justify-center font-bold text-sm text-white shrink-0 shadow-sm"
+                                                style={{ backgroundColor: (p as any).color || '#0d9488' }}
+                                            >
+                                                {((p as any).avatar_url || (p as any).foto_url) ? (
+                                                    /* eslint-disable-next-line @next/next/no-img-element */
+                                                    <img src={(p as any).avatar_url || (p as any).foto_url} alt={`Dr/a. ${p.nombre}`} className="w-full h-full object-cover" />
+                                                ) : (
+                                                    `${p.nombre[0]}${p.apellido[0]}`
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="font-semibold text-sm text-slate-900 truncate">Dr/a. {p.nombre} {p.apellido}</p>
+                                                {p.especialidad && <p className="text-xs text-slate-500 truncate">{p.especialidad}</p>}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
+            )}
 
             {/* Modal central de confirmación de profesional.
                 Se renderiza con portal a document.body para escapar del contenedor
