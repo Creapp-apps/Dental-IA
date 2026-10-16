@@ -2664,6 +2664,7 @@ export function AgendaView({
                 onAdd20Minutes={handleExtend20Minutes}
                 landingConfig={landingConfig}
                 onImprimirTicket={handleImprimirTicket}
+                profesionales={profesionales}
             />
 
             {/* Modal de Búsqueda Rápida de Turnos */}
@@ -3251,6 +3252,7 @@ interface TurnoDetailModalProps {
     onAdd20Minutes?: (id: string) => void
     landingConfig?: any
     onImprimirTicket: (turno: any) => void
+    profesionales?: any[]
 }
 
 function TurnoDetailModal({
@@ -3265,6 +3267,7 @@ function TurnoDetailModal({
     onAdd20Minutes,
     landingConfig,
     onImprimirTicket,
+    profesionales = [],
 }: TurnoDetailModalProps) {
     const [isSendingReminder, setIsSendingReminder] = useState(false)
 
@@ -3272,6 +3275,10 @@ function TurnoDetailModal({
     const estado = turno.estado as EstadoTurno
     const isST = turno.es_sobreturno === true
     const esWeb = turno.origen === 'ONLINE'
+    // Distinción del profesional (alias para no confundirlo con otro de nombre
+    // parecido). El turno trae la relación sin este campo, así que se resuelve
+    // contra la lista completa del tenant.
+    const aclaracionProf = profesionales.find(p => p.id === turno.profesional_id)?.aclaracion_web
 
     const handleSendReminder = async () => {
         setIsSendingReminder(true)
@@ -3362,7 +3369,10 @@ function TurnoDetailModal({
                         )}
                         <div className="flex items-center gap-2">
                             <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: turno.profesional?.color_agenda }} />
-                            <span className="text-xs font-medium text-slate-200">Dr. {turno.profesional?.nombre} {turno.profesional?.apellido}</span>
+                            <span className="text-xs font-medium text-slate-200">
+                                Dr. {turno.profesional?.nombre} {turno.profesional?.apellido}
+                                {aclaracionProf && <span className="text-violet-300 font-normal"> — {aclaracionProf}</span>}
+                            </span>
                         </div>
                         <div className="flex items-center gap-2 pl-6 text-xs text-slate-400">
                             <Clock className="h-3.5 w-3.5" />
