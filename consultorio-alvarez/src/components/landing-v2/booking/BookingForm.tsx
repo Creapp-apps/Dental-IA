@@ -380,7 +380,6 @@ function StepProfessional({
                             animate={{ opacity: 1 }}
                             exit={{ opacity: 0 }}
                             transition={{ duration: 0.2 }}
-                            onClick={() => setPendingPro(null)}
                         >
                             <motion.div
                                 className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl"
