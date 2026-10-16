@@ -105,12 +105,9 @@ export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHer
     }
 
     return (
-        <section 
-            id="conocenos" 
+        <section
+            id="conocenos"
             className="w-full py-20 relative overflow-hidden select-none"
-            style={{
-                background: `linear-gradient(to bottom, ${bgHero || 'var(--landing-bg-hero, #f0fdfa)'}, #ffffff, ${bgHero || 'var(--landing-bg-hero, #f0fdfa)'})`
-            }}
         >
             {/* Background Ambient Glow */}
             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[500px] bg-primary/10 rounded-full blur-[140px] pointer-events-none" />
