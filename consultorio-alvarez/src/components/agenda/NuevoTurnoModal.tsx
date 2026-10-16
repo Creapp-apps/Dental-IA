@@ -20,6 +20,7 @@ import { Calendar } from '@/components/ui/calendar'
 import { GlassDatePicker } from '@/components/ui/glass-date-picker'
 import { crearTurno, editarTurno, getOcupacionProfesionalDia, resumenAsistenciaPaciente } from '@/lib/actions/turnos'
 import { crearPaciente, searchPacientesAction } from '@/lib/actions/pacientes'
+import { localDb } from '@/lib/offline/db'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { type PrioridadTratamiento, PRIORIDAD_LABEL } from '@/types'
 
@@ -222,18 +223,43 @@ export function NuevoTurnoModal({
         }
     }, [pacienteSearch, pacientes])
 
-    // Al elegir un paciente existente, traer su resumen de asistencia para avisar
-    // si suele faltar. En modo "paciente nuevo" no aplica.
+    // Al elegir un paciente existente, mostrar su resumen de asistencia para avisar
+    // si suele faltar. Híbrido local-first: primero se calcula desde el cache Dexie
+    // (instantáneo, offline, ventana de -90 días); luego, si hay red, se reconcilia
+    // con el total histórico exacto de Supabase. En modo "paciente nuevo" no aplica.
     useEffect(() => {
         if (!pacienteId || modoNuevoPaciente) {
             setResumenAsistencia(null)
             return
         }
         let vivo = true
+        let serverRespondio = false
+
+        // 1) Local (0ms): cuenta sobre los turnos ya cacheados en IndexedDB.
+        localDb.turnos.where('paciente_id').equals(pacienteId).toArray().then((locales) => {
+            // Si el server ya contestó (histórico completo), no lo pisamos con el local.
+            if (!vivo || serverRespondio || locales.length === 0) return
+            const ausentes = locales.filter(t => t.estado === 'AUSENTE')
+            const ahoraIso = new Date().toISOString()
+            const pasados = locales
+                .filter(t => t.fecha_inicio < ahoraIso)
+                .sort((a, b) => (a.fecha_inicio < b.fecha_inicio ? 1 : -1))
+            setResumenAsistencia({
+                ausencias: ausentes.length,
+                ausenciasConfirmadas: ausentes.filter(t => t.fue_confirmado).length,
+                ultimo: pasados[0] ?? null,
+            })
+        }).catch(() => { /* sin cache: espera al server */ })
+
+        // 2) Reconciliar con el histórico completo del server (best-effort).
         resumenAsistenciaPaciente(pacienteId).then((r) => {
             if (!vivo) return
-            if (r && !('error' in r)) setResumenAsistencia(r)
-        }).catch(() => { /* aviso best-effort: si falla, no se muestra */ })
+            if (r && !('error' in r)) {
+                serverRespondio = true
+                setResumenAsistencia(r)
+            }
+        }).catch(() => { /* offline o falla: queda el conteo local */ })
+
         return () => { vivo = false }
     }, [pacienteId, modoNuevoPaciente])
 
