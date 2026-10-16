@@ -273,18 +273,27 @@ export async function obtenerProximosTresSlots(tenantSlug: string): Promise<Arra
 /**
  * Busca si ya existe un paciente registrado con este teléfono para facilitarle la reserva en 1 solo clic.
  */
+// RC12: compara dos teléfonos por sus últimos 10 dígitos EXACTOS (área + número),
+// tolerando prefijos de país y el 9 de celular de Argentina. Antes se usaba
+// cleanPhone.includes(otro.slice(-8)), que cruzaba pacientes con terminaciones
+// parecidas (podía mostrar/cancelar el turno de otra persona).
+export function mismoTelefonoAR(a?: string | null, b?: string | null): boolean {
+    if (!a || !b) return false
+    const da = a.replace(/\D/g, '')
+    const db = b.replace(/\D/g, '')
+    if (da.length < 8 || db.length < 8) return false
+    return da.slice(-10) === db.slice(-10)
+}
+
 export async function buscarPacientePorTelefono(tenantId: string, phone: string) {
     const admin = createAdminClient()
-    const cleanPhone = phone.replace(/\D/g, '')
 
     const { data: pacientes } = await admin
         .from('pacientes')
         .select('id, nombre, apellido, dni, telefono')
         .eq('tenant_id', tenantId)
 
-    const match = (pacientes || []).find(p => 
-        p.telefono && cleanPhone.includes(p.telefono.replace(/\D/g, '').slice(-8))
-    )
+    const match = (pacientes || []).find(p => mismoTelefonoAR(phone, p.telefono))
 
     return match || null
 }
@@ -325,14 +334,13 @@ export async function buscarProximoTurnoPaciente(tenantId: string, phone: string
         const { data: turno } = await query.eq('paciente_id', pct.id).maybeSingle()
         return turno
     } else {
-        const cleanPhone = phone.replace(/\D/g, '')
         const { data: pacientes } = await admin
             .from('pacientes')
             .select('id, telefono')
             .eq('tenant_id', tenantId)
 
         const matchingIds = (pacientes || [])
-            .filter(p => p.telefono && cleanPhone.includes(p.telefono.replace(/\D/g, '').slice(-8)))
+            .filter(p => mismoTelefonoAR(phone, p.telefono))
             .map(p => p.id)
 
         if (matchingIds.length === 0) return null
