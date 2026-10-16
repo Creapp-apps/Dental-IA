@@ -391,7 +391,7 @@ function StepProfessional({
                                 onClick={(e) => e.stopPropagation()}
                             >
                         <div
-                            className="mx-auto mb-5 h-28 w-28 relative overflow-hidden rounded-full flex items-center justify-center text-4xl font-bold text-white shadow-lg ring-4 ring-slate-100"
+                            className="mx-auto mb-5 h-36 w-36 relative overflow-hidden rounded-full flex items-center justify-center text-5xl font-bold text-white shadow-lg ring-4 ring-slate-100"
                             style={{ backgroundColor: (pendingPro as any).color || '#0d9488' }}
                         >
                             {((pendingPro as any).avatar_url || (pendingPro as any).foto_url) ? (
