@@ -8,17 +8,43 @@ export interface WhatsAppCreds {
 }
 
 interface EstadoReservaConversacional {
-    paso: 'PIDIENDO_NOMBRE' | 'PIDIENDO_DNI'
+    paso: 'PIDIENDO_NOMBRE' | 'PIDIENDO_DNI' | 'SLOTS_OFRECIDOS'
     fecha: string
     hora: string
     fechaLegible: string
     nombre?: string
     apellido?: string
+    // Slots que se le ofrecieron (para mapear respuestas numéricas "1/2/3").
+    slots?: { payload: string }[]
     expiresAt: number
 }
 
-// Memoria de corto plazo para estados conversacionales (30 min TTL)
-const conversacionReservaMemory = new Map<string, EstadoReservaConversacional>()
+// RC8: el estado de la reserva conversacional se persiste por conversación en
+// whatsapp_conversaciones.reserva_contexto (jsonb). Antes era un Map en memoria
+// del proceso, que en serverless se pierde entre requests y cortaba el flujo.
+async function getReservaCtx(admin: any, conversacionId?: string): Promise<EstadoReservaConversacional | null> {
+    if (!conversacionId) return null
+    try {
+        const { data } = await admin
+            .from('whatsapp_conversaciones')
+            .select('reserva_contexto')
+            .eq('id', conversacionId)
+            .maybeSingle()
+        const ctx = (data?.reserva_contexto || null) as EstadoReservaConversacional | null
+        if (ctx && typeof ctx.expiresAt === 'number' && ctx.expiresAt > Date.now()) return ctx
+        return null
+    } catch { return null }
+}
+
+async function setReservaCtx(admin: any, conversacionId: string | undefined, ctx: EstadoReservaConversacional | null) {
+    if (!conversacionId) return
+    try {
+        await admin
+            .from('whatsapp_conversaciones')
+            .update({ reserva_contexto: ctx })
+            .eq('id', conversacionId)
+    } catch { /* no bloqueante */ }
+}
 
 /**
  * Normaliza texto para análisis de intenciones (minúsculas, sin acentos ni signos raros).
@@ -420,10 +446,7 @@ export async function procesarMensajeAutonomo({
     // ─────────────────────────────────────────────────────────────
     // ESTADO CONVERSACIONAL EN CURSO (Máquina de estados de reserva)
     // ─────────────────────────────────────────────────────────────
-    const estadoEnMemoria = conversacionReservaMemory.get(cleanPhone)
-    const estadoActivo = (estadoEnMemoria && estadoEnMemoria.expiresAt > Date.now()) 
-        ? estadoEnMemoria 
-        : null
+    const estadoActivo = await getReservaCtx(admin, conversacionId)
 
     // ── PASO 2: Paciente respondió su DNI (Confirmación final del turno) ──
     if (estadoActivo && estadoActivo.paso === 'PIDIENDO_DNI') {
@@ -452,7 +475,7 @@ export async function procesarMensajeAutonomo({
             es_nuevo: 'si'
         })
 
-        conversacionReservaMemory.delete(cleanPhone)
+        await setReservaCtx(admin, conversacionId, null)
 
         if ((resultado as any)?.error) {
             console.warn('[WA AUTO-FLOW] Conflicto o error al confirmar turno:', (resultado as any).error)
@@ -484,7 +507,7 @@ export async function procesarMensajeAutonomo({
         console.log(`[WA AUTO-FLOW] Nombre recibido: ${nombre} ${apellido}`)
 
         // Actualizar estado a PIDIENDO_DNI
-        conversacionReservaMemory.set(cleanPhone, {
+        await setReservaCtx(admin, conversacionId, {
             ...estadoActivo,
             paso: 'PIDIENDO_DNI',
             nombre,
@@ -499,9 +522,19 @@ export async function procesarMensajeAutonomo({
         return { handled: true, action: 'nombre_recibido_pidiendo_dni' }
     }
 
-    // ── CLIC EN BOTÓN DE SLOT DE RESERVA: SLOT_RES_YYYY-MM-DD_HH:MM ──
-    if (buttonPayload?.startsWith('SLOT_RES_')) {
-        const parts = buttonPayload.replace('SLOT_RES_', '').split('_')
+    // ── CLIC EN SLOT (botón SLOT_RES_...) o SELECCIÓN NUMÉRICA ("1"/"2"/"3") ──
+    // RC9: si el bot acaba de ofrecer slots y el paciente responde con un número,
+    // lo mapeamos al slot correspondiente que quedó guardado en el contexto.
+    let slotPayloadEfectivo = buttonPayload?.startsWith('SLOT_RES_') ? buttonPayload : ''
+    if (!slotPayloadEfectivo && estadoActivo?.paso === 'SLOTS_OFRECIDOS' && estadoActivo.slots?.length) {
+        const mNum = normText.match(/^(?:opcion\s*)?([123])$/)
+        if (mNum) {
+            slotPayloadEfectivo = estadoActivo.slots[Number(mNum[1]) - 1]?.payload || ''
+        }
+    }
+
+    if (slotPayloadEfectivo) {
+        const parts = slotPayloadEfectivo.replace('SLOT_RES_', '').split('_')
         const fecha = parts[0]
         const hora = parts[1]
 
@@ -516,7 +549,7 @@ export async function procesarMensajeAutonomo({
 
         if (pacienteExistente && pacienteExistente.dni) {
             // Ofrecer confirmación directa en 1 clic
-            conversacionReservaMemory.set(cleanPhone, {
+            await setReservaCtx(admin, conversacionId, {
                 paso: 'PIDIENDO_NOMBRE', // Por si decide ingresar otro
                 fecha,
                 hora,
@@ -541,7 +574,7 @@ export async function procesarMensajeAutonomo({
         }
 
         // Si es un paciente nuevo o no registrado: Pedir Nombre
-        conversacionReservaMemory.set(cleanPhone, {
+        await setReservaCtx(admin, conversacionId, {
             paso: 'PIDIENDO_NOMBRE',
             fecha,
             hora,
@@ -586,7 +619,7 @@ export async function procesarMensajeAutonomo({
             es_nuevo: 'no'
         })
 
-        conversacionReservaMemory.delete(cleanPhone)
+        await setReservaCtx(admin, conversacionId, null)
 
         const msgExito = `✅ *¡Tu Turno quedó CONFIRMADO con éxito!* 🦷✨\n\n` +
             `👤 Paciente: *${nombre} ${apellido}* (DNI ${dni})\n` +
@@ -614,7 +647,7 @@ export async function procesarMensajeAutonomo({
         const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre']
         const fechaLegible = `${diasAbrev[dateObj.getDay()]} ${diaNum} de ${meses[m - 1]} a las ${hora} hs`
 
-        conversacionReservaMemory.set(cleanPhone, {
+        await setReservaCtx(admin, conversacionId, {
             paso: 'PIDIENDO_NOMBRE',
             fecha,
             hora,
@@ -1136,6 +1169,13 @@ export async function procesarMensajeAutonomo({
             await enviarBotonesWhatsApp(creds, cleanPhone, textoPropuesta, botonesSlots, {
                 ...trackingBase,
                 accion: 'ofrecidos_slots_conversacionales'
+            })
+            // RC9: recordamos qué slots se ofrecieron para poder mapear "1/2/3".
+            await setReservaCtx(admin, conversacionId, {
+                paso: 'SLOTS_OFRECIDOS',
+                fecha: '', hora: '', fechaLegible: '',
+                slots: botonesSlots.map(b => ({ payload: b.id })),
+                expiresAt: Date.now() + 30 * 60 * 1000
             })
             return { handled: true, action: 'ofrecidos_slots_conversacionales' }
         } else {
