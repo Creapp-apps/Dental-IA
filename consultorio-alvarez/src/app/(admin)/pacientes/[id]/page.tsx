@@ -18,7 +18,7 @@ async function getPacienteCompleto(id: string) {
     // corresponden al rol: al profesional, sin datos de contacto (§8).
     // El resto sale con el cliente con sesión, donde RLS ya acota lo que ve
     // cada uno: los turnos de esta ficha, por ejemplo, son los suyos (§9).
-    const [pacienteRes, turnosRes, historialRes, odontogramaRes, presupuestosRes, adjuntosRes, escaneosRes, ausenciasRes] = await Promise.all([
+    const [pacienteRes, turnosRes, historialRes, odontogramaRes, presupuestosRes, adjuntosRes, escaneosRes, ausenciasRes, ausenciasConfirmadasRes] = await Promise.all([
         getPacienteById(id),
         supabase.from('turnos').select(`
             *, profesional:profesionales(nombre, apellido),
@@ -37,6 +37,8 @@ async function getPacienteCompleto(id: string) {
         // Total de ausencias ("No vino") en toda la historia del paciente, no solo
         // en los últimos 20 turnos que se listan. RLS acota igual que el listado.
         supabase.from('turnos').select('id', { count: 'exact', head: true }).eq('paciente_id', id).eq('estado', 'AUSENTE'),
+        // De esas ausencias, cuántas habían sido confirmadas ("confirmó y no vino").
+        supabase.from('turnos').select('id', { count: 'exact', head: true }).eq('paciente_id', id).eq('estado', 'AUSENTE').eq('fue_confirmado', true),
     ])
 
     return {
@@ -48,6 +50,7 @@ async function getPacienteCompleto(id: string) {
         adjuntos: adjuntosRes.data ?? [],
         escaneos3d: escaneosRes.escaneos ?? [],
         ausencias: ausenciasRes.count ?? 0,
+        ausenciasConfirmadas: ausenciasConfirmadasRes.count ?? 0,
     }
 }
 
@@ -65,7 +68,7 @@ export default async function FichaPacientePage({
         notFound()
     }
 
-    const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos, escaneos3d, ausencias } = await getPacienteCompleto(id)
+    const { paciente: p, turnos, historial, odontograma, presupuestos, adjuntos, escaneos3d, ausencias, ausenciasConfirmadas } = await getPacienteCompleto(id)
     if (!p) notFound()
 
     const { esProfesional } = await origenPacientes()
@@ -107,7 +110,7 @@ export default async function FichaPacientePage({
             {/* Layout: Profile sidebar + Tabbed content */}
             <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
                 {/* ── Left: Profile card con soporte reactivo Local-First / Optimistic ── */}
-                <PacientePerfilOptimistic initialPaciente={p} esProfesional={esProfesional} comparteClinica={comparteClinica} profesionales={profesionales} ausencias={ausencias} />
+                <PacientePerfilOptimistic initialPaciente={p} esProfesional={esProfesional} comparteClinica={comparteClinica} profesionales={profesionales} ausencias={ausencias} ausenciasConfirmadas={ausenciasConfirmadas} />
 
                 {/* ── Right: Tabbed content ── */}
                 <FichaPacienteTabs
@@ -115,6 +118,7 @@ export default async function FichaPacientePage({
                     tenantId={p.tenant_id}
                     turnos={turnos}
                     ausencias={ausencias}
+                    ausenciasConfirmadas={ausenciasConfirmadas}
                     historial={historial}
                     odontograma={odontograma}
                     presupuestos={presupuestos}
