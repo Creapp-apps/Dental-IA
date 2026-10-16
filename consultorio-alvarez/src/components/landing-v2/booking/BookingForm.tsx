@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { StaggerButton } from '@/components/landing-v2/ui/stagger-button'
 import { motion, AnimatePresence } from 'motion/react'
@@ -366,16 +367,29 @@ function StepProfessional({
                 })}
             </div>
 
-            {/* Modal central de confirmación de profesional */}
-            {pendingPro && (
-                <div
-                    className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
-                    onClick={() => setPendingPro(null)}
-                >
-                    <div
-                        className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl"
-                        onClick={(e) => e.stopPropagation()}
-                    >
+            {/* Modal central de confirmación de profesional.
+                Se renderiza con portal a document.body para escapar del contenedor
+                del gestor (que tiene overflow-hidden y transform de framer-motion,
+                lo que recortaba un position:fixed interno). */}
+            {typeof document !== 'undefined' && createPortal(
+                <AnimatePresence>
+                    {pendingPro && (
+                        <motion.div
+                            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md"
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            transition={{ duration: 0.2 }}
+                            onClick={() => setPendingPro(null)}
+                        >
+                            <motion.div
+                                className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl"
+                                initial={{ opacity: 0, scale: 0.9, y: 18 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 0.9, y: 18 }}
+                                transition={{ type: 'spring', stiffness: 320, damping: 26 }}
+                                onClick={(e) => e.stopPropagation()}
+                            >
                         <div
                             className="mx-auto mb-5 h-28 w-28 relative overflow-hidden rounded-full flex items-center justify-center text-4xl font-bold text-white shadow-lg ring-4 ring-slate-100"
                             style={{ backgroundColor: (pendingPro as any).color || '#0d9488' }}
@@ -418,8 +432,11 @@ function StepProfessional({
                                 Elegir otro
                             </button>
                         </div>
-                    </div>
-                </div>
+                            </motion.div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>,
+                document.body
             )}
         </div>
     )
