@@ -53,9 +53,10 @@ export async function crearPreferenciaPagoSenia({ turnoId }: CrearPreferenciaSen
         // 4. Datos del payer y clínica derivados del turno.
         const [{ data: paciente }, { data: tenant }] = await Promise.all([
             admin.from('pacientes').select('nombre, apellido, email').eq('id', turno.paciente_id).maybeSingle(),
-            admin.from('tenants').select('nombre').eq('id', tenantId).maybeSingle(),
+            admin.from('tenants').select('nombre, slug').eq('id', tenantId).maybeSingle(),
         ])
         const clinicaNombre = tenant?.nombre || 'Consultorio Odontológico'
+        const tenantSlug = tenant?.slug
         const pacienteNombre = paciente ? `${paciente.nombre ?? ''} ${paciente.apellido ?? ''}`.trim() : ''
         const pacienteEmail = paciente?.email ?? undefined
 
@@ -64,7 +65,14 @@ export async function crearPreferenciaPagoSenia({ turnoId }: CrearPreferenciaSen
             ? `https://${process.env.VERCEL_URL}` 
             : 'http://localhost:3000')
 
-        const cleanAppUrl = appUrl.startsWith('http') ? appUrl : `https://${appUrl}`
+        // Normalizar: asegurar esquema y sacar la(s) barra(s) final(es) para no
+        // generar back_urls con "//reservar".
+        const baseUrl = (appUrl.startsWith('http') ? appUrl : `https://${appUrl}`).replace(/\/+$/, '')
+
+        // El slug del tenant es obligatorio en el back_url: /reservar resuelve el
+        // consultorio por slug o por host, y el host del dominio principal no
+        // mapea a ningún tenant (daría 404 tras pagar).
+        const slugQuery = tenantSlug ? `&slug=${encodeURIComponent(tenantSlug)}` : ''
 
         // 3. Crear la preferencia en Mercado Pago API
         const preferencePayload = {
@@ -89,12 +97,12 @@ export async function crearPreferenciaPagoSenia({ turnoId }: CrearPreferenciaSen
                 tipo: 'senia_turno'
             },
             back_urls: {
-                success: `${cleanAppUrl}/reservar?status=approved&turno=${turnoId}`,
-                pending: `${cleanAppUrl}/reservar?status=pending&turno=${turnoId}`,
-                failure: `${cleanAppUrl}/reservar?status=failure&turno=${turnoId}`
+                success: `${baseUrl}/reservar?status=approved&turno=${turnoId}${slugQuery}`,
+                pending: `${baseUrl}/reservar?status=pending&turno=${turnoId}${slugQuery}`,
+                failure: `${baseUrl}/reservar?status=failure&turno=${turnoId}${slugQuery}`
             },
             auto_return: 'approved',
-            notification_url: `${cleanAppUrl}/api/webhooks/mercadopago`
+            notification_url: `${baseUrl}/api/webhooks/mercadopago`
         }
 
         const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
