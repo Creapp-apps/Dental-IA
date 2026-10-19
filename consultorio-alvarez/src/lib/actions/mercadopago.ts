@@ -2,6 +2,7 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { calcularSenia } from '@/lib/pagos/senia'
+import { confirmarSeniaPorPago } from '@/lib/pagos/confirmar-senia'
 
 // DT-004: la action recibe SÓLO turnoId. El monto, el tenant y los datos del
 // payer se derivan server-side desde la base; nunca se confía un monto del cliente.
@@ -130,5 +131,58 @@ export async function crearPreferenciaPagoSenia({ turnoId }: CrearPreferenciaSen
     } catch (err: any) {
         console.error('Excepción en crearPreferenciaPagoSenia:', err)
         return { error: err.message || 'Error inesperado al generar el link de pago' }
+    }
+}
+
+// Capa 2 (reconciliación): al volver del checkout verificamos el pago directo
+// contra MP por external_reference (= turnoId) y confirmamos si está aprobado,
+// sin confiar en el ?status de la URL. Idempotente con el webhook. Cierra el
+// loop aunque la notificación del webhook se pierda.
+export type EstadoPagoSenia = 'approved' | 'pending' | 'rejected' | 'none' | 'error'
+
+export async function verificarPagoSenia(turnoId: string): Promise<{ status: EstadoPagoSenia }> {
+    try {
+        if (!turnoId) return { status: 'error' }
+        const admin = createAdminClient()
+
+        const { data: turno } = await admin
+            .from('turnos')
+            .select('tenant_id')
+            .eq('id', turnoId)
+            .maybeSingle()
+        if (!turno) return { status: 'error' }
+
+        const { data: integracion } = await admin
+            .from('tenant_integrations')
+            .select('credentials, is_active')
+            .eq('tenant_id', turno.tenant_id)
+            .eq('provider', 'mercadopago')
+            .maybeSingle()
+
+        const accessToken = (integracion?.credentials as any)?.access_token
+        if (!integracion?.is_active || !accessToken) return { status: 'error' }
+
+        const res = await fetch(
+            `https://api.mercadopago.com/v1/payments/search?external_reference=${encodeURIComponent(turnoId)}&sort=date_created&criteria=desc`,
+            { headers: { Authorization: `Bearer ${accessToken}` } },
+        )
+        if (!res.ok) return { status: 'error' }
+
+        const data = await res.json()
+        const pagos: any[] = data?.results || []
+        if (pagos.length === 0) return { status: 'none' }
+
+        const aprobado = pagos.find((p) => p.status === 'approved')
+        if (aprobado) {
+            await confirmarSeniaPorPago(admin, aprobado)
+            return { status: 'approved' }
+        }
+        if (pagos.some((p) => p.status === 'pending' || p.status === 'in_process')) {
+            return { status: 'pending' }
+        }
+        return { status: 'rejected' }
+    } catch (err) {
+        console.error('Excepción en verificarPagoSenia:', err)
+        return { status: 'error' }
     }
 }
