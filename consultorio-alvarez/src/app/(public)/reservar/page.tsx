@@ -6,6 +6,7 @@ import { getLandingConfigPublica } from '@/lib/actions/landing'
 import { DEFAULT_LANDING_CONFIG } from '@/lib/types/landing'
 import { BookingSection } from '@/components/landing-v2/sections/BookingSection'
 import { PaymentResult, normalizePaymentStatus } from '@/components/landing-v2/booking/PaymentResult'
+import { verificarPagoSenia } from '@/lib/actions/mercadopago'
 import { MeshGradient } from '@/components/landing-v2/ui/MeshGradient'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -39,7 +40,7 @@ export async function generateMetadata(props: {
 }
 
 export default async function ReservarPage(props: {
-    searchParams?: Promise<{ slug?: string; status?: string }>
+    searchParams?: Promise<{ slug?: string; status?: string; turno?: string }>
 }) {
     const searchParams = await props.searchParams
     const headersList = await headers()
@@ -52,6 +53,17 @@ export default async function ReservarPage(props: {
     }
     const slug = tenant.slug
     const config = (await getLandingConfigPublica(slug)) ?? { id: '', tenant_id: '', ...DEFAULT_LANDING_CONFIG }
+
+    // Si el paciente vuelve del checkout, reconciliamos el pago contra MP (no
+    // confiamos en el ?status de la URL) y confirmamos el turno si corresponde.
+    let paymentStatus = searchParams?.status ? normalizePaymentStatus(searchParams.status) : null
+    if (searchParams?.status && searchParams?.turno && paymentStatus !== 'failure') {
+        const recon = await verificarPagoSenia(searchParams.turno)
+        if (recon.status === 'approved') paymentStatus = 'approved'
+        else if (recon.status === 'pending') paymentStatus = 'pending'
+        else if (recon.status === 'rejected') paymentStatus = 'failure'
+        // 'none'/'error': dejamos el status derivado de la URL.
+    }
 
     return (
         <div style={{ position: 'relative', minHeight: '100vh', overflow: 'hidden' }}>
@@ -97,8 +109,8 @@ export default async function ReservarPage(props: {
             </div>
 
             <main className="relative z-10 min-h-screen flex flex-col justify-center pb-12">
-                {searchParams?.status ? (
-                    <PaymentResult status={normalizePaymentStatus(searchParams.status)} slug={slug} />
+                {paymentStatus ? (
+                    <PaymentResult status={paymentStatus} slug={slug} />
                 ) : (
                     <BookingSection config={config} slug={slug} />
                 )}
