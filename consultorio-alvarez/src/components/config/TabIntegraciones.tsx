@@ -249,14 +249,16 @@ function WizardMercadoPago({ currentConfig }: { currentConfig: any }) {
     const [isPending, startTransition] = useTransition()
     const [publicKey, setPublicKey] = useState(currentConfig?.credentials?.public_key || '')
     const [accessToken, setAccessToken] = useState(currentConfig?.credentials?.access_token || '')
+    const [webhookSecret, setWebhookSecret] = useState(currentConfig?.credentials?.webhook_secret || '')
     const [cobrarSenia, setCobrarSenia] = useState<boolean>(currentConfig?.credentials?.cobrar_senia ?? false)
     const [montoSenia, setMontoSenia] = useState<string>(String(currentConfig?.credentials?.monto_senia || ''))
 
     function guardar() {
         startTransition(async () => {
-            const data = await guardarIntegracion('mercadopago', { 
-                public_key: publicKey.trim(), 
+            const data = await guardarIntegracion('mercadopago', {
+                public_key: publicKey.trim(),
                 access_token: accessToken.trim(),
+                webhook_secret: webhookSecret.trim(),
                 cobrar_senia: cobrarSenia,
                 monto_senia: Number(montoSenia) || 0
             })
@@ -287,6 +289,7 @@ function WizardMercadoPago({ currentConfig }: { currentConfig: any }) {
                     <li>Creá una nueva aplicación. Omití los datos que no tengas.</li>
                     <li>Navegá a <strong>Credenciales de Producción</strong> en el menú lateral.</li>
                     <li>Copiá tu <code>Public Key</code> y <code>Access Token</code> de producción y pegalos abajo.</li>
+                    <li>En <strong>Webhooks</strong> de tu aplicación, configurá la URL de notificación y copiá la <strong>Clave secreta</strong> para pegarla abajo (blinda tus pagos).</li>
                 </ul>
             </div>
 
@@ -307,6 +310,18 @@ function WizardMercadoPago({ currentConfig }: { currentConfig: any }) {
                         placeholder="APP_USR-..."
                         type="password"
                     />
+                </div>
+                <div className="space-y-1.5">
+                    <Label>Clave secreta del Webhook (opcional, recomendado)</Label>
+                    <Input
+                        value={webhookSecret}
+                        onChange={e => setWebhookSecret(e.target.value)}
+                        placeholder="Clave secreta de la sección Webhooks"
+                        type="password"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                        Valida que las notificaciones de pago vengan realmente de Mercado Pago. Si la dejás vacía, los pagos se confirman igual pero sin esta verificación extra.
+                    </p>
                 </div>
             </div>
 
