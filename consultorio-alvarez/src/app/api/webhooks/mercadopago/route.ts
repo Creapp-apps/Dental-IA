@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { notificarTurnoPorWhatsApp } from '@/lib/actions/turnos'
+import { verifyMercadoPagoSignature } from '@/lib/pagos/mp-signature'
 
 export async function GET() {
     return NextResponse.json({ status: 'Mercado Pago Webhook Active' }, { status: 200 })
@@ -44,11 +45,47 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ status: 'no_integrations' }, { status: 200 })
         }
 
+        // 1.b Validación de firma por tenant (opt-in). Un tenant que cargó su
+        // webhook_secret queda blindado: solo aceptamos su notificación si la
+        // firma x-signature valida. Los tenants que NO cargaron secret siguen
+        // por el fallback de abajo (MP es opcional por consultorio).
+        const xSignature = request.headers.get('x-signature')
+        const xRequestId = request.headers.get('x-request-id')
+
+        const conSecret = integraciones.filter((i) => (i.credentials as any)?.webhook_secret)
+        const sinSecret = integraciones.filter((i) => !(i.credentials as any)?.webhook_secret)
+
+        let integracionPorFirma: typeof integraciones[number] | null = null
+        for (const integ of conSecret) {
+            const ok = verifyMercadoPagoSignature({
+                secret: (integ.credentials as any).webhook_secret,
+                xSignature,
+                xRequestId,
+                dataId: paymentId,
+            })
+            if (ok) {
+                integracionPorFirma = integ
+                break
+            }
+        }
+
+        // Candidatos a consultar el pago:
+        // - Si una firma validó → solo ese tenant (identificado y verificado).
+        // - Si ninguna validó → solo los tenants SIN secret (los que optaron por
+        //   no blindar). Un tenant con secret jamás cae al fallback: si su firma
+        //   no valida, su notificación se descarta.
+        const candidatos = integracionPorFirma ? [integracionPorFirma] : sinSecret
+
+        if (candidatos.length === 0) {
+            console.warn('🔒 [MP Webhook] Firma inválida o ausente para tenants con secret; notificación descartada.')
+            return NextResponse.json({ status: 'invalid_signature' }, { status: 401 })
+        }
+
         // 2. Buscar el pago en Mercado Pago usando los tokens de los tenants
         let paymentData: any = null
         let tenantIdEncontrado: string | null = null
 
-        for (const integ of integraciones) {
+        for (const integ of candidatos) {
             const token = (integ.credentials as any)?.access_token
             if (!token) continue
 
