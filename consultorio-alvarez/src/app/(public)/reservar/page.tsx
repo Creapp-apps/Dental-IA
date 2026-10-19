@@ -5,6 +5,7 @@ import { resolveTenant } from '@/lib/tenant'
 import { getLandingConfigPublica } from '@/lib/actions/landing'
 import { DEFAULT_LANDING_CONFIG } from '@/lib/types/landing'
 import { BookingSection } from '@/components/landing-v2/sections/BookingSection'
+import { PaymentResult, normalizePaymentStatus } from '@/components/landing-v2/booking/PaymentResult'
 import { MeshGradient } from '@/components/landing-v2/ui/MeshGradient'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
@@ -38,7 +39,7 @@ export async function generateMetadata(props: {
 }
 
 export default async function ReservarPage(props: {
-    searchParams?: Promise<{ slug?: string }>
+    searchParams?: Promise<{ slug?: string; status?: string }>
 }) {
     const searchParams = await props.searchParams
     const headersList = await headers()
@@ -96,7 +97,11 @@ export default async function ReservarPage(props: {
             </div>
 
             <main className="relative z-10 min-h-screen flex flex-col justify-center pb-12">
-                <BookingSection config={config} slug={slug} />
+                {searchParams?.status ? (
+                    <PaymentResult status={normalizePaymentStatus(searchParams.status)} slug={slug} />
+                ) : (
+                    <BookingSection config={config} slug={slug} />
+                )}
             </main>
         </div>
     )
