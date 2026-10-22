@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { motion } from 'framer-motion'
 import {
     Save, Globe, ExternalLink, Palette, Type, List,
-    Plus, Trash2, Eye, MapPin
+    Plus, Trash2, Eye, MapPin, Image as ImageIcon
 } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
@@ -122,6 +122,15 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
         config.about_visible ?? (!slug || slug === 'alvarez')
     )
 
+    // Sub-tabs internos para no tener un scroll infinito de ajustes.
+    const SUBTABS = [
+        { id: 'apariencia', label: 'Apariencia', icon: Palette },
+        { id: 'textos', label: 'Textos', icon: Type },
+        { id: 'medios', label: 'Imágenes y video', icon: ImageIcon },
+        { id: 'contacto', label: 'Contacto', icon: MapPin },
+    ] as const
+    const [subtab, setSubtab] = useState<typeof SUBTABS[number]['id']>('apariencia')
+
     function applyPalette(p: PalettePreset) {
         setColores({
             color_primary: p.primary,
@@ -206,6 +215,31 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                 </a>
             </div>
 
+            {/* Sub-tabs internos */}
+            <div className="flex flex-wrap gap-2 glass rounded-2xl p-1.5 border border-primary/15 sticky top-2 z-20">
+                {SUBTABS.map(t => {
+                    const Icon = t.icon
+                    const active = subtab === t.id
+                    return (
+                        <button
+                            key={t.id}
+                            type="button"
+                            onClick={() => setSubtab(t.id)}
+                            className={cn(
+                                'flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold transition-colors cursor-pointer',
+                                active ? 'bg-primary text-primary-foreground shadow' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'
+                            )}
+                        >
+                            <Icon className="h-3.5 w-3.5" />
+                            {t.label}
+                        </button>
+                    )
+                })}
+            </div>
+
+            {/* ── TAB: Apariencia (logo + colores) ── */}
+            {subtab === 'apariencia' && (
+            <div className="space-y-5">
             {/* Logo Builder */}
             <SectionCard title="Identidad visual (Logo)" icon={Type}>
                 <div className="space-y-4">
@@ -420,7 +454,12 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                     Reservar
                 </button>
             </motion.div>
+            </div>
+            )}
 
+            {/* ── TAB: Textos (landing + asistente) ── */}
+            {subtab === 'textos' && (
+            <div className="space-y-5">
             {/* Textos */}
             <SectionCard title="Textos de la landing" icon={Type}>
                 <div className="space-y-3">
@@ -476,6 +515,12 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                     </Field>
                 </div>
             </SectionCard>
+            </div>
+            )}
+
+            {/* ── TAB: Imágenes y video (hero + video + servicios) ── */}
+            {subtab === 'medios' && (
+            <div className="space-y-5">
             {/* Fotos de la portada (Hero) */}
             <SectionCard title="Fotos de la portada (Hero)" icon={Type}>
                 <div className="space-y-3">
@@ -604,6 +649,12 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                 </div>
             </SectionCard>
 
+            </div>
+            )}
+
+            {/* ── TAB: Contacto (footer) ── */}
+            {subtab === 'contacto' && (
+            <div className="space-y-5">
             {/* Footer */}
             <SectionCard title="Datos de contacto (Footer)" icon={MapPin}>
                 <div className="space-y-3">
@@ -684,9 +735,11 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                     </Field>
                 </div>
             </SectionCard>
+            </div>
+            )}
 
-            {/* Guardar */}
-            <div className="flex justify-end">
+            {/* Guardar (siempre visible: publica todas las secciones) */}
+            <div className="flex justify-end sticky bottom-2">
                 <GlassButton onClick={guardar} loading={isPending} className="px-6">
                     <Save className="h-4 w-4 mr-2" />
                     Publicar cambios
