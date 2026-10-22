@@ -4,6 +4,12 @@ import { useState, useRef, useEffect } from 'react'
 import { Volume2, VolumeX, Play, Pause, Maximize2, ShieldCheck, Sparkles, MapPin, ChevronRight, Award, Clock } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
+import {
+    ABOUT_DEFAULT_SCENES,
+    ABOUT_DEFAULT_FEATURES,
+    ABOUT_DEFAULT_TITULO,
+    ABOUT_DEFAULT_SUBTITULO,
+} from '@/lib/landing-about'
 
 interface VideoScene {
     id: string
@@ -44,24 +50,50 @@ interface AboutVideoInput {
     badge: string
 }
 
+interface AboutFeatureInput {
+    title: string
+    description: string
+}
+
 interface Props {
     onBookingClick: () => void
     colorPrimary?: string
     bgHero?: string
     videos?: AboutVideoInput[] | null
+    features?: AboutFeatureInput[] | null
+    titulo?: string | null
+    subtitulo?: string | null
 }
 
-export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHero, videos }: Props) {
+// Íconos fijos de las tarjetas de la derecha (por posición).
+const FEATURE_ICONS = [ShieldCheck, Award, Clock]
+
+export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHero, videos, features, titulo, subtitulo }: Props) {
     const [currentSceneIdx, setCurrentSceneIdx] = useState(0)
     const [isMuted, setIsMuted] = useState(true)
     const [isPlaying, setIsPlaying] = useState(true)
     const videoRef = useRef<HTMLVideoElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
 
-    // Videos del tenant si cargó los suyos; si no, los de la plantilla por defecto.
-    const scenes: VideoScene[] = (videos && videos.length > 0)
-        ? videos.map((v, i) => ({ id: `scene-${i}`, src: v.src, title: v.title, subtitle: v.subtitle, badge: v.badge }))
-        : SCENES
+    // Escenas: cada campo cae al default por posición. Así un tenant puede editar
+    // solo los textos sin subir video (usa el video de la plantilla), o subir el
+    // suyo manteniendo los textos.
+    const base = (videos && videos.length > 0) ? videos : ABOUT_DEFAULT_SCENES
+    const scenes: VideoScene[] = base.map((v, i) => ({
+        id: `scene-${i}`,
+        src: v.src || ABOUT_DEFAULT_SCENES[i]?.src || ABOUT_DEFAULT_SCENES[0].src,
+        title: v.title || ABOUT_DEFAULT_SCENES[i]?.title || '',
+        subtitle: v.subtitle || ABOUT_DEFAULT_SCENES[i]?.subtitle || '',
+        badge: v.badge || ABOUT_DEFAULT_SCENES[i]?.badge || `Escena ${i + 1}`,
+    }))
+
+    const pillars = (features && features.length > 0) ? features : ABOUT_DEFAULT_FEATURES
+    const headerTitulo = titulo || ABOUT_DEFAULT_TITULO
+    const headerSubtitulo = subtitulo || ABOUT_DEFAULT_SUBTITULO
+    // Resalta la última palabra del título (como la plantilla con "bienestar").
+    const tituloWords = headerTitulo.trim().split(' ')
+    const tituloUltima = tituloWords.length > 1 ? tituloWords.pop() : ''
+    const tituloBase = tituloWords.join(' ')
 
     const activeScene = scenes[currentSceneIdx] ?? scenes[0]
 
@@ -136,11 +168,11 @@ export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHer
                     </div>
 
                     <h2 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight leading-tight">
-                        Un espacio pensado para tu <span className="text-primary">bienestar</span>
+                        {tituloBase}{tituloUltima ? <> <span className="text-primary">{tituloUltima}</span></> : null}
                     </h2>
 
                     <p className="text-sm sm:text-base text-slate-600 leading-relaxed font-medium">
-                        Recorré virtualmente nuestras instalaciones de vanguardia. Tecnología de alta precisión, higiene médica rigurosa y máxima comodidad para tu atención.
+                        {headerSubtitulo}
                     </p>
                 </div>
 
@@ -275,44 +307,22 @@ export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHer
 
                     {/* RIGHT COLUMN: CLINIC PILLARS & CTA CARD (4 cols) */}
                     <div className="lg:col-span-4 space-y-6 text-left">
-                        {/* Pillar 1 */}
-                        <div className="bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white/80 shadow-sm flex items-start gap-3.5 hover:shadow-md transition-shadow">
-                            <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
-                                <ShieldCheck className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-black text-slate-900 mb-0.5">Bioseguridad Médica</h4>
-                                <p className="text-xs text-slate-600 leading-relaxed">
-                                    Protocolos estrictos de esterilización y desinfección grado hospitalario en cada sesión.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Pillar 2 */}
-                        <div className="bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white/80 shadow-sm flex items-start gap-3.5 hover:shadow-md transition-shadow">
-                            <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
-                                <Award className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-black text-slate-900 mb-0.5">Tecnología Intraoral 3D</h4>
-                                <p className="text-xs text-slate-600 leading-relaxed">
-                                    Escaneo digitalizado y radiología de alta definición sin molestias ni pastas tradicionales.
-                                </p>
-                            </div>
-                        </div>
-
-                        {/* Pillar 3 */}
-                        <div className="bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white/80 shadow-sm flex items-start gap-3.5 hover:shadow-md transition-shadow">
-                            <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
-                                <Clock className="h-5 w-5" />
-                            </div>
-                            <div>
-                                <h4 className="text-sm font-black text-slate-900 mb-0.5">Turnos Puntuales y Sin Demoras</h4>
-                                <p className="text-xs text-slate-600 leading-relaxed">
-                                    Gestión de agenda sin demoras para garantizar una atención relajada y personalizada.
-                                </p>
-                            </div>
-                        </div>
+                        {pillars.map((pillar, i) => {
+                            const Icon = FEATURE_ICONS[i] ?? ShieldCheck
+                            return (
+                                <div key={i} className="bg-white/80 backdrop-blur-md p-5 rounded-2xl border border-white/80 shadow-sm flex items-start gap-3.5 hover:shadow-md transition-shadow">
+                                    <div className="h-10 w-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0 border border-primary/20">
+                                        <Icon className="h-5 w-5" />
+                                    </div>
+                                    <div>
+                                        <h4 className="text-sm font-black text-slate-900 mb-0.5">{pillar.title}</h4>
+                                        <p className="text-xs text-slate-600 leading-relaxed">
+                                            {pillar.description}
+                                        </p>
+                                    </div>
+                                </div>
+                            )
+                        })}
 
                         {/* Action CTA Card */}
                         <div className="bg-gradient-to-br from-slate-900 to-slate-800 text-white p-6 rounded-2xl shadow-xl space-y-3.5 border border-slate-700/50">

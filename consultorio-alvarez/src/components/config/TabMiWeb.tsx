@@ -17,6 +17,7 @@ import { glassAlert } from '@/components/ui/glass-alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ImageUploader } from '@/components/ui/image-uploader'
 import { MediaUploader } from '@/components/ui/media-uploader'
+import { ABOUT_DEFAULT_SCENES, ABOUT_DEFAULT_FEATURES } from '@/lib/landing-about'
 
 // ── Paleta de colores predefinida ─────────────────────────────────
 
@@ -115,8 +116,13 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
     // Hero slides (fotos de la portada)
     const [heroSlides, setHeroSlides] = useState(config.hero_slides ?? [])
 
-    // Videos de la sección "Nosotros"
-    const [aboutVideos, setAboutVideos] = useState(config.about_videos ?? [])
+    // Sección "Nosotros" (video tour). Escenas y tarjetas se siembran con los
+    // textos de la plantilla si el tenant todavía no cargó los suyos, así los ve
+    // y los puede editar.
+    const [escenas, setEscenas] = useState(config.about_videos ?? ABOUT_DEFAULT_SCENES)
+    const [aboutFeatures, setAboutFeatures] = useState(config.about_features ?? ABOUT_DEFAULT_FEATURES)
+    const [aboutTitulo, setAboutTitulo] = useState(config.about_titulo ?? '')
+    const [aboutSubtitulo, setAboutSubtitulo] = useState(config.about_subtitulo ?? '')
     // null = default por slug; acá lo materializamos a booleano para el toggle.
     const [aboutVisible, setAboutVisible] = useState<boolean>(
         config.about_visible ?? (!slug || slug === 'alvarez')
@@ -164,29 +170,45 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
         setHeroSlides(s => s.map((item, idx) => idx === i ? { ...item, [field]: val } : item))
     }
 
-    // ── Videos "Nosotros" ──
-    function addAboutVideo() {
-        setAboutVideos(v => [...v, { src: '', title: '', subtitle: '', badge: '' }])
+    // ── Escenas de "Nosotros" (video + textos) ──
+    function addEscena() {
+        setEscenas(v => [...v, { src: '', title: '', subtitle: '', badge: '' }])
     }
-    function removeAboutVideo(i: number) {
-        setAboutVideos(v => v.filter((_, idx) => idx !== i))
+    function removeEscena(i: number) {
+        setEscenas(v => v.filter((_, idx) => idx !== i))
     }
-    function updateAboutVideo(i: number, field: string, val: string) {
-        setAboutVideos(v => v.map((item, idx) => idx === i ? { ...item, [field]: val } : item))
+    function updateEscena(i: number, field: string, val: string) {
+        setEscenas(v => v.map((item, idx) => idx === i ? { ...item, [field]: val } : item))
+    }
+
+    // ── Tarjetas de "Nosotros" ──
+    function addFeature() {
+        setAboutFeatures(f => [...f, { title: '', description: '' }])
+    }
+    function removeFeature(i: number) {
+        setAboutFeatures(f => f.filter((_, idx) => idx !== i))
+    }
+    function updateFeature(i: number, field: string, val: string) {
+        setAboutFeatures(f => f.map((item, idx) => idx === i ? { ...item, [field]: val } : item))
     }
 
     function guardar() {
         startTransition(async () => {
-            // Solo mandamos slides/videos con su medio cargado (el resto son borradores vacíos).
+            // Hero: solo slides con foto cargada. Escenas/tarjetas: filtramos las
+            // completamente vacías (las demás guardan texto aunque no tengan video).
             const heroSlidesLimpios = heroSlides.filter(s => s.image_url)
-            const aboutVideosLimpios = aboutVideos.filter(v => v.src)
+            const escenasLimpias = escenas.filter(v => v.src || v.title || v.subtitle || v.badge)
+            const featuresLimpias = aboutFeatures.filter(f => f.title || f.description)
             const r = await guardarLandingConfig({
                 ...textos,
                 ...colores,
                 servicios,
                 logo_config: logoConfig,
                 hero_slides: heroSlidesLimpios.length > 0 ? heroSlidesLimpios : null,
-                about_videos: aboutVideosLimpios.length > 0 ? aboutVideosLimpios : null,
+                about_videos: escenasLimpias.length > 0 ? escenasLimpias : null,
+                about_features: featuresLimpias.length > 0 ? featuresLimpias : null,
+                about_titulo: aboutTitulo || null,
+                about_subtitulo: aboutSubtitulo || null,
                 about_visible: aboutVisible,
             }, slug)
             if (r.error) glassAlert.error({ title: 'Error al guardar', description: r.error })
@@ -558,7 +580,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
 
             {/* Sección de video "Nosotros" */}
             <SectionCard title="Sección de video (Nosotros)" icon={Type}>
-                <div className="space-y-3">
+                <div className="space-y-4">
                     <label className="flex items-center justify-between gap-3 glass-subtle rounded-xl p-3 cursor-pointer">
                         <span className="text-sm text-foreground">Mostrar la sección de video en la web</span>
                         <input
@@ -568,35 +590,74 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                             className="h-4 w-4 accent-primary cursor-pointer"
                         />
                     </label>
-                    <p className="text-xs text-muted-foreground">Subí tus propios videos (MP4, cortos y livianos: máx. 10MB cada uno). Si no cargás ninguno, se usan los de la plantilla.</p>
-                    {aboutVideos.map((v, i) => (
-                        <div key={i} className="glass-subtle rounded-xl p-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <span className="text-xs font-semibold text-foreground">Video {i + 1}</span>
-                                <button
-                                    onClick={() => removeAboutVideo(i)}
-                                    className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
-                                >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+
+                    {/* Encabezado de la sección */}
+                    <div className="space-y-2">
+                        <p className="text-xs font-semibold text-foreground">Encabezado</p>
+                        <Field label="Título (la última palabra se resalta con el color principal)">
+                            <Input value={aboutTitulo} onChange={e => setAboutTitulo(e.target.value)} placeholder="Un espacio pensado para tu bienestar" />
+                        </Field>
+                        <Field label="Subtítulo">
+                            <Input value={aboutSubtitulo} onChange={e => setAboutSubtitulo(e.target.value)} placeholder="Recorré virtualmente nuestras instalaciones..." />
+                        </Field>
+                    </div>
+
+                    {/* Escenas (video + textos) */}
+                    <div className="space-y-2">
+                        <p className="text-xs font-semibold text-foreground">Escenas del video</p>
+                        <p className="text-xs text-muted-foreground">Cada escena tiene su nombre, título y subtítulo. El video es opcional (MP4, máx. 10MB): si no subís uno, se usa el de la plantilla.</p>
+                        {escenas.map((v, i) => (
+                            <div key={i} className="glass-subtle rounded-xl p-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-foreground">Escena {i + 1}</span>
+                                    <button
+                                        onClick={() => removeEscena(i)}
+                                        className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                <Input value={v.badge} onChange={e => updateEscena(i, 'badge', e.target.value)} placeholder="Nombre de la escena (ej. Equipamiento de Avanzada)" className="text-sm" />
+                                <Input value={v.title} onChange={e => updateEscena(i, 'title', e.target.value)} placeholder="Título (ej. Instalaciones Premium)" className="text-sm" />
+                                <Input value={v.subtitle} onChange={e => updateEscena(i, 'subtitle', e.target.value)} placeholder="Subtítulo" className="text-sm" />
+                                <MediaUploader
+                                    folder="videos"
+                                    kind="video"
+                                    value={v.src || null}
+                                    onChange={(url) => updateEscena(i, 'src', url)}
+                                />
                             </div>
-                            <MediaUploader
-                                folder="videos"
-                                kind="video"
-                                value={v.src || null}
-                                onChange={(url) => updateAboutVideo(i, 'src', url)}
-                            />
-                            <div className="grid grid-cols-2 gap-2">
-                                <Input value={v.title} onChange={e => updateAboutVideo(i, 'title', e.target.value)} placeholder="Título" className="text-sm" />
-                                <Input value={v.badge} onChange={e => updateAboutVideo(i, 'badge', e.target.value)} placeholder="Etiqueta" className="text-sm" />
+                        ))}
+                        <GlassButton size="sm" variant="glass" onClick={addEscena}>
+                            <Plus className="h-3.5 w-3.5 mr-1.5" />
+                            Agregar escena
+                        </GlassButton>
+                    </div>
+
+                    {/* Tarjetas de la derecha */}
+                    <div className="space-y-2">
+                        <p className="text-xs font-semibold text-foreground">Tarjetas destacadas (columna derecha)</p>
+                        <p className="text-xs text-muted-foreground">Las 3 tarjetas que aparecen al costado del video. El ícono es fijo por posición.</p>
+                        {aboutFeatures.map((f, i) => (
+                            <div key={i} className="glass-subtle rounded-xl p-3 space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-xs font-semibold text-foreground">Tarjeta {i + 1}</span>
+                                    <button
+                                        onClick={() => removeFeature(i)}
+                                        className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                </div>
+                                <Input value={f.title} onChange={e => updateFeature(i, 'title', e.target.value)} placeholder="Título (ej. Bioseguridad Médica)" className="text-sm" />
+                                <Input value={f.description} onChange={e => updateFeature(i, 'description', e.target.value)} placeholder="Descripción" className="text-sm" />
                             </div>
-                            <Input value={v.subtitle} onChange={e => updateAboutVideo(i, 'subtitle', e.target.value)} placeholder="Subtítulo" className="text-sm" />
-                        </div>
-                    ))}
-                    <GlassButton size="sm" variant="glass" onClick={addAboutVideo}>
-                        <Plus className="h-3.5 w-3.5 mr-1.5" />
-                        Agregar video
-                    </GlassButton>
+                        ))}
+                        <GlassButton size="sm" variant="glass" onClick={addFeature}>
+                            <Plus className="h-3.5 w-3.5 mr-1.5" />
+                            Agregar tarjeta
+                        </GlassButton>
+                    </div>
                 </div>
             </SectionCard>
 

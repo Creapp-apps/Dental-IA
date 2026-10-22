@@ -24,6 +24,11 @@ export interface AboutVideo {
     badge: string
 }
 
+export interface AboutFeature {
+    title: string
+    description: string
+}
+
 export interface LandingConfig {
     id: string
     tenant_id: string
@@ -40,6 +45,9 @@ export interface LandingConfig {
     hero_slides?: HeroSlide[] | null
     about_videos?: AboutVideo[] | null
     about_visible?: boolean | null
+    about_titulo?: string | null
+    about_subtitulo?: string | null
+    about_features?: AboutFeature[] | null
     color_primary: string
     color_primary_hover: string
     color_accent: string
@@ -94,5 +102,8 @@ export const DEFAULT_LANDING_CONFIG: Omit<LandingConfig, 'id' | 'tenant_id'> = {
     hero_slides: null,
     about_videos: null,
     about_visible: null,
+    about_titulo: null,
+    about_subtitulo: null,
+    about_features: null,
 }
 

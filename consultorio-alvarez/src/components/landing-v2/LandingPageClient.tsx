@@ -109,7 +109,15 @@ export function LandingPageClient({ slug, tenantNombre, config, professionals, o
             <main className="relative z-10">
                 <HeroSection onBookingClick={scrollToBooking} config={config} clinicName={clinicName} slug={slug} />
                 {showAbout && (
-                    <AboutUsSection onBookingClick={scrollToBooking} colorPrimary={config.color_primary} bgHero={config.color_bg_hero} videos={config.about_videos} />
+                    <AboutUsSection
+                        onBookingClick={scrollToBooking}
+                        colorPrimary={config.color_primary}
+                        bgHero={config.color_bg_hero}
+                        videos={config.about_videos}
+                        features={config.about_features}
+                        titulo={config.about_titulo}
+                        subtitulo={config.about_subtitulo}
+                    />
                 )}
                 <ServicesSection onBookingClick={scrollToBooking} config={config} />
                 <TeamSection config={config} professionals={professionals} />
