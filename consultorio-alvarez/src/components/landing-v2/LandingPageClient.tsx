@@ -116,6 +116,7 @@ export function LandingPageClient({ slug, tenantNombre, config, professionals, o
                 <FloatingChatbot
                     slug={slug}
                     clinicName={clinicName}
+                    assistantName={config.asistente_nombre || 'CinthIA'}
                     colorPrimary={config.color_primary}
                     professionals={professionals}
                     obrasSociales={obrasSociales}

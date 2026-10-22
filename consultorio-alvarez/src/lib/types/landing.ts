@@ -39,6 +39,7 @@ export interface LandingConfig {
     footer_email: string | null
     footer_hours: string | null
     coberturas_subtitulo?: string
+    asistente_nombre?: string
 }
 
 export const DEFAULT_LANDING_CONFIG: Omit<LandingConfig, 'id' | 'tenant_id'> = {
@@ -72,5 +73,6 @@ export const DEFAULT_LANDING_CONFIG: Omit<LandingConfig, 'id' | 'tenant_id'> = {
     footer_email: null,
     footer_hours: null,
     coberturas_subtitulo: 'Trabajamos con las principales coberturas del país para brindarte la mejor atención médica sin preocupaciones.',
+    asistente_nombre: 'CinthIA',
 }
 

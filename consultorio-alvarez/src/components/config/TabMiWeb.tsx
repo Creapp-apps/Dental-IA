@@ -86,6 +86,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
         footer_email: config.footer_email ?? '',
         footer_hours: config.footer_hours ?? '',
         coberturas_subtitulo: config.coberturas_subtitulo ?? '',
+        asistente_nombre: config.asistente_nombre ?? 'CinthIA',
     })
 
     // Colores
@@ -425,6 +426,15 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                             </Field>
                         </div>
                     </div>
+                </div>
+            </SectionCard>
+            {/* Asistente virtual */}
+            <SectionCard title="Asistente virtual (chatbot)" icon={Type}>
+                <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Nombre con el que se presenta el asistente de turnos en tu web. Si lo dejás vacío, se usa &quot;CinthIA&quot;.</p>
+                    <Field label="Nombre del asistente">
+                        <Input value={textos.asistente_nombre} onChange={e => setTextos(t => ({ ...t, asistente_nombre: e.target.value }))} placeholder="CinthIA" />
+                    </Field>
                 </div>
             </SectionCard>
             {/* Servicios */}

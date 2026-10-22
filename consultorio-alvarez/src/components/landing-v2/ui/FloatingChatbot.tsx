@@ -21,13 +21,15 @@ import {
     Smile,
     CalendarDays
 } from 'lucide-react'
-import { crearReservaPublica, getTurnosDisponibles } from '@/lib/actions/reservas'
+import { crearReservaPublica, getTurnosDisponibles, getConfiguracionSeniaPublica } from '@/lib/actions/reservas'
+import { crearPreferenciaPagoSenia } from '@/lib/actions/mercadopago'
 import { format, addDays, parseISO, isToday, isTomorrow } from 'date-fns'
 import { es } from 'date-fns/locale'
 
 interface FloatingChatbotProps {
     slug: string
     clinicName?: string
+    assistantName?: string
     colorPrimary?: string
     professionals?: any[]
     obrasSociales?: any[]
@@ -53,11 +55,13 @@ interface BookingData {
 export function FloatingChatbot({
     slug,
     clinicName = 'Consultorio Odontológico',
+    assistantName = 'CinthIA',
     colorPrimary = '#2563eb',
     professionals = [],
     obrasSociales = []
 }: FloatingChatbotProps) {
     const effectiveClinicName = clinicName || 'Consultorio Odontológico'
+    const effectiveAssistantName = assistantName || 'CinthIA'
     const [isOpen, setIsOpen] = useState(false)
     const [step, setStep] = useState<Step>('profesional')
     const [loadingSlots, setLoadingSlots] = useState(false)
@@ -65,6 +69,8 @@ export function FloatingChatbot({
     const [selectedDaySlots, setSelectedDaySlots] = useState<string[]>([])
     const [submitting, setSubmitting] = useState(false)
     const [errorMsg, setErrorMsg] = useState('')
+    const [configSenia, setConfigSenia] = useState<{ requiereSenia: boolean; montoSenia: number } | null>(null)
+    const [seniaPendiente, setSeniaPendiente] = useState(false)
 
     const [booking, setBooking] = useState<BookingData>({
         motivo: 'Consulta Odontológica General',
@@ -95,6 +101,26 @@ export function FloatingChatbot({
         }
     }, [isOpen, step, loadingSlots])
 
+    // Cargar configuración de seña una sola vez al abrir el asistente.
+    useEffect(() => {
+        if (!isOpen || configSenia) return
+        let cancelled = false
+        getConfiguracionSeniaPublica(slug)
+            .then((res) => {
+                if (cancelled) return
+                if (res?.success && res.requiereSenia) {
+                    setConfigSenia({ requiereSenia: true, montoSenia: res.montoSenia || 0 })
+                } else {
+                    setConfigSenia({ requiereSenia: false, montoSenia: 0 })
+                }
+            })
+            .catch((e) => {
+                console.error('Error cargando configuración de seña:', e)
+                if (!cancelled) setConfigSenia({ requiereSenia: false, montoSenia: 0 })
+            })
+        return () => { cancelled = true }
+    }, [isOpen, slug, configSenia])
+
     // Cargar turnos disponibles al llegar al paso de fecha
     const loadDays = async (profId: string | null) => {
         setLoadingSlots(true)
@@ -117,6 +143,7 @@ export function FloatingChatbot({
     const resetChat = () => {
         setStep('profesional')
         setErrorMsg('')
+        setSeniaPendiente(false)
         setBooking({
             motivo: 'Consulta Odontológica General',
             profesionalId: null,
@@ -183,17 +210,34 @@ export function FloatingChatbot({
                 apellido: booking.apellido.trim(),
                 telefono: booking.telefono.trim(),
                 es_nuevo: booking.esNuevo,
-                notas: `Agendado por CinthIA. Motivo: ${booking.motivo}`,
+                notas: `Agendado por ${effectiveAssistantName}. Motivo: ${booking.motivo}`,
                 obraSocialId: booking.obraSocialId,
             })
 
             if (res.error) {
                 setErrorMsg(res.error)
                 setSubmitting(false)
-            } else {
+                return
+            }
+
+            // Si el consultorio exige seña, redirigir a Mercado Pago (mismo flujo que el gestor web).
+            if (res.requiereSenia && res.turnoId && res.montoSenia) {
+                // DT-004: sólo se pasa turnoId; el monto y el resto se derivan server-side.
+                const prefResult = await crearPreferenciaPagoSenia({ turnoId: res.turnoId })
+                if (prefResult.success && prefResult.initPoint) {
+                    window.location.href = prefResult.initPoint
+                    return
+                }
+                // No se pudo generar el link: el turno quedó PENDIENTE con seña impaga.
+                console.error('Error al generar preferencia MP:', prefResult.error)
+                setSeniaPendiente(true)
                 setStep('exito')
                 setSubmitting(false)
+                return
             }
+
+            setStep('exito')
+            setSubmitting(false)
         } catch (err: any) {
             console.error('Error al confirmar reserva:', err)
             setErrorMsg('Ocurrió un error al agendar tu turno. Por favor intenta de nuevo.')
@@ -233,7 +277,7 @@ export function FloatingChatbot({
                             {/* Textos */}
                             <div className="text-left">
                                 <p className="text-[11px] font-extrabold tracking-wider uppercase leading-tight text-white/90 flex items-center gap-1">
-                                    <span>Cinth</span><span className="text-white underline decoration-white font-black">IA</span>
+                                    <span>{effectiveAssistantName}</span>
                                     <span className="text-[9px] font-normal opacity-80 lowercase">(recepción)</span>
                                 </p>
                                 <p className="text-sm font-bold text-white leading-tight flex items-center gap-1">
@@ -278,7 +322,7 @@ export function FloatingChatbot({
                                 <div>
                                     <div className="flex items-center gap-2">
                                         <h3 className="font-bold text-base text-white tracking-tight">
-                                            Cinth<span className="text-white font-extrabold">IA</span>
+                                            {effectiveAssistantName}
                                         </h3>
                                         <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white/20 text-white border border-white/25">
                                             Recepción IA
@@ -323,7 +367,7 @@ export function FloatingChatbot({
                                     👩‍⚕️
                                 </div>
                                 <div className="p-3.5 rounded-2xl rounded-tl-sm bg-white border border-slate-200/90 text-sm text-slate-700 leading-relaxed shadow-sm">
-                                    ¡Hola! 👋 Soy <strong>CinthIA</strong>, recepcionista virtual de {effectiveClinicName}.
+                                    ¡Hola! 👋 Soy <strong>{effectiveAssistantName}</strong>, recepcionista virtual de {effectiveClinicName}.
                                     <br />
                                     Te ayudaré a agendar tu <strong>Consulta Odontológica</strong> en 1 minuto.
                                     <br /><br />
@@ -536,6 +580,17 @@ export function FloatingChatbot({
                                         </div>
                                     </div>
 
+                                    {configSenia?.requiereSenia && configSenia.montoSenia > 0 && (
+                                        <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-start gap-2">
+                                            <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+                                            <span>
+                                                Para confirmar el turno es necesario abonar una seña de{' '}
+                                                <strong>${configSenia.montoSenia.toLocaleString('es-AR')} ARS</strong> por Mercado Pago.
+                                                Al confirmar te llevamos al pago de forma segura.
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <form onSubmit={handleConfirmBooking} className="space-y-3 pt-1">
                                         <div className="grid grid-cols-2 gap-2">
                                             <div>
@@ -609,11 +664,15 @@ export function FloatingChatbot({
                                             {submitting ? (
                                                 <>
                                                     <Loader2 className="h-4 w-4 animate-spin" />
-                                                    <span>Confirmando tu turno...</span>
+                                                    <span>{configSenia?.requiereSenia ? 'Redirigiendo al pago...' : 'Confirmando tu turno...'}</span>
                                                 </>
                                             ) : (
                                                 <>
-                                                    <span>Confirmar Turno</span>
+                                                    <span>
+                                                        {configSenia?.requiereSenia && configSenia.montoSenia > 0
+                                                            ? `Pagar seña ($${configSenia.montoSenia.toLocaleString('es-AR')}) y confirmar`
+                                                            : 'Confirmar Turno'}
+                                                    </span>
                                                     <ArrowRight className="h-4 w-4" />
                                                 </>
                                             )}
@@ -625,12 +684,14 @@ export function FloatingChatbot({
                             {/* ── PASO 6: ÉXITO / CONFIRMADO ────────────────────────── */}
                             {step === 'exito' && (
                                 <div className="space-y-4 pt-2 text-center animate-in zoom-in-95 duration-300">
-                                    <div className="h-16 w-16 rounded-full bg-emerald-100 text-emerald-600 border border-emerald-200 flex items-center justify-center text-3xl mx-auto shadow-sm">
-                                        ✓
+                                    <div className={`h-16 w-16 rounded-full border flex items-center justify-center text-3xl mx-auto shadow-sm ${seniaPendiente ? 'bg-amber-100 text-amber-600 border-amber-200' : 'bg-emerald-100 text-emerald-600 border-emerald-200'}`}>
+                                        {seniaPendiente ? '⏳' : '✓'}
                                     </div>
 
                                     <div>
-                                        <h4 className="text-lg font-extrabold text-slate-800">¡Turno Confirmado!</h4>
+                                        <h4 className="text-lg font-extrabold text-slate-800">
+                                            {seniaPendiente ? 'Turno registrado — seña pendiente' : '¡Turno Confirmado!'}
+                                        </h4>
                                         <p className="text-xs text-slate-500 mt-0.5">
                                             ¡Muchas gracias, <strong>{booking.nombre}</strong>!
                                         </p>
@@ -652,10 +713,17 @@ export function FloatingChatbot({
                                         </div>
                                     </div>
 
-                                    <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 text-left">
-                                        <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
-                                        <span>Te enviamos el recordatorio automático a tu WhatsApp.</span>
-                                    </div>
+                                    {seniaPendiente ? (
+                                        <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center gap-2 text-left">
+                                            <ShieldCheck className="h-4 w-4 text-amber-600 shrink-0" />
+                                            <span>No pudimos abrir el pago de la seña ahora. Tu turno quedó registrado y te contactaremos para coordinar el pago y confirmarlo.</span>
+                                        </div>
+                                    ) : (
+                                        <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 text-left">
+                                            <CheckCircle2 className="h-4 w-4 text-emerald-600 shrink-0" />
+                                            <span>Te enviamos el recordatorio automático a tu WhatsApp.</span>
+                                        </div>
+                                    )}
 
                                     <div className="grid grid-cols-2 gap-2 pt-2">
                                         <button
