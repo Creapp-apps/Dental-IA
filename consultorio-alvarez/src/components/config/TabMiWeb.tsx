@@ -16,6 +16,7 @@ import { TenantLogo } from '@/components/ui/tenant-logo'
 import { glassAlert } from '@/components/ui/glass-alert'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ImageUploader } from '@/components/ui/image-uploader'
+import { MediaUploader } from '@/components/ui/media-uploader'
 
 // ── Paleta de colores predefinida ─────────────────────────────────
 
@@ -111,6 +112,16 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
     // Servicios
     const [servicios, setServicios] = useState(config.servicios)
 
+    // Hero slides (fotos de la portada)
+    const [heroSlides, setHeroSlides] = useState(config.hero_slides ?? [])
+
+    // Videos de la sección "Nosotros"
+    const [aboutVideos, setAboutVideos] = useState(config.about_videos ?? [])
+    // null = default por slug; acá lo materializamos a booleano para el toggle.
+    const [aboutVisible, setAboutVisible] = useState<boolean>(
+        config.about_visible ?? (!slug || slug === 'alvarez')
+    )
+
     function applyPalette(p: PalettePreset) {
         setColores({
             color_primary: p.primary,
@@ -133,13 +144,41 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
         setServicios(s => s.map((item, idx) => idx === i ? { ...item, [field]: val } : item))
     }
 
+    // ── Hero slides ──
+    function addHeroSlide() {
+        setHeroSlides(s => [...s, { image_url: '', title: '', description: '', tag: '' }])
+    }
+    function removeHeroSlide(i: number) {
+        setHeroSlides(s => s.filter((_, idx) => idx !== i))
+    }
+    function updateHeroSlide(i: number, field: string, val: string) {
+        setHeroSlides(s => s.map((item, idx) => idx === i ? { ...item, [field]: val } : item))
+    }
+
+    // ── Videos "Nosotros" ──
+    function addAboutVideo() {
+        setAboutVideos(v => [...v, { src: '', title: '', subtitle: '', badge: '' }])
+    }
+    function removeAboutVideo(i: number) {
+        setAboutVideos(v => v.filter((_, idx) => idx !== i))
+    }
+    function updateAboutVideo(i: number, field: string, val: string) {
+        setAboutVideos(v => v.map((item, idx) => idx === i ? { ...item, [field]: val } : item))
+    }
+
     function guardar() {
         startTransition(async () => {
+            // Solo mandamos slides/videos con su medio cargado (el resto son borradores vacíos).
+            const heroSlidesLimpios = heroSlides.filter(s => s.image_url)
+            const aboutVideosLimpios = aboutVideos.filter(v => v.src)
             const r = await guardarLandingConfig({
                 ...textos,
                 ...colores,
                 servicios,
-                logo_config: logoConfig
+                logo_config: logoConfig,
+                hero_slides: heroSlidesLimpios.length > 0 ? heroSlidesLimpios : null,
+                about_videos: aboutVideosLimpios.length > 0 ? aboutVideosLimpios : null,
+                about_visible: aboutVisible,
             }, slug)
             if (r.error) glassAlert.error({ title: 'Error al guardar', description: r.error })
             else glassAlert.success({ title: '¡Landing actualizada!', description: 'Los cambios ya están publicados.' })
@@ -437,31 +476,125 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                     </Field>
                 </div>
             </SectionCard>
+            {/* Fotos de la portada (Hero) */}
+            <SectionCard title="Fotos de la portada (Hero)" icon={Type}>
+                <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">Estas son las fotos grandes que se ven arriba de todo. Subí las de tu consultorio. Si no cargás ninguna, se usan las de la plantilla.</p>
+                    {heroSlides.map((slide, i) => (
+                        <div key={i} className="glass-subtle rounded-xl p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold text-foreground">Foto {i + 1}</span>
+                                <button
+                                    onClick={() => removeHeroSlide(i)}
+                                    className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
+                            <MediaUploader
+                                folder="hero"
+                                kind="image"
+                                value={slide.image_url || null}
+                                onChange={(url) => updateHeroSlide(i, 'image_url', url)}
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                                <Input value={slide.title} onChange={e => updateHeroSlide(i, 'title', e.target.value)} placeholder="Título (ej. Implantología)" className="text-sm" />
+                                <Input value={slide.tag} onChange={e => updateHeroSlide(i, 'tag', e.target.value)} placeholder="Etiqueta (ej. Rehabilitación Oral)" className="text-sm" />
+                            </div>
+                            <Input value={slide.description} onChange={e => updateHeroSlide(i, 'description', e.target.value)} placeholder="Descripción" className="text-sm" />
+                        </div>
+                    ))}
+                    <GlassButton size="sm" variant="glass" onClick={addHeroSlide}>
+                        <Plus className="h-3.5 w-3.5 mr-1.5" />
+                        Agregar foto
+                    </GlassButton>
+                </div>
+            </SectionCard>
+
+            {/* Sección de video "Nosotros" */}
+            <SectionCard title="Sección de video (Nosotros)" icon={Type}>
+                <div className="space-y-3">
+                    <label className="flex items-center justify-between gap-3 glass-subtle rounded-xl p-3 cursor-pointer">
+                        <span className="text-sm text-foreground">Mostrar la sección de video en la web</span>
+                        <input
+                            type="checkbox"
+                            checked={aboutVisible}
+                            onChange={e => setAboutVisible(e.target.checked)}
+                            className="h-4 w-4 accent-primary cursor-pointer"
+                        />
+                    </label>
+                    <p className="text-xs text-muted-foreground">Subí tus propios videos (MP4, cortos y livianos: máx. 10MB cada uno). Si no cargás ninguno, se usan los de la plantilla.</p>
+                    {aboutVideos.map((v, i) => (
+                        <div key={i} className="glass-subtle rounded-xl p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs font-semibold text-foreground">Video {i + 1}</span>
+                                <button
+                                    onClick={() => removeAboutVideo(i)}
+                                    className="p-1.5 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                            </div>
+                            <MediaUploader
+                                folder="videos"
+                                kind="video"
+                                value={v.src || null}
+                                onChange={(url) => updateAboutVideo(i, 'src', url)}
+                            />
+                            <div className="grid grid-cols-2 gap-2">
+                                <Input value={v.title} onChange={e => updateAboutVideo(i, 'title', e.target.value)} placeholder="Título" className="text-sm" />
+                                <Input value={v.badge} onChange={e => updateAboutVideo(i, 'badge', e.target.value)} placeholder="Etiqueta" className="text-sm" />
+                            </div>
+                            <Input value={v.subtitle} onChange={e => updateAboutVideo(i, 'subtitle', e.target.value)} placeholder="Subtítulo" className="text-sm" />
+                        </div>
+                    ))}
+                    <GlassButton size="sm" variant="glass" onClick={addAboutVideo}>
+                        <Plus className="h-3.5 w-3.5 mr-1.5" />
+                        Agregar video
+                    </GlassButton>
+                </div>
+            </SectionCard>
+
             {/* Servicios */}
             <SectionCard title="Servicios destacados" icon={List}>
-                <div className="space-y-2">
+                <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">La imagen aparece al tocar el servicio en la web. Si no cargás una, se usa la de la plantilla.</p>
                     {servicios.map((s, i) => (
-                        <div key={i} className="glass-subtle rounded-xl p-3 flex items-start gap-2">
-                            <div className="flex-1 grid grid-cols-2 gap-2">
-                                <Input
-                                    value={s.titulo}
-                                    onChange={e => updateServicio(i, 'titulo', e.target.value)}
-                                    placeholder="Título"
-                                    className="text-sm"
-                                />
-                                <Input
-                                    value={s.descripcion}
-                                    onChange={e => updateServicio(i, 'descripcion', e.target.value)}
-                                    placeholder="Descripción breve"
-                                    className="text-sm"
-                                />
+                        <div key={i} className="glass-subtle rounded-xl p-3 space-y-2">
+                            <div className="flex items-start gap-2">
+                                <div className="flex-1 grid grid-cols-2 gap-2">
+                                    <Input
+                                        value={s.titulo}
+                                        onChange={e => updateServicio(i, 'titulo', e.target.value)}
+                                        placeholder="Título"
+                                        className="text-sm"
+                                    />
+                                    <Input
+                                        value={s.descripcion}
+                                        onChange={e => updateServicio(i, 'descripcion', e.target.value)}
+                                        placeholder="Descripción breve"
+                                        className="text-sm"
+                                    />
+                                </div>
+                                <button
+                                    onClick={() => removeServicio(i)}
+                                    className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </button>
                             </div>
-                            <button
-                                onClick={() => removeServicio(i)}
-                                className="p-2 text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            <Input
+                                value={s.descripcion_ampliada ?? ''}
+                                onChange={e => updateServicio(i, 'descripcion_ampliada', e.target.value)}
+                                placeholder="Descripción ampliada (opcional, aparece al tocar)"
+                                className="text-sm"
+                            />
+                            <MediaUploader
+                                folder="servicios"
+                                kind="image"
+                                value={s.image_url ?? null}
+                                onChange={(url) => updateServicio(i, 'image_url', url)}
+                            />
                         </div>
                     ))}
                     <GlassButton size="sm" variant="glass" onClick={addServicio}>

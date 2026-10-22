@@ -37,20 +37,33 @@ const SCENES: VideoScene[] = [
     }
 ]
 
+interface AboutVideoInput {
+    src: string
+    title: string
+    subtitle: string
+    badge: string
+}
+
 interface Props {
     onBookingClick: () => void
     colorPrimary?: string
     bgHero?: string
+    videos?: AboutVideoInput[] | null
 }
 
-export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHero }: Props) {
+export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHero, videos }: Props) {
     const [currentSceneIdx, setCurrentSceneIdx] = useState(0)
     const [isMuted, setIsMuted] = useState(true)
     const [isPlaying, setIsPlaying] = useState(true)
     const videoRef = useRef<HTMLVideoElement>(null)
     const containerRef = useRef<HTMLDivElement>(null)
 
-    const activeScene = SCENES[currentSceneIdx]
+    // Videos del tenant si cargó los suyos; si no, los de la plantilla por defecto.
+    const scenes: VideoScene[] = (videos && videos.length > 0)
+        ? videos.map((v, i) => ({ id: `scene-${i}`, src: v.src, title: v.title, subtitle: v.subtitle, badge: v.badge }))
+        : SCENES
+
+    const activeScene = scenes[currentSceneIdx] ?? scenes[0]
 
     // Handle scene change
     useEffect(() => {
@@ -101,7 +114,7 @@ export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHer
 
     // Automatically transition to next scene when video ends
     const handleVideoEnd = () => {
-        setCurrentSceneIdx((prev) => (prev + 1) % SCENES.length)
+        setCurrentSceneIdx((prev) => (prev + 1) % scenes.length)
     }
 
     return (
@@ -237,7 +250,7 @@ export function AboutUsSection({ onBookingClick, colorPrimary = '#0d9488', bgHer
 
                         {/* SCENE NAVIGATOR TABS BELOW VIDEO */}
                         <div className="flex items-center justify-center gap-2 sm:gap-3 flex-wrap">
-                            {SCENES.map((scene, idx) => (
+                            {scenes.map((scene, idx) => (
                                 <button
                                     key={scene.id}
                                     onClick={() => setCurrentSceneIdx(idx)}

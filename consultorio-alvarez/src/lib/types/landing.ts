@@ -10,6 +10,20 @@ export interface LogoConfig {
     color_style: 'gradient' | 'solid' | 'monochrome'
 }
 
+export interface HeroSlide {
+    image_url: string
+    title: string
+    description: string
+    tag: string
+}
+
+export interface AboutVideo {
+    src: string
+    title: string
+    subtitle: string
+    badge: string
+}
+
 export interface LandingConfig {
     id: string
     tenant_id: string
@@ -22,7 +36,10 @@ export interface LandingConfig {
     equipo_subtitulo?: string
     booking_titulo: string
     booking_subtitulo: string
-    servicios: { icono: string; titulo: string; descripcion: string }[]
+    servicios: { icono: string; titulo: string; descripcion: string; image_url?: string; descripcion_ampliada?: string }[]
+    hero_slides?: HeroSlide[] | null
+    about_videos?: AboutVideo[] | null
+    about_visible?: boolean | null
     color_primary: string
     color_primary_hover: string
     color_accent: string
@@ -74,5 +91,8 @@ export const DEFAULT_LANDING_CONFIG: Omit<LandingConfig, 'id' | 'tenant_id'> = {
     footer_hours: null,
     coberturas_subtitulo: 'Trabajamos con las principales coberturas del país para brindarte la mejor atención médica sin preocupaciones.',
     asistente_nombre: 'CinthIA',
+    hero_slides: null,
+    about_videos: null,
+    about_visible: null,
 }
 

@@ -37,7 +37,7 @@ const SLIDES = [
 
 interface Props {
     onBookingClick: () => void
-    config?: Pick<LandingConfig, 'hero_badge' | 'hero_titulo' | 'hero_subtitulo' | 'color_primary' | 'color_accent' | 'footer_address' | 'footer_phone' | 'logo_config'>
+    config?: Pick<LandingConfig, 'hero_badge' | 'hero_titulo' | 'hero_subtitulo' | 'color_primary' | 'color_accent' | 'footer_address' | 'footer_phone' | 'logo_config' | 'hero_slides'>
     clinicName?: string
     slug?: string
 }
@@ -48,6 +48,11 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
     const fallbackPhone = isAlvarez ? CLINIC.phone : '+54 9 11 0000-0000'
     const currentAddress = config?.footer_address || fallbackAddress
     const currentPhone = config?.footer_phone || fallbackPhone
+
+    // Slides del tenant si cargó las suyas; si no, las de la plantilla por defecto.
+    const slides = (config?.hero_slides && config.hero_slides.length > 0)
+        ? config.hero_slides.map(s => ({ image: s.image_url, title: s.title, description: s.description, tag: s.tag }))
+        : SLIDES
     const titleRef = useRef<HTMLHeadingElement>(null)
     const subtitleRef = useRef<HTMLParagraphElement>(null)
     const ctaRef = useRef<HTMLDivElement>(null)
@@ -72,7 +77,7 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
             setProgress(p)
 
             if (currentStep >= steps) {
-                setCurrentSlide((prev) => (prev + 1) % SLIDES.length)
+                setCurrentSlide((prev) => (prev + 1) % slides.length)
                 currentStep = 0
                 setProgress(0)
             }
@@ -82,12 +87,12 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
     }, [isHovered])
 
     const nextSlide = () => {
-        setCurrentSlide((prev) => (prev + 1) % SLIDES.length)
+        setCurrentSlide((prev) => (prev + 1) % slides.length)
         setProgress(0)
     }
 
     const prevSlide = () => {
-        setCurrentSlide((prev) => (prev - 1 + SLIDES.length) % SLIDES.length)
+        setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length)
         setProgress(0)
     }
 
@@ -167,7 +172,7 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
                         className="flex h-full w-full transition-transform duration-1000 ease-out"
                         style={{ transform: `translateX(-${currentSlide * 100}%)` }}
                     >
-                        {SLIDES.map((slide, idx) => (
+                        {slides.map((slide, idx) => (
                             <div key={idx} className="relative w-full h-full shrink-0 overflow-hidden">
                                 <img
                                     src={slide.image}
@@ -206,7 +211,7 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
                                 className="text-[10px] sm:text-xs font-black uppercase tracking-widest transition-all duration-300"
                                 style={{ color: config?.color_primary ?? '#0d9488' }}
                             >
-                                {SLIDES[currentSlide].tag || 'Tecnología de última generación'}
+                                {slides[currentSlide].tag || 'Tecnología de última generación'}
                             </span>
                         </div>
 
@@ -216,7 +221,7 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
                             className="text-2xl md:text-3.5xl font-black text-slate-900 leading-tight mb-3 tracking-tight"
                             style={{ opacity: 0 }}
                         >
-                            {SLIDES[currentSlide].title}
+                            {slides[currentSlide].title}
                         </h1>
 
                         {/* Subtitle / Description */}
@@ -225,7 +230,7 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
                             className="text-xs sm:text-sm text-gray-600 leading-relaxed mb-6"
                             style={{ opacity: 0 }}
                         >
-                            {SLIDES[currentSlide].description}
+                            {slides[currentSlide].description}
                         </p>
 
                         {/* CTA Button inside Card */}
@@ -260,7 +265,7 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
 
                 {/* DOT INDICATORS (Bottom Right to prevent overlap) */}
                 <div className="absolute bottom-16 right-6 md:right-20 lg:right-32 flex gap-2 z-40 bg-white/30 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/30 shadow-sm transition-all duration-300">
-                    {SLIDES.map((_, idx) => (
+                    {slides.map((_, idx) => (
                         <button
                             key={idx}
                             onClick={() => {
@@ -277,7 +282,7 @@ export function HeroSection({ onBookingClick, config, clinicName, slug }: Props)
 
                 {/* TOP PROGRESS BAR INDICATORS */}
                 <div className="absolute top-0 left-0 right-0 h-1 flex gap-1 z-40">
-                    {SLIDES.map((_, idx) => (
+                    {slides.map((_, idx) => (
                         <div key={idx} className="h-full bg-slate-800/10 flex-1 overflow-hidden">
                             <div
                                 className="h-full bg-slate-800/60 transition-all duration-100 ease-linear"

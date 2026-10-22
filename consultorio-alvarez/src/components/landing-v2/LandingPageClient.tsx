@@ -41,6 +41,9 @@ export function LandingPageClient({ slug, tenantNombre, config, professionals, o
 
     const clinicName = tenantNombre || ((config as any)?.logo_config?.text) || config?.meta_title || 'Consultorio Odontológico'
 
+    // Sección de video: NULL = default por slug (solo Álvarez), true/false = explícito.
+    const showAbout = config.about_visible ?? (!slug || slug === 'alvarez')
+
     useEffect(() => {
         const lenis = new Lenis({
             duration: 1.8,
@@ -105,7 +108,9 @@ export function LandingPageClient({ slug, tenantNombre, config, professionals, o
             <MeshGradient scrollProgress={scrollProgress} />
             <main className="relative z-10">
                 <HeroSection onBookingClick={scrollToBooking} config={config} clinicName={clinicName} slug={slug} />
-                <AboutUsSection onBookingClick={scrollToBooking} colorPrimary={config.color_primary} bgHero={config.color_bg_hero} />
+                {showAbout && (
+                    <AboutUsSection onBookingClick={scrollToBooking} colorPrimary={config.color_primary} bgHero={config.color_bg_hero} videos={config.about_videos} />
+                )}
                 <ServicesSection onBookingClick={scrollToBooking} config={config} />
                 <TeamSection config={config} professionals={professionals} />
                 {obrasSociales && obrasSociales.length > 0 && (

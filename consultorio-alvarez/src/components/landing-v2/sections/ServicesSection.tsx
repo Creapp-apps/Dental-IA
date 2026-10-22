@@ -194,6 +194,21 @@ export function ServicesSection({ config, onBookingClick }: ServicesSectionProps
     const sectionRef = useRef<HTMLDivElement>(null)
     const cardsRef = useRef<HTMLDivElement>(null)
     const titleRef = useRef<HTMLHeadingElement>(null)
+
+    // Tooltip por servicio del tenant: si el servicio tiene su propia imagen, se
+    // usa esa (y su descripción ampliada); si no, cae al tooltip por keyword.
+    const serviciosTooltips: Record<string, ServiceTooltipData> = {}
+    for (const s of config?.servicios ?? []) {
+        if (s.image_url) {
+            serviciosTooltips[s.titulo] = {
+                title: s.titulo,
+                expandedDescription: s.descripcion_ampliada || s.descripcion || '',
+                images: [s.image_url],
+            }
+        }
+    }
+    const tooltipDe = (titulo: string): ServiceTooltipData | null =>
+        serviciosTooltips[titulo] ?? getTooltipData(titulo)
     
     // State to manage pinned/active tooltip on iPad/mobile/tap
     const [activeTooltipKey, setActiveTooltipKey] = useState<string | null>(null)
@@ -321,7 +336,7 @@ export function ServicesSection({ config, onBookingClick }: ServicesSectionProps
         setActiveTooltipKey((prev) => (prev === key ? null : key))
     }
 
-    const activeTooltipData = activeTooltipKey ? getTooltipData(activeTooltipKey) : null
+    const activeTooltipData = activeTooltipKey ? tooltipDe(activeTooltipKey) : null
 
     return (
         <section
@@ -349,7 +364,7 @@ export function ServicesSection({ config, onBookingClick }: ServicesSectionProps
                 <div ref={cardsRef} className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     {config?.servicios ? (
                         config.servicios.map((service, idx) => {
-                            const tooltipData = getTooltipData(service.titulo);
+                            const tooltipData = tooltipDe(service.titulo);
                             const isPinned = activeTooltipKey === service.titulo;
                             return (
                                 <div 
