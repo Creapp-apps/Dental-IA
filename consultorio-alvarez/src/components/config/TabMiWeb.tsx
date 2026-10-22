@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { motion } from 'framer-motion'
 import {
     Save, Globe, ExternalLink, Palette, Type, List,
-    Plus, Trash2, Eye, MapPin, Image as ImageIcon
+    Plus, Trash2, Eye, MapPin, Image as ImageIcon, ChevronDown
 } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
@@ -48,14 +48,23 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     )
 }
 
-function SectionCard({ title, children, icon: Icon }: { title: string; children: React.ReactNode; icon: React.ElementType<{ className?: string }> }) {
+function SectionCard({ title, children, icon: Icon, defaultOpen = false, badge }: { title: string; children: React.ReactNode; icon: React.ElementType<{ className?: string }>; defaultOpen?: boolean; badge?: string }) {
+    const [open, setOpen] = useState(defaultOpen)
     return (
-        <div className="glass rounded-2xl shadow-glass p-5 space-y-4">
-            <div className="flex items-center gap-2">
-                <Icon className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-            </div>
-            {children}
+        <div className="glass rounded-2xl shadow-glass overflow-hidden">
+            <button
+                type="button"
+                onClick={() => setOpen(o => !o)}
+                className="w-full flex items-center justify-between gap-2 p-5 cursor-pointer hover:bg-white/5 transition-colors"
+            >
+                <div className="flex items-center gap-2">
+                    <Icon className="h-4 w-4 text-primary" />
+                    <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+                    {badge && <span className="text-[10px] font-semibold text-primary bg-primary/10 border border-primary/20 rounded-full px-2 py-0.5">{badge}</span>}
+                </div>
+                <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform shrink-0', open && 'rotate-180')} />
+            </button>
+            {open && <div className="px-5 pb-5 space-y-4">{children}</div>}
         </div>
     )
 }
@@ -263,7 +272,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
             {subtab === 'apariencia' && (
             <div className="space-y-5">
             {/* Logo Builder */}
-            <SectionCard title="Identidad visual (Logo)" icon={Type}>
+            <SectionCard title="Identidad visual (Logo)" icon={Type} defaultOpen>
                 <div className="space-y-4">
                     <p className="text-xs text-muted-foreground">Configurá el logo que aparecerá en tu panel y Landing Page.</p>
 
@@ -483,7 +492,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
             {subtab === 'textos' && (
             <div className="space-y-5">
             {/* Textos */}
-            <SectionCard title="Textos de la landing" icon={Type}>
+            <SectionCard title="Textos de la landing" icon={Type} defaultOpen>
                 <div className="space-y-3">
                     <div className="grid grid-cols-2 gap-3">
                         <Field label="Badge del hero">
@@ -544,7 +553,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
             {subtab === 'medios' && (
             <div className="space-y-5">
             {/* Fotos de la portada (Hero) */}
-            <SectionCard title="Fotos de la portada (Hero)" icon={Type}>
+            <SectionCard title="Fotos de la portada (Hero)" icon={Type} defaultOpen>
                 <div className="space-y-3">
                     <p className="text-xs text-muted-foreground">Estas son las fotos grandes que se ven arriba de todo. Subí las de tu consultorio. Si no cargás ninguna, se usan las de la plantilla.</p>
                     {heroSlides.map((slide, i) => (
@@ -579,7 +588,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
             </SectionCard>
 
             {/* Sección de video "Nosotros" */}
-            <SectionCard title="Sección de video (Nosotros)" icon={Type}>
+            <SectionCard title="Sección de video (Nosotros)" icon={Type} badge={aboutVisible ? "Visible" : "Oculta"}>
                 <div className="space-y-4">
                     <label className="flex items-center justify-between gap-3 glass-subtle rounded-xl p-3 cursor-pointer">
                         <span className="text-sm text-foreground">Mostrar la sección de video en la web</span>
@@ -591,6 +600,11 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                         />
                     </label>
 
+                    {!aboutVisible && (
+                        <p className="text-xs text-muted-foreground">La sección está oculta en la web. Activá el interruptor para mostrarla y editar sus textos, escenas y tarjetas.</p>
+                    )}
+
+                    {aboutVisible && (<>
                     {/* Encabezado de la sección */}
                     <div className="space-y-2">
                         <p className="text-xs font-semibold text-foreground">Encabezado</p>
@@ -658,6 +672,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
                             Agregar tarjeta
                         </GlassButton>
                     </div>
+                    </>)}
                 </div>
             </SectionCard>
 
@@ -717,7 +732,7 @@ export function TabMiWeb({ config, slug }: TabMiWebProps) {
             {subtab === 'contacto' && (
             <div className="space-y-5">
             {/* Footer */}
-            <SectionCard title="Datos de contacto (Footer)" icon={MapPin}>
+            <SectionCard title="Datos de contacto (Footer)" icon={MapPin} defaultOpen>
                 <div className="space-y-3">
                     <Field label="Dirección / Ubicación">
                         <Input value={textos.footer_address} onChange={e => setTextos(t => ({ ...t, footer_address: e.target.value }))} placeholder="Ej: Av. Corrientes 1234, CABA" />
