@@ -406,6 +406,28 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: true, message: 'Turno not found or tenant mismatch' })
             }
 
+            // ── DEDUPE ANTI RAGE-CLICK ──
+            // El dedupe por wa_message_id (arriba) solo frena reintentos de Meta del
+            // MISMO mensaje. Si el paciente toca el botón "Si, confirmo" varias veces,
+            // son mensajes distintos: cada uno reconfirmaba y re-enviaba plantilla +
+            // notificación (se vieron 6 confirmaciones del mismo turno). Si el último
+            // recordatorio de este turno ya fue respondido con la MISMA acción, es un
+            // reclick: lo ignoramos (no re-notificamos ni re-despachamos plantilla).
+            const { data: ultimoRecordatorio } = await admin
+                .from('recordatorios')
+                .select('estado_envio, respuesta_paciente')
+                .eq('turno_id', turnoIdToUpdate)
+                .eq('tenant_id', tenantId)
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle()
+
+            if (ultimoRecordatorio?.estado_envio === 'RESPONDIDO' &&
+                ultimoRecordatorio?.respuesta_paciente === respuestaPaciente) {
+                console.log(`[WA WEBHOOK] Reclick de "${respuestaPaciente}" en turno ${turnoIdToUpdate} ya respondido. Ignorado (anti rage-click).`)
+                return NextResponse.json({ success: true, message: 'Duplicate action ignored' })
+            }
+
             // Si no es solicitud de reprogramar, actualizamos el estado físico del turno en la grilla
             if (respuestaPaciente !== 'REPROGRAMAR') {
                 const nuevoEstado = respuestaPaciente === 'CONFIRMAR' ? 'CONFIRMADO' : 'CANCELADO'

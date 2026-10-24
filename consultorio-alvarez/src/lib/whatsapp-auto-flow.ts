@@ -590,6 +590,61 @@ export async function procesarMensajeAutonomo({
         return { handled: true, action: 'slot_elegido_pidiendo_nombre' }
     }
 
+    // ── NINGUNO DE ESOS SLOTS / PIDE OTRA FECHA EN TEXTO ──
+    // Si recién ofrecimos los 3 próximos slots y el paciente responde en texto
+    // pidiendo una fecha más adelante ("semana próxima", "pasada esa fecha",
+    // "para noviembre"), hoy no sabemos ofrecer esa fecha: en vez de tirarle el
+    // menú genérico, lo pasamos a una persona para coordinar. (No pisa números
+    // ni clics de slot: eso ya se resolvió arriba.)
+    if (estadoActivo?.paso === 'SLOTS_OFRECIDOS') {
+        const pideOtraFecha =
+            normText.includes('semana proxima') ||
+            normText.includes('semana que viene') ||
+            normText.includes('proxima semana') ||
+            normText.includes('la que viene') ||
+            normText.includes('mes que viene') ||
+            normText.includes('mas adelante') ||
+            normText.includes('mas tarde') ||
+            normText.includes('pasada esa fecha') ||
+            normText.includes('despues de') ||
+            normText.includes('otra fecha') ||
+            normText.includes('otro dia') ||
+            normText.includes('otra semana') ||
+            normText.includes('mas lejos') ||
+            normText.includes('ninguno') ||
+            normText.includes('ninguna') ||
+            normText.includes('no me sirve') ||
+            normText.includes('no me sirven') ||
+            /para (enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)/.test(normText)
+
+        if (pideOtraFecha) {
+            console.log(`[WA AUTO-FLOW] ${cleanPhone} pide una fecha fuera de los slots ofrecidos. Derivando a humano.`)
+            if (conversacionId) {
+                await admin.from('whatsapp_conversaciones').update({
+                    estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+                }).eq('id', conversacionId)
+                await setReservaCtx(admin, conversacionId, null)
+            }
+            await admin.from('notificaciones').insert({
+                tenant_id: tenantId,
+                titulo: '📅 Paciente pide otra fecha de turno',
+                mensaje: `El paciente (+${cleanPhone}) no quiere los próximos horarios y pidió: "${textBody.slice(0, 120)}". Coordinar fecha por chat.`,
+                tipo: 'turno_reprogramado',
+                referencia_id: conversacionId || '',
+                leida: false
+            })
+            try {
+                const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                await sendPushToRole('admin', tenantId, '📅 Pide otra fecha', `Paciente +${cleanPhone} quiere un turno más adelante.`, '/mensajes')
+            } catch (e) {}
+            await enviarTextoWhatsApp(creds, cleanPhone,
+                `¡Dale! 🙏 Para buscarte una fecha más adelante te paso con una persona de nuestro equipo, que te va a escribir por acá para coordinarla.`,
+                { ...trackingBase, accion: 'pide_otra_fecha_derivado' }
+            )
+            return { handled: true, action: 'pide_otra_fecha_derivado' }
+        }
+    }
+
     // ── CONFIRMACIÓN AUTOMÁTICA EN 1 CLIC PARA PACIENTE EXISTENTE ──
     if (buttonPayload?.startsWith('CONFIRMAR_AUTO_')) {
         const parts = buttonPayload.replace('CONFIRMAR_AUTO_', '').split('_')
@@ -667,14 +722,20 @@ export async function procesarMensajeAutonomo({
     // ─────────────────────────────────────────────────────────────
     // PARCHE 1: ACUSE DE RECIBO INTELIGENTE DE FOTOS / ESTUDIOS
     // ─────────────────────────────────────────────────────────────
+    // Nota de voz: WhatsApp no transcribe el audio, así que el bot no puede
+    // "entenderlo". En vez de tirar el menú genérico, acusamos recibo y lo
+    // derivamos a una persona (igual que una foto/estudio).
+    const esNotaVoz = textBody.includes('[Nota de voz]') || textBody.includes('🎙️')
+
     if (
+        esNotaVoz ||
         textBody.includes('[Foto adjunta]') || textBody.includes('📷') ||
         textBody.includes('[Documento adjunto]') || textBody.includes('📄') ||
         textBody.includes('[Video adjunto]') || textBody.includes('🎥') ||
         (normText.includes('foto') && (normText.includes('envio') || normText.includes('adjunt') || normText.includes('mando')))
     ) {
-        console.log(`[WA AUTO-FLOW] Archivo (foto/estudio/documento) recibido de ${cleanPhone}. Acusando recibo y alertando recepción...`)
-        
+        console.log(`[WA AUTO-FLOW] Archivo (${esNotaVoz ? 'nota de voz' : 'foto/estudio/documento'}) recibido de ${cleanPhone}. Acusando recibo y alertando recepción...`)
+
         if (conversacionId) {
             await admin.from('whatsapp_conversaciones').update({
                 estado: 'HUMANO_PENDIENTE',
@@ -684,8 +745,10 @@ export async function procesarMensajeAutonomo({
 
         await admin.from('notificaciones').insert({
             tenant_id: tenantId,
-            titulo: '📸 Foto enviada por Paciente',
-            mensaje: `El paciente (+${cleanPhone}) envió una foto/estudio por WhatsApp. Revisar en mensajes.`,
+            titulo: esNotaVoz ? '🎙️ Nota de voz de Paciente' : '📸 Foto enviada por Paciente',
+            mensaje: esNotaVoz
+                ? `El paciente (+${cleanPhone}) envió una nota de voz por WhatsApp. Escuchar y responder en mensajes.`
+                : `El paciente (+${cleanPhone}) envió una foto/estudio por WhatsApp. Revisar en mensajes.`,
             tipo: 'turno_reprogramado',
             referencia_id: conversacionId || '',
             leida: false
@@ -693,18 +756,23 @@ export async function procesarMensajeAutonomo({
 
         try {
             const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
-            await sendPushToRole('admin', tenantId, '📸 Foto Clínica Recibida', `Paciente +${cleanPhone} envió una foto por WhatsApp.`, '/mensajes')
+            await sendPushToRole('admin', tenantId,
+                esNotaVoz ? '🎙️ Nota de voz recibida' : '📸 Foto Clínica Recibida',
+                `Paciente +${cleanPhone} envió ${esNotaVoz ? 'una nota de voz' : 'una foto'} por WhatsApp.`, '/mensajes')
         } catch (e) {}
 
-        const msgFoto = `¡Recibido correctamente! 📎✨\n\n` +
-            `Ya lo adjuntamos a tu ficha para que el equipo odontológico pueda verlo y evaluarlo.\n` +
-            `Un profesional o asesor de nuestro equipo te responderá a la brevedad por este medio.`
+        const msgFoto = esNotaVoz
+            ? `¡Recibimos tu nota de voz! 🎙️✨\n\n` +
+              `Una persona de nuestro equipo la va a escuchar y te responde a la brevedad por este medio.`
+            : `¡Recibido correctamente! 📎✨\n\n` +
+              `Ya lo adjuntamos a tu ficha para que el equipo odontológico pueda verlo y evaluarlo.\n` +
+              `Un profesional o asesor de nuestro equipo te responderá a la brevedad por este medio.`
 
         await enviarTextoWhatsApp(creds, cleanPhone, msgFoto, {
             ...trackingBase,
-            accion: 'foto_recibida_acuse'
+            accion: esNotaVoz ? 'nota_voz_recibida_acuse' : 'foto_recibida_acuse'
         })
-        return { handled: true, action: 'foto_recibida_acuse' }
+        return { handled: true, action: esNotaVoz ? 'nota_voz_recibida_acuse' : 'foto_recibida_acuse' }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -750,22 +818,55 @@ export async function procesarMensajeAutonomo({
     // ─────────────────────────────────────────────────────────────
     // PARCHE 2: CORTESÍA Y AGRADECIMIENTOS (Cierre cálido sin loops)
     // ─────────────────────────────────────────────────────────────
-    const esAgradecimiento =
-        normText === 'gracias' ||
-        normText === 'muchas gracias' ||
-        normText === 'muchas gracias!' ||
-        normText === 'gracias!!' ||
-        normText === 'gracias!' ||
-        normText.startsWith('gracias') ||
-        normText.startsWith('muchas gracias') ||
-        normText === 'perfecto gracias' ||
-        normText === 'muy bien gracias' ||
-        normText.includes('excelente estado') ||
-        normText === 'buen dia' ||
-        normText === 'buenas tardes'
+    // Texto sin emojis, para que "perfecto 👌 allí estaré" matchee igual que
+    // "perfecto allí estaré". Un flujo activo (reserva/DNI) ya retornó arriba,
+    // así que acá un "ok"/"dale" suelto es cierre de charla, no un paso perdido.
+    const EMOJI_RE = /[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}‍️]/gu
+    const soloTexto = normText.replace(EMOJI_RE, '').replace(/\s+/g, ' ').trim()
 
-    if (esAgradecimiento && !normText.includes('turno') && !normText.includes('dolor')) {
-        const msgAgradecimiento = `¡De nada! Que tengas un excelente día. Quedamos a tu entera disposición ante cualquier duda o consulta 😊🦷✨`
+    // 2.0 Reacción que llega como texto (solo emojis, sin palabras): silencio.
+    // No tiene sentido responder el menú a un 👍 / 🙏 / 🫰 de cierre.
+    if (textBody.trim() !== '' && soloTexto === '') {
+        console.log(`[WA AUTO-FLOW] Mensaje solo-emoji de ${cleanPhone}. Silencio (sin menú).`)
+        return { handled: true, action: 'reaccion_emoji_silenciada' }
+    }
+
+    const esAgradecimiento =
+        soloTexto === 'gracias' ||
+        soloTexto.startsWith('gracias') ||
+        soloTexto.startsWith('muchas gracias') ||
+        soloTexto.startsWith('mil gracias') ||
+        soloTexto.includes('muchas gracias') ||
+        soloTexto === 'perfecto gracias' ||
+        soloTexto === 'muy bien gracias' ||
+        soloTexto.includes('excelente estado') ||
+        soloTexto === 'buen dia' ||
+        soloTexto === 'buenas tardes'
+
+    // Cierre conforme / aviso de que asiste: "ok", "dale", "perfecto",
+    // "allí estaré", "estoy yendo", etc. No es una consulta: no va al menú.
+    const esCierreConforme =
+        ['ok', 'oka', 'okis', 'okey', 'dale', 'listo', 'perfecto', 'perfe',
+         'genial', 'barbaro', 'buenisimo', 'joya', 'de una', 'ok dale',
+         'dale gracias', 'ok gracias', 'listo gracias', 'perfecto dale',
+         'ok perfecto', 'buenisimo gracias', 'excelente', 'excelente gracias'
+        ].includes(soloTexto) ||
+        soloTexto.includes('alli estare') ||
+        soloTexto.includes('ahi estare') ||
+        soloTexto.includes('ahi estoy') ||
+        soloTexto.includes('estoy yendo') ||
+        soloTexto.includes('ya estoy yendo') ||
+        soloTexto.includes('voy en camino') ||
+        soloTexto.includes('voy para alla') ||
+        soloTexto.includes('ahi voy') ||
+        soloTexto.includes('estoy llegando') ||
+        soloTexto.includes('ya estoy aca') ||
+        soloTexto.includes('ya llegue')
+
+    if ((esAgradecimiento || esCierreConforme) && !soloTexto.includes('turno') && !soloTexto.includes('dolor')) {
+        const msgAgradecimiento = esAgradecimiento
+            ? `¡De nada! Que tengas un excelente día. Quedamos a tu entera disposición ante cualquier duda o consulta 😊🦷✨`
+            : `¡Perfecto! 😊🦷 Cualquier cosa, quedamos a tu disposición por acá.`
         await enviarTextoWhatsApp(creds, cleanPhone, msgAgradecimiento, {
             ...trackingBase,
             accion: 'cortesia_agradecimiento'
@@ -844,6 +945,59 @@ export async function procesarMensajeAutonomo({
             { ...trackingBase, accion: 'impedimento_derivado_humano' }
         )
         return { handled: true, action: 'impedimento_derivado_humano' }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // DATO CLÍNICO RELEVANTE (medicación / condición de salud)
+    // Ej.: "tomo anticoagulantes", "soy alérgico a la penicilina",
+    // "estoy embarazada", "soy diabético". El profesional tiene que verlo
+    // antes del procedimiento: en vez del menú genérico, lo acusamos y lo
+    // dejamos a la vista del equipo (NO afirmamos nada clínico).
+    // (No cubre marcas sueltas mal escritas; sí las menciones comunes.)
+    // ─────────────────────────────────────────────────────────────
+    const mencionaDatoClinico =
+        normText.includes('anticoagul') ||
+        normText.includes('antiagreg') ||
+        normText.includes('sintrom') ||
+        normText.includes('acenocumarol') ||
+        normText.includes('warfarina') ||
+        normText.includes('clexane') ||
+        normText.includes('alergi') ||
+        normText.includes('embaraz') ||
+        normText.includes('diabet') ||
+        normText.includes('insulina') ||
+        normText.includes('marcapaso') ||
+        normText.includes('hipertens') ||
+        normText.includes('presion alta') ||
+        normText.includes('tomo medic') ||
+        normText.includes('tomando medic') ||
+        normText.includes('mi medicacion') ||
+        normText.includes('estoy medicad')
+
+    if (mencionaDatoClinico) {
+        console.log(`[WA AUTO-FLOW] Dato clínico de ${cleanPhone}. Acuse + derivar al equipo (no menú).`)
+        if (conversacionId) {
+            await admin.from('whatsapp_conversaciones').update({
+                estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+            }).eq('id', conversacionId)
+        }
+        await admin.from('notificaciones').insert({
+            tenant_id: tenantId,
+            titulo: '🩺 Dato clínico del paciente — revisar',
+            mensaje: `El paciente (+${cleanPhone}) informó un dato de salud/medicación: "${textBody.slice(0, 160)}". Que lo vea el profesional antes del turno.`,
+            tipo: 'turno_reprogramado',
+            referencia_id: conversacionId || '',
+            leida: false
+        })
+        try {
+            const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+            await sendPushToRole('admin', tenantId, '🩺 Dato clínico recibido', `Paciente +${cleanPhone} informó medicación/condición. Revisar en mensajes.`, '/mensajes')
+        } catch (e) {}
+        await enviarTextoWhatsApp(creds, cleanPhone,
+            `¡Gracias por avisarnos! 🙏 Tomamos nota y se lo pasamos al profesional para que lo tenga en cuenta antes de tu turno. Si tenés una urgencia, avisanos por acá.`,
+            { ...trackingBase, accion: 'dato_clinico_derivado' }
+        )
+        return { handled: true, action: 'dato_clinico_derivado' }
     }
 
     // ─────────────────────────────────────────────────────────────
