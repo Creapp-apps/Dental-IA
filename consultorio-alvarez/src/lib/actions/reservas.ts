@@ -435,11 +435,21 @@ export async function crearReservaPublica(data: {
     // Fetch all active professionals
     const { data: profs } = await supabase
         .from('profesionales')
-        .select('id, nombre, apellido')
+        .select('id, nombre, apellido, modo_disponibilidad, fechas_atencion, fechas_horario')
         .eq('tenant_id', tenant.id)
         .eq('activo', true)
 
     if (!profs || profs.length === 0) return { error: 'No hay profesionales disponibles' }
+
+    // Horario efectivo del prof para data.fecha según su modo. En modo fechas,
+    // una fecha no marcada (o sin esquema) no es reservable.
+    const horarioEfectivo = (p: (typeof profs)[number]) => {
+        if (p.modo_disponibilidad === 'fechas') {
+            if (!fechaEnLista(p.fechas_atencion, data.fecha)) return null
+            return esquemaFechasAHorario(p.fechas_horario)
+        }
+        return getHorarioProf(allSchedules, p.id, dow)
+    }
 
     // Buscar turnos del día que se solapen con el intervalo [fechaInicio, fechaFin)
     const localStartMs = fechaInicio.getTime()
@@ -477,7 +487,7 @@ export async function crearReservaPublica(data: {
         // exige que alguien tenga el horario libre, para no sobrevender el slot.
         const hayLugar = profs.some(p => {
             if (ocupadosSet.has(p.id)) return false
-            const h = getHorarioProf(allSchedules, p.id, dow)
+            const h = horarioEfectivo(p)
             return profTieneSlot(h, data.hora)
         })
 
@@ -490,7 +500,7 @@ export async function crearReservaPublica(data: {
         // Find professional who works on this day, at this specific hour, and is NOT occupied
         const candidateProf = profs.find(p => {
             if (ocupadosSet.has(p.id)) return false
-            const h = getHorarioProf(allSchedules, p.id, dow)
+            const h = horarioEfectivo(p)
             return profTieneSlot(h, data.hora)
         })
 
@@ -510,7 +520,7 @@ export async function crearReservaPublica(data: {
             return { error: 'El profesional seleccionado ya se encuentra ocupado en ese horario' }
         }
 
-        const h = getHorarioProf(allSchedules, profesionalId, dow)
+        const h = horarioEfectivo(selectedProf)
         if (!profTieneSlot(h, data.hora)) {
             return { error: 'El profesional seleccionado no atiende en el día u horario elegido' }
         }
