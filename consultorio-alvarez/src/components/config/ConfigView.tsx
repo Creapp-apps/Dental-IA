@@ -1526,12 +1526,23 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
             {modo === 'fechas' && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                     <div className="space-y-3">
-                        <div className="rounded-xl border border-border/60 glass-subtle w-fit">
+                        <div className="rounded-2xl border border-white/10 glass shadow-glass p-2 w-fit">
                             <Calendar
                                 mode="multiple"
                                 locale={es}
                                 selected={fechasAtencion.map(s => new Date(s + 'T00:00:00'))}
                                 onSelect={(dates) => setFechasAtencion((dates ?? []).map(fechaAStr).sort())}
+                                className="[--cell-size:--spacing(10)] [--cell-radius:0.65rem] bg-transparent p-2"
+                                classNames={{
+                                    month_caption: 'flex h-(--cell-size) w-full items-center justify-center',
+                                    caption_label: 'text-sm font-semibold capitalize tracking-wide text-foreground select-none',
+                                    button_previous: 'size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors',
+                                    button_next: 'size-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-white/10 transition-colors',
+                                    weekday: 'flex-1 text-[0.7rem] font-semibold uppercase tracking-wider text-muted-foreground/70 select-none',
+                                    day: 'group/day relative aspect-square h-full w-full rounded-lg p-0 text-center select-none transition-colors hover:bg-primary/10',
+                                    today: 'rounded-lg text-primary font-semibold ring-1 ring-inset ring-primary/40 data-[selected=true]:ring-0 data-[selected=true]:text-primary-foreground',
+                                    outside: 'text-muted-foreground/40',
+                                }}
                             />
                         </div>
                         <div className="text-xs text-muted-foreground">
