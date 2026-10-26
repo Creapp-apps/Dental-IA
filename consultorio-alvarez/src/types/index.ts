@@ -31,6 +31,8 @@ export interface HorarioAtencion {
   cierre?: string
 }
 
+export type EsquemaHorario = Omit<HorarioAtencion, 'dia' | 'profesional_id'>
+
 export interface Tenant {
   id: string
   slug: string              // "alvarez" → /c/alvarez
@@ -89,6 +91,9 @@ export interface Profesional {
   color_agenda: string
   email: string
   activo: boolean
+  modo_disponibilidad: 'recurrente' | 'fechas'
+  fechas_atencion: string[]
+  fechas_horario?: EsquemaHorario | null
   created_at: string
 }
 

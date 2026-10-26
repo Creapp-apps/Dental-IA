@@ -25,6 +25,8 @@ export const MOCK_PROFESIONALES: Profesional[] = [
         color_agenda: '#2563eb',
         email: 'ricardo@consultorioalvarez.com',
         activo: true,
+        modo_disponibilidad: 'recurrente',
+        fechas_atencion: [],
         created_at: '2024-01-01T00:00:00Z',
     },
     {
@@ -34,6 +36,8 @@ export const MOCK_PROFESIONALES: Profesional[] = [
         color_agenda: '#16a34a',
         email: 'martin@consultorioalvarez.com',
         activo: true,
+        modo_disponibilidad: 'recurrente',
+        fechas_atencion: [],
         created_at: '2024-01-01T00:00:00Z',
     },
 ]
