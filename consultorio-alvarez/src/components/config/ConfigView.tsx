@@ -24,6 +24,8 @@ import type { LandingConfig } from '@/lib/types/landing'
 import { createClient } from '@/lib/supabase/client'
 import { rutaTenant } from '@/lib/storage/rutas'
 import { AvatarCropperModal } from '@/components/ui/avatar-cropper'
+import { Calendar } from '@/components/ui/calendar'
+import { es } from 'react-day-picker/locale'
 
 type TabId = 
     | 'consultorio' 
@@ -1240,6 +1242,22 @@ function getSlotsForShift(apertura?: string, cierre?: string): string[] {
 }
 
 /* ──────────── Tab: Horarios ──────────── */
+type EsquemaFechas = {
+    activo_manana: boolean; apertura_manana: string; cierre_manana: string
+    activo_tarde: boolean; apertura_tarde: string; cierre_tarde: string
+    web_activo_manana: boolean; web_activo_tarde: boolean; web_slots_deshabilitados: string[]
+}
+
+const ESQUEMA_FECHAS_DEFAULT: EsquemaFechas = {
+    activo_manana: true, apertura_manana: '09:00', cierre_manana: '13:00',
+    activo_tarde: true, apertura_tarde: '14:00', cierre_tarde: '18:00',
+    web_activo_manana: true, web_activo_tarde: true, web_slots_deshabilitados: [],
+}
+
+function fechaAStr(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: any[]; profesionales: any[] }) {
     const [isPending, startTransition] = useTransition()
     const activeProfs = profesionales.filter(p => p.activo)
@@ -1290,11 +1308,57 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
 
     const [horarios, setHorarios] = useState<any[]>(() => getHorariosFor(selectedProfId))
 
+    const profSel = profesionales.find(p => p.id === selectedProfId)
+    const [modo, setModo] = useState<'recurrente' | 'fechas'>(profSel?.modo_disponibilidad === 'fechas' ? 'fechas' : 'recurrente')
+    const [fechasAtencion, setFechasAtencion] = useState<string[]>(() => Array.isArray(profSel?.fechas_atencion) ? [...profSel.fechas_atencion] : [])
+    const [fechasHorario, setFechasHorario] = useState<EsquemaFechas>(() => ({ ...ESQUEMA_FECHAS_DEFAULT, ...(profSel?.fechas_horario ?? {}) }))
+
     useEffect(() => {
         if (selectedProfId) {
             setHorarios(getHorariosFor(selectedProfId))
+            const p = profesionales.find(x => x.id === selectedProfId)
+            setModo(p?.modo_disponibilidad === 'fechas' ? 'fechas' : 'recurrente')
+            setFechasAtencion(Array.isArray(p?.fechas_atencion) ? [...p.fechas_atencion] : [])
+            setFechasHorario({ ...ESQUEMA_FECHAS_DEFAULT, ...(p?.fechas_horario ?? {}) })
         }
-    }, [selectedProfId, initialHorarios])
+    }, [selectedProfId, initialHorarios, profesionales])
+
+    function updateFechas<K extends keyof EsquemaFechas>(field: K, value: EsquemaFechas[K]) {
+        setFechasHorario(f => ({ ...f, [field]: value }))
+    }
+
+    function guardarFechas() {
+        if (fechasAtencion.length === 0) {
+            glassAlert.error({ title: 'Error de Horarios', description: 'Marcá al menos una fecha de atención en el calendario.' })
+            return
+        }
+        const f = fechasHorario
+        if (!f.activo_manana && !f.activo_tarde) {
+            glassAlert.error({ title: 'Error de Horarios', description: 'Activá al menos un turno (Mañana o Tarde).' })
+            return
+        }
+        const toMin = (t: string) => { const [a, b] = t.split(':').map(Number); return a * 60 + b }
+        if (f.activo_manana && toMin(f.cierre_manana) <= toMin(f.apertura_manana)) {
+            glassAlert.error({ title: 'Error de Horarios', description: `El cierre de la mañana (${f.cierre_manana}) debe ser posterior a la apertura (${f.apertura_manana}).` })
+            return
+        }
+        if (f.activo_tarde && toMin(f.cierre_tarde) <= toMin(f.apertura_tarde)) {
+            glassAlert.error({ title: 'Error de Horarios', description: `El cierre de la tarde (${f.cierre_tarde}) debe ser posterior a la apertura (${f.apertura_tarde}).` })
+            return
+        }
+        if (f.activo_manana && f.activo_tarde && toMin(f.apertura_tarde) < toMin(f.cierre_manana)) {
+            glassAlert.error({ title: 'Error de Horarios', description: `El inicio de la tarde (${f.apertura_tarde}) no puede superponerse con el cierre de la mañana (${f.cierre_manana}).` })
+            return
+        }
+        startTransition(async () => {
+            const r = await actualizarProfesional(selectedProfId, {
+                modo_disponibilidad: 'fechas',
+                fechas_atencion: [...fechasAtencion].sort(),
+                fechas_horario: fechasHorario,
+            })
+            r.error ? glassAlert.error({ title: 'Error', description: r.error }) : glassAlert.success({ title: 'Horarios actualizados correctamente' })
+        })
+    }
 
     function update(dia: number, field: string, value: any) {
         setHorarios(h => h.map(item => item.dia === dia ? { ...item, [field]: value } : item))
@@ -1324,6 +1388,11 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
     function guardar() {
         if (!selectedProfId) {
             glassAlert.error({ title: 'Error', description: 'Seleccioná un profesional para guardar sus horarios.' })
+            return
+        }
+
+        if (modo === 'fechas') {
+            guardarFechas()
             return
         }
 
@@ -1392,7 +1461,12 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
             const finalHorarios = [...otherHorarios, ...updatedHorarios]
 
             const r = await actualizarHorarios(finalHorarios)
-            r.error ? glassAlert.error({ title: 'Error', description: r.error }) : glassAlert.success({ title: 'Horarios actualizados correctamente' })
+            if (r.error) {
+                glassAlert.error({ title: 'Error', description: r.error })
+                return
+            }
+            const rm = await actualizarProfesional(selectedProfId, { modo_disponibilidad: 'recurrente' })
+            rm.error ? glassAlert.error({ title: 'Error', description: rm.error }) : glassAlert.success({ title: 'Horarios actualizados correctamente' })
         })
     }
 
@@ -1426,7 +1500,98 @@ function TabHorarios({ horarios: initialHorarios, profesionales }: { horarios: a
                 </div>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-2">
+                <div className="inline-flex p-1 rounded-xl bg-muted/40 border border-border/60 gap-1">
+                    {([['recurrente', 'Días fijos'], ['fechas', 'Fechas puntuales']] as const).map(([val, label]) => (
+                        <button
+                            key={val}
+                            type="button"
+                            onClick={() => setModo(val)}
+                            className={cn(
+                                'px-3.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer',
+                                modo === val ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                            )}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                    {modo === 'fechas'
+                        ? 'Elegí las fechas exactas en que atiende este profesional. Sólo esas fechas se ofrecen en la web y el bot.'
+                        : 'Atiende los mismos días de la semana, todas las semanas.'}
+                </p>
+            </div>
+
+            {modo === 'fechas' && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    <div className="space-y-3">
+                        <div className="rounded-xl border border-border/60 glass-subtle w-fit">
+                            <Calendar
+                                mode="multiple"
+                                locale={es}
+                                selected={fechasAtencion.map(s => new Date(s + 'T00:00:00'))}
+                                onSelect={(dates) => setFechasAtencion((dates ?? []).map(fechaAStr).sort())}
+                            />
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            {fechasAtencion.length === 0 ? (
+                                <span className="italic">Todavía no marcaste ninguna fecha.</span>
+                            ) : (
+                                <>
+                                    <span className="font-semibold text-foreground">{fechasAtencion.length} {fechasAtencion.length === 1 ? 'fecha' : 'fechas'}:</span>{' '}
+                                    {[...fechasAtencion].sort().map(s => s.split('-').reverse().join('/')).join(', ')}
+                                </>
+                            )}
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 content-start">
+                        {([
+                            { key: 'manana', label: 'Turno Mañana', Icon: Sun, color: 'text-amber-500' },
+                            { key: 'tarde', label: 'Turno Tarde', Icon: Moon, color: 'text-indigo-500' },
+                        ] as const).map(({ key, label, Icon, color }) => {
+                            const activo = fechasHorario[`activo_${key}`]
+                            return (
+                                <div key={key} className={cn(
+                                    'flex flex-col gap-2 p-2.5 rounded-lg border transition-all',
+                                    activo ? 'bg-background/70 border-border/80 shadow-xs' : 'bg-muted/20 border-border/30 opacity-60'
+                                )}>
+                                    <div className="flex items-center justify-between border-b border-border/30 pb-1.5">
+                                        <div className="flex items-center gap-1.5">
+                                            <Icon className={cn('h-3.5 w-3.5', activo ? color : 'text-muted-foreground')} />
+                                            <span className="text-xs font-semibold text-foreground">{label}</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => updateFechas(`activo_${key}`, !activo)}
+                                            className={cn(
+                                                'inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer border',
+                                                activo
+                                                    ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+                                                    : 'bg-muted text-muted-foreground border-border/50 hover:bg-muted/80'
+                                            )}
+                                        >
+                                            {activo ? 'Habilitado' : 'Desactivado'}
+                                        </button>
+                                    </div>
+                                    {activo ? (
+                                        <div className="flex items-center gap-2 justify-start pt-0.5">
+                                            <TimeSelect value={fechasHorario[`apertura_${key}`]} onChange={val => updateFechas(`apertura_${key}`, val)} />
+                                            <span className="text-xs text-muted-foreground font-medium">a</span>
+                                            <TimeSelect value={fechasHorario[`cierre_${key}`]} onChange={val => updateFechas(`cierre_${key}`, val)} />
+                                        </div>
+                                    ) : (
+                                        <div className="py-1 text-xs text-muted-foreground/80 italic">Sin atención en este turno</div>
+                                    )}
+                                </div>
+                            )
+                        })}
+                        <p className="text-[11px] text-muted-foreground">El mismo horario aplica a todas las fechas marcadas.</p>
+                    </div>
+                </div>
+            )}
+
+            <div className={cn('space-y-3', modo === 'fechas' && 'hidden')}>
                 {horarios.map(h => {
                     const isExpandedWeb = expandedWebDia === h.dia
                     const isMorningActive = h.activo && h.activo_manana !== false
