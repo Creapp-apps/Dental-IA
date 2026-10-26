@@ -6,6 +6,7 @@ import { getNextNroHistoriaClinica } from './pacientes'
 import { normalizarTelefonoArgentino, limpiarTituloProfesional } from '@/lib/utils'
 import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
 import { calcularSenia } from '@/lib/pagos/senia'
+import { capHorizonte, horizonteMaximo, fechaEnLista, esquemaFechasAHorario } from '@/lib/disponibilidad/disponibilidad-core'
 
 async function getTenantBySlug(slug: string) {
     const supabase = createAdminClient()
@@ -38,7 +39,7 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
 
     const { data: allProfs } = await supabase
         .from('profesionales')
-        .select('id, nombre, apellido, especialidad, matricula, color_agenda, activo, avatar_url, foto_url, aclaracion_web')
+        .select('id, nombre, apellido, especialidad, matricula, color_agenda, activo, avatar_url, foto_url, aclaracion_web, modo_disponibilidad, fechas_atencion')
         .eq('tenant_id', tenant.id)
         .eq('activo', true)
         .order('nombre')
@@ -70,6 +71,8 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
 
     // Filter out professionals who have custom schedules where ALL days are deactivated
     const availableProfs = allProfs.filter(p => {
+        // Modo fechas: visible mientras esté activo; la reservabilidad la resuelve getTurnosDisponibles.
+        if (p.modo_disponibilidad === 'fechas') return true
         if (profsWithConfig.has(p.id)) {
             return profsWithActiveDays.has(p.id)
         }
@@ -143,7 +146,7 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
     // Get count of active professionals
     const { data: activeProfs } = await supabase
         .from('profesionales')
-        .select('id')
+        .select('id, modo_disponibilidad, fechas_atencion, fechas_horario')
         .eq('tenant_id', tenant.id)
         .eq('activo', true)
 
@@ -157,8 +160,9 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
     // Get existing booked slots for the next 21 days (starting from start of today in Argentina)
     const now = new Date()
     const startOfTodayArgentina = new Date(`${todayStr}T00:00:00-03:00`)
+    const maxDias = horizonteMaximo((activeProfs ?? []).map(p => p.modo_disponibilidad))
     const endDate = new Date(now)
-    endDate.setDate(endDate.getDate() + 21)
+    endDate.setDate(endDate.getDate() + maxDias)
 
     const { data: turnosOcupados } = await supabase
         .from('turnos')
@@ -273,7 +277,7 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
 
     const days: { date: string; dayOfWeek: number; dayNum: number; month: number; slots: string[] }[] = []
 
-    for (let i = 0; i <= 21; i++) {
+    for (let i = 0; i <= maxDias; i++) {
         const d = new Date(now)
         d.setDate(now.getDate() + i)
 
@@ -289,7 +293,15 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
         const availableSlotsSet = new Set<string>()
 
         for (const prof of targetProfs) {
-            const h = getHorarioProf(allSchedules, prof.id, dow)
+            let h: any
+            if (prof.modo_disponibilidad === 'fechas') {
+                if (!fechaEnLista(prof.fechas_atencion, dateStr)) continue
+                h = esquemaFechasAHorario(prof.fechas_horario)
+            } else {
+                // Recurrente no aporta días más allá de su horizonte (21), aunque el loop llegue a 90.
+                if (i > capHorizonte('recurrente')) continue
+                h = getHorarioProf(allSchedules, prof.id, dow)
+            }
             if (!h || !h.activo) continue
 
             const profSlots = generarSlotsParaDia(h)
