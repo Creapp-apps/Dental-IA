@@ -39,7 +39,7 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
 
     const { data: allProfs } = await supabase
         .from('profesionales')
-        .select('id, nombre, apellido, especialidad, matricula, color_agenda, activo, avatar_url, foto_url, aclaracion_web, modo_disponibilidad, fechas_atencion')
+        .select('id, nombre, apellido, especialidad, matricula, color_agenda, activo, avatar_url, foto_url, aclaracion_web, modo_disponibilidad, fechas_atencion, fechas_horario')
         .eq('tenant_id', tenant.id)
         .eq('activo', true)
         .order('nombre')
@@ -87,10 +87,18 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
     const dow = new Date(y, m - 1, d).getDay()
 
     function checkProfHasSlot(profId: string, slot: string): boolean {
-        const custom = allSchedules.filter(h => h.profesional_id === profId)
-        const h = custom.length > 0
-            ? custom.find(x => x.dia === dow)
-            : allSchedules.find(x => !x.profesional_id && x.dia === dow)
+        const prof = allProfs!.find(x => x.id === profId)
+        let h: ReturnType<typeof esquemaFechasAHorario> | (typeof allSchedules)[number] | null | undefined
+        if (prof?.modo_disponibilidad === 'fechas') {
+            // Modo fechas: sin entrada en tenant.horarios; vale la fecha puntual y su esquema único.
+            if (!fechaEnLista(prof.fechas_atencion, fecha!)) return false
+            h = esquemaFechasAHorario(prof.fechas_horario)
+        } else {
+            const custom = allSchedules.filter(x => x.profesional_id === profId)
+            h = custom.length > 0
+                ? custom.find(x => x.dia === dow)
+                : allSchedules.find(x => !x.profesional_id && x.dia === dow)
+        }
         if (!h || !h.activo) return false
         if (Array.isArray(h.web_slots_deshabilitados) && h.web_slots_deshabilitados.includes(slot)) return false
 
@@ -157,7 +165,7 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
     const [todayStr, currentLocalTime] = localNow.split(' ')
     const currentHHMM = currentLocalTime.slice(0, 5)
 
-    // Get existing booked slots for the next 21 days (starting from start of today in Argentina)
+    // Get existing booked slots for the horizon (maxDias, depends on each professional's mode; starting from start of today in Argentina)
     const now = new Date()
     const startOfTodayArgentina = new Date(`${todayStr}T00:00:00-03:00`)
     const maxDias = horizonteMaximo((activeProfs ?? []).map(p => p.modo_disponibilidad))
@@ -293,7 +301,7 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
         const availableSlotsSet = new Set<string>()
 
         for (const prof of targetProfs) {
-            let h: any
+            let h: ReturnType<typeof esquemaFechasAHorario> | ReturnType<typeof getHorarioProf>
             if (prof.modo_disponibilidad === 'fechas') {
                 if (!fechaEnLista(prof.fechas_atencion, dateStr)) continue
                 h = esquemaFechasAHorario(prof.fechas_horario)
