@@ -93,57 +93,51 @@ export async function crearPaciente(formData: {
         }
     }
 
-    let attempts = 0
-    let lastError: any = null
+    const manualHC = formData.nro_historia_clinica?.trim()
 
-    while (attempts < 3) {
-        const nextHC = (attempts === 0 && formData.nro_historia_clinica?.trim())
-            ? formData.nro_historia_clinica.trim()
-            : await getNextNroHistoriaClinica(tenantId, supabase)
+    const { data, error } = await supabase
+        .from('pacientes')
+        .insert({
+            tenant_id: tenantId,
+            // Si el admin no tipeó un HC a mano, lo asigna el trigger de la DB
+            // (asignar_nro_historia_clinica, migración 042): atómico, serializado
+            // por tenant y sin que ningún camino de inserción pueda saltearlo.
+            // Sólo mandamos el valor cuando vino cargado a mano.
+            ...(manualHC ? { nro_historia_clinica: manualHC } : {}),
+            nombre: formData.nombre,
+            apellido: formData.apellido,
+            foto_url: formData.foto_url || null,
+            dni: formData.dni || null,
+            cuit: formData.cuit || null,
+            fecha_nacimiento: formData.fecha_nacimiento || null,
+            genero: formData.genero || null,
+            telefono: formData.telefono || null,
+            email: formData.email || null,
+            direccion: formData.direccion || null,
+            ciudad: formData.ciudad || null,
+            obra_social_id: finalObraSocialId,
+            plan_obra_social: formData.plan_obra_social || null,
+            n_afiliado: formData.n_afiliado || null,
+            alergias: formData.alergias || null,
+            medicacion_actual: formData.medicacion_actual || null,
+            antecedentes: formData.antecedentes || null,
+            notas_internas: formData.notas_internas || null,
+            registro_completo: formData.registro_completo !== undefined ? formData.registro_completo : true,
+        })
+        .select()
+        .single()
 
-        const { data, error } = await supabase
-            .from('pacientes')
-            .insert({
-                tenant_id: tenantId,
-                nro_historia_clinica: nextHC,
-                nombre: formData.nombre,
-                apellido: formData.apellido,
-                foto_url: formData.foto_url || null,
-                dni: formData.dni || null,
-                cuit: formData.cuit || null,
-                fecha_nacimiento: formData.fecha_nacimiento || null,
-                genero: formData.genero || null,
-                telefono: formData.telefono || null,
-                email: formData.email || null,
-                direccion: formData.direccion || null,
-                ciudad: formData.ciudad || null,
-                obra_social_id: finalObraSocialId,
-                plan_obra_social: formData.plan_obra_social || null,
-                n_afiliado: formData.n_afiliado || null,
-                alergias: formData.alergias || null,
-                medicacion_actual: formData.medicacion_actual || null,
-                antecedentes: formData.antecedentes || null,
-                notas_internas: formData.notas_internas || null,
-                registro_completo: formData.registro_completo !== undefined ? formData.registro_completo : true,
-            })
-            .select()
-            .single()
-
-        if (!error) {
-            revalidatePath('/pacientes')
-            return { data }
+    if (error) {
+        // Con HC automática el trigger nunca choca. Un 23505 acá sólo puede venir
+        // de un HC tipeado a mano que ya existe: lo avisamos en claro.
+        if (error.code === '23505' || error.message?.includes('pacientes_tenant_id_nro_historia_clinica_key')) {
+            return { error: 'Ese número de historia clínica ya existe. Dejalo vacío para que el sistema lo asigne solo.' }
         }
-
-        if (error.code === '23505' || error.message?.includes('duplicate key') || error.message?.includes('pacientes_tenant_id_nro_historia_clinica_key')) {
-            lastError = error
-            attempts++
-            continue
-        } else {
-            return { error: error.message }
-        }
+        return { error: error.message }
     }
 
-    return { error: lastError?.message || 'Error al generar un número de historia clínica único.' }
+    revalidatePath('/pacientes')
+    return { data }
 }
 
 /**
@@ -457,51 +451,8 @@ export async function getOdontogramaPaciente(pacienteId: string) {
     return data ?? []
 }
 
-export async function getNextNroHistoriaClinica(tenantId: string, supabase: any): Promise<string> {
-    const { data } = await supabase
-        .from('pacientes')
-        .select('nro_historia_clinica')
-        .eq('tenant_id', tenantId)
-        .limit(5000)
-
-    let maxNum = 0
-    if (data && data.length > 0) {
-        for (const p of data) {
-            if (!p.nro_historia_clinica) continue
-            const clean = p.nro_historia_clinica.replace(/\D/g, '')
-            if (clean) {
-                const num = parseInt(clean, 10)
-                if (!isNaN(num) && num > maxNum) {
-                    maxNum = num
-                }
-            }
-        }
-    }
-
-    if (maxNum === 0) {
-        maxNum = 999 // so initial candidate is '1000'
-    }
-
-    let nextNum = maxNum + 1
-    let candidate = nextNum.toString().padStart(4, '0')
-
-    // Verification loop: check if candidate already exists in database
-    let attempts = 0
-    while (attempts < 100) {
-        const { data: existing } = await supabase
-            .from('pacientes')
-            .select('id')
-            .eq('tenant_id', tenantId)
-            .eq('nro_historia_clinica', candidate)
-            .maybeSingle()
-
-        if (!existing) {
-            return candidate
-        }
-        nextNum++
-        candidate = nextNum.toString().padStart(4, '0')
-        attempts++
-    }
-
-    return candidate
-}
+// La numeración de historia clínica la asigna la DB: el trigger
+// asignar_nro_historia_clinica (migración 042) rellena nro_historia_clinica
+// cuando se inserta en NULL, serializado por tenant con un advisory lock. Ya no
+// se calcula en la app, así que no existe más getNextNroHistoriaClinica: para
+// numerar automático, insertá el paciente sin nro_historia_clinica.

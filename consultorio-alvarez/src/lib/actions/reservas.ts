@@ -2,7 +2,6 @@
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { getNextNroHistoriaClinica } from './pacientes'
 import { normalizarTelefonoArgentino, limpiarTituloProfesional } from '@/lib/utils'
 import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
 import { calcularSenia } from '@/lib/pagos/senia'
@@ -586,41 +585,25 @@ export async function crearReservaPublica(data: {
         pacienteId = existing?.id ?? null
     }
 
-    // Create patient if new
+    // Create patient if new. El nro_historia_clinica lo asigna el trigger de la
+    // DB (asignar_nro_historia_clinica, migración 042): se inserta sin HC y la
+    // DB numera de forma atómica y serializada por tenant.
     if (!pacienteId) {
-        let attempts = 0
-        let newPat = null
-        while (attempts < 3) {
-            const nextHC = await getNextNroHistoriaClinica(tenant.id, supabase)
-            const { data: createdPat, error: createErr } = await supabase
-                .from('pacientes')
-                .insert({
-                    tenant_id: tenant.id,
-                    nro_historia_clinica: nextHC,
-                    nombre: data.nombre,
-                    apellido: data.apellido,
-                    telefono: data.telefono,
-                    email: data.email || null,
-                    dni: cleanDni || null,
-                    obra_social_id: data.obraSocialId || null,
-                })
-                .select('id')
-                .single()
+        const { data: createdPat } = await supabase
+            .from('pacientes')
+            .insert({
+                tenant_id: tenant.id,
+                nombre: data.nombre,
+                apellido: data.apellido,
+                telefono: data.telefono,
+                email: data.email || null,
+                dni: cleanDni || null,
+                obra_social_id: data.obraSocialId || null,
+            })
+            .select('id')
+            .single()
 
-            if (!createErr && createdPat) {
-                newPat = createdPat
-                break
-            }
-
-            if (createErr && (createErr.code === '23505' || createErr.message?.includes('duplicate key'))) {
-                attempts++
-                continue
-            } else {
-                break
-            }
-        }
-
-        pacienteId = newPat?.id ?? null
+        pacienteId = createdPat?.id ?? null
     }
 
     // Verificar si el consultorio exige cobro de seña online

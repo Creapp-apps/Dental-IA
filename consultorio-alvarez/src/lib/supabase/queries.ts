@@ -459,33 +459,27 @@ export async function getPacientesCompactos(limit: number = 5000) {
 
     const { camposCompactos } = await origenPacientes()
 
-    // Consultar hasta 3.000 registros en paralelo para superar el límite REST de 1.000 de Supabase
-    const [p1, p2, p3] = await Promise.all([
-        supabase
+    // PostgREST corta cada respuesta en 1.000 filas, así que paginamos de a 1.000
+    // hasta traer todos los pacientes del tenant (tope en `limit`). El orden
+    // secundario por id hace la paginación determinística aunque se repitan
+    // apellidos: sin él, filas con el mismo apellido podrían duplicarse o
+    // perderse entre páginas.
+    const PAGE = 1000
+    const all: any[] = []
+    for (let from = 0; from < limit; from += PAGE) {
+        const to = Math.min(from + PAGE, limit) - 1
+        const { data, error } = await supabase
             .from('pacientes')
             .select(camposCompactos)
             .eq('tenant_id', tenantId)
             .order('apellido', { ascending: true })
-            .range(0, 999),
-        supabase
-            .from('pacientes')
-            .select(camposCompactos)
-            .eq('tenant_id', tenantId)
-            .order('apellido', { ascending: true })
-            .range(1000, 1999),
-        supabase
-            .from('pacientes')
-            .select(camposCompactos)
-            .eq('tenant_id', tenantId)
-            .order('apellido', { ascending: true })
-            .range(2000, 2999)
-    ])
+            .order('id', { ascending: true })
+            .range(from, to)
 
-    const all = [
-        ...(p1.data || []),
-        ...(p2.data || []),
-        ...(p3.data || [])
-    ]
+        if (error || !data) break
+        all.push(...data)
+        if (data.length < to - from + 1) break
+    }
 
     return all as any[]
 }
