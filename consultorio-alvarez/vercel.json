@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/diario",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/send-recalls",
+      "schedule": "0 13 * * *"
     }
   ]
 }

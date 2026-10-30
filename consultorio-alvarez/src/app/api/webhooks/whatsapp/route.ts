@@ -158,8 +158,10 @@ export async function POST(request: NextRequest) {
             buttonPayload = message.button?.payload || ''
             buttonTextFallback = message.button?.text || ''
         } else if (type === 'interactive') {
-            buttonPayload = message.interactive?.button_reply?.id || ''
-            buttonTextFallback = message.interactive?.button_reply?.title || ''
+            // button_reply = botones; list_reply = selección de un mensaje tipo lista
+            // (ej: elegir profesional en consultorios con muchos profesionales).
+            buttonPayload = message.interactive?.button_reply?.id || message.interactive?.list_reply?.id || ''
+            buttonTextFallback = message.interactive?.button_reply?.title || message.interactive?.list_reply?.title || ''
         } else if (type === 'text') {
             textBody = message.text?.body?.trim() || ''
         } else if (type === 'image') {

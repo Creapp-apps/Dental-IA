@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { esMensajeDeUrgencia, getTriageCategorias, enviarMenuTriageWhatsApp } from '@/lib/whatsapp-guardia'
-import { getTurnosDisponibles, crearReservaPublica } from '@/lib/actions/reservas'
+import { getTurnosDisponibles, crearReservaPublica, getProfesionalesPublicos } from '@/lib/actions/reservas'
 
 export interface WhatsAppCreds {
     phoneNumberId: string
@@ -8,12 +8,15 @@ export interface WhatsAppCreds {
 }
 
 interface EstadoReservaConversacional {
-    paso: 'PIDIENDO_NOMBRE' | 'PIDIENDO_DNI' | 'SLOTS_OFRECIDOS'
+    paso: 'PIDIENDO_PROFESIONAL' | 'PIDIENDO_NOMBRE' | 'PIDIENDO_DNI' | 'SLOTS_OFRECIDOS'
     fecha: string
     hora: string
     fechaLegible: string
     nombre?: string
     apellido?: string
+    // Profesional elegido por el paciente (el cliente exige elegirlo antes de ver horarios).
+    profesionalId?: string | null
+    profesionalNombre?: string
     // Slots que se le ofrecieron (para mapear respuestas numéricas "1/2/3").
     slots?: { payload: string }[]
     expiresAt: number
@@ -231,16 +234,99 @@ export async function enviarBotonesWhatsApp(
 }
 
 /**
- * Busca los próximos 3 slots disponibles en la agenda y genera botones interactivos optimizados.
+ * Envía un mensaje interactivo tipo LISTA (hasta 10 filas) y lo persiste para tracking.
+ * Se usa cuando hay más opciones que los 3 botones que permite WhatsApp (ej: elegir
+ * profesional en consultorios con muchos profesionales).
  */
-export async function obtenerProximosTresSlots(tenantSlug: string): Promise<Array<{
+export async function enviarListaWhatsApp(
+    creds: WhatsAppCreds,
+    toPhone: string,
+    textoCuerpo: string,
+    botonLista: string,
+    filas: { id: string; title: string; description?: string }[],
+    tracking?: { tenantId?: string; conversacionId?: string; accion?: string }
+): Promise<boolean> {
+    try {
+        const filasLimitadas = filas.slice(0, 10).map(f => ({
+            id: f.id,
+            title: f.title.slice(0, 24),
+            ...(f.description ? { description: f.description.slice(0, 72) } : {})
+        }))
+        const response = await fetch(`https://graph.facebook.com/v20.0/${creds.phoneNumberId}/messages`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${creds.accessToken}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                messaging_product: 'whatsapp',
+                recipient_type: 'individual',
+                to: toPhone,
+                type: 'interactive',
+                interactive: {
+                    type: 'list',
+                    body: { text: textoCuerpo },
+                    action: {
+                        button: botonLista.slice(0, 20),
+                        sections: [{ title: 'Profesionales', rows: filasLimitadas }]
+                    }
+                }
+            })
+        })
+        const res = await response.json()
+        if (!response.ok) {
+            console.error('[WA AUTO-FLOW] Error al enviar lista interactiva:', res)
+            return false
+        }
+
+        if (tracking?.tenantId && tracking?.conversacionId) {
+            try {
+                const admin = createAdminClient()
+                const filasTxt = filasLimitadas.map(f => `• ${f.title}`).join('\n')
+                const contenidoCompleto = `${textoCuerpo}\n\n[📋 ${botonLista}]\n${filasTxt}`
+                await admin.from('whatsapp_mensajes').insert({
+                    tenant_id: tracking.tenantId,
+                    conversacion_id: tracking.conversacionId,
+                    tipo: 'interactivo',
+                    remitente: 'bot',
+                    contenido: contenidoCompleto,
+                    wa_message_id: res?.messages?.[0]?.id || null,
+                    estado_envio: 'enviado',
+                    metadata: { accion: tracking.accion || 'bot_lista', filas: filasLimitadas }
+                })
+                await admin.from('whatsapp_conversaciones').update({
+                    ultimo_mensaje_at: new Date().toISOString(),
+                    ultimo_mensaje_texto: `🤖 ${textoCuerpo.slice(0, 80)}`,
+                }).eq('id', tracking.conversacionId)
+            } catch (dbErr) {
+                console.warn('[WA TRACKING] Error persistiendo lista bot:', dbErr)
+            }
+        }
+
+        return true
+    } catch (err) {
+        console.error('[WA AUTO-FLOW] Excepción enviando lista interactiva:', err)
+        return false
+    }
+}
+
+/**
+ * Busca los próximos slots disponibles en la agenda y genera botones interactivos optimizados.
+ * profesionalId filtra por un profesional concreto; limite topea cuántos slots devuelve
+ * (1 = solo el turno más próximo, para "ocupar el primer turno libre").
+ */
+export async function obtenerProximosTresSlots(
+    tenantSlug: string,
+    profesionalId?: string | null,
+    limite: number = 3
+): Promise<Array<{
     fecha: string
     hora: string
     fechaLegible: string
     btnTitulo: string
     payload: string
 }>> {
-    const disponibilidad = await getTurnosDisponibles(tenantSlug)
+    const disponibilidad = await getTurnosDisponibles(tenantSlug, profesionalId)
     if (!disponibilidad || disponibilidad.length === 0) return []
 
     const diasAbrev = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb']
@@ -274,7 +360,7 @@ export async function obtenerProximosTresSlots(tenantSlug: string): Promise<Arra
         else if (d.date === tomorrowStr) prefijoDia = 'Mañ.'
 
         for (const slot of d.slots) {
-            if (slotsResult.length >= 3) break
+            if (slotsResult.length >= limite) break
 
             const horaCorta = slot.slice(0, 5)
             // Botón de WhatsApp máx 20 caracteres: ej "Mañ. 15:40 hs" o "Vie 26/09 11:00 hs"
@@ -290,7 +376,7 @@ export async function obtenerProximosTresSlots(tenantSlug: string): Promise<Arra
             })
         }
 
-        if (slotsResult.length >= 3) break
+        if (slotsResult.length >= limite) break
     }
 
     return slotsResult
@@ -467,7 +553,7 @@ export async function procesarMensajeAutonomo({
             tenantSlug: tenant?.slug || '',
             fecha: estadoActivo.fecha,
             hora: estadoActivo.hora,
-            profesionalId: null, // Asignación automática inteligente
+            profesionalId: estadoActivo.profesionalId ?? null, // Profesional elegido por el paciente
             nombre: estadoActivo.nombre || 'Paciente',
             apellido: estadoActivo.apellido || 'Reserva',
             dni: dniDetectado,
@@ -537,6 +623,9 @@ export async function procesarMensajeAutonomo({
         const parts = slotPayloadEfectivo.replace('SLOT_RES_', '').split('_')
         const fecha = parts[0]
         const hora = parts[1]
+        // Profesional elegido en el paso previo (viene en el contexto SLOTS_OFRECIDOS).
+        const profesionalId = estadoActivo?.profesionalId ?? null
+        const profesionalNombre = estadoActivo?.profesionalNombre
 
         const [y, m, diaNum] = fecha.split('-').map(Number)
         const dateObj = new Date(y, m - 1, diaNum)
@@ -554,6 +643,8 @@ export async function procesarMensajeAutonomo({
                 fecha,
                 hora,
                 fechaLegible,
+                profesionalId,
+                profesionalNombre,
                 nombre: pacienteExistente.nombre,
                 apellido: pacienteExistente.apellido,
                 expiresAt: Date.now() + 30 * 60 * 1000
@@ -566,8 +657,8 @@ export async function procesarMensajeAutonomo({
                 `¿Deseás confirmar el turno a tu nombre o es para otra persona?`
 
             await enviarBotonesWhatsApp(creds, cleanPhone, msgAutoPct, [
-                { id: `CONFIRMAR_AUTO_${fecha}_${hora}_${pacienteExistente.dni}`, title: '✅ A mi nombre' },
-                { id: `RESERVA_OTRA_PERSONA_${fecha}_${hora}`, title: '👤 Para otra persona' },
+                { id: `CONFIRMAR_AUTO_${fecha}_${hora}_${pacienteExistente.dni}_${profesionalId || 'auto'}`, title: '✅ A mi nombre' },
+                { id: `RESERVA_OTRA_PERSONA_${fecha}_${hora}_${profesionalId || 'auto'}`, title: '👤 Para otra persona' },
                 { id: 'MENU_PRINCIPAL', title: '⬅️ Volver' }
             ], { ...trackingBase, accion: 'ofrecida_confirmacion_auto_pct' })
             return { handled: true, action: 'ofrecida_confirmacion_auto_pct' }
@@ -579,6 +670,8 @@ export async function procesarMensajeAutonomo({
             fecha,
             hora,
             fechaLegible,
+            profesionalId,
+            profesionalNombre,
             expiresAt: Date.now() + 30 * 60 * 1000
         })
 
@@ -651,6 +744,7 @@ export async function procesarMensajeAutonomo({
         const fecha = parts[0]
         const hora = parts[1]
         const dni = parts[2]
+        const profesionalId = parts[3] && parts[3] !== 'auto' ? parts[3] : null
 
         const pacienteExistente = await buscarPacientePorTelefono(tenantId, cleanPhone)
         const nombre = pacienteExistente?.nombre || 'Paciente'
@@ -666,7 +760,7 @@ export async function procesarMensajeAutonomo({
             tenantSlug: tenant?.slug || '',
             fecha,
             hora,
-            profesionalId: null,
+            profesionalId, // Profesional elegido por el paciente
             nombre,
             apellido,
             dni,
@@ -695,6 +789,7 @@ export async function procesarMensajeAutonomo({
         const parts = buttonPayload.replace('RESERVA_OTRA_PERSONA_', '').split('_')
         const fecha = parts[0]
         const hora = parts[1]
+        const profesionalId = parts[2] && parts[2] !== 'auto' ? parts[2] : null
 
         const [y, m, diaNum] = fecha.split('-').map(Number)
         const dateObj = new Date(y, m - 1, diaNum)
@@ -707,6 +802,7 @@ export async function procesarMensajeAutonomo({
             fecha,
             hora,
             fechaLegible,
+            profesionalId,
             expiresAt: Date.now() + 30 * 60 * 1000
         })
 
@@ -717,6 +813,80 @@ export async function procesarMensajeAutonomo({
             { ...trackingBase, accion: 'pidiendo_nombre_familiar' }
         )
         return { handled: true, action: 'pidiendo_nombre_familiar' }
+    }
+
+    // ── PASO PREVIO: PACIENTE ELIGIÓ PROFESIONAL (botón/lista SEL_PROF_<id>) ──
+    // El cliente exige elegir profesional antes de ver horarios, y que se devuelva
+    // UN SOLO turno (el más próximo de ese profesional) para ocupar el primer hueco.
+    // Va acá (antes de los detectores de texto) para que el título de la opción
+    // elegida no dispare otra intención por coincidencia de palabras.
+    if (buttonPayload?.startsWith('SEL_PROF_')) {
+        const profId = buttonPayload.replace('SEL_PROF_', '')
+        const profs = await getProfesionalesPublicos(tenant?.slug || '')
+        const profElegido = (profs as any[]).find(p => p.id === profId)
+        const profNombre = profElegido
+            ? `${profElegido.nombre} ${profElegido.apellido}`.trim()
+            : 'el profesional'
+
+        // Solo el turno MÁS PRÓXIMO de ese profesional (limite = 1).
+        const slotsCandidatos = await obtenerProximosTresSlots(tenant?.slug || '', profId, 1)
+
+        if (slotsCandidatos.length > 0) {
+            const s = slotsCandidatos[0]
+            const textoPropuesta = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+                `El primer turno libre con *Dr/a. ${profNombre}* es:\n\n` +
+                `📅 *${s.fechaLegible}*\n\n` +
+                `👇 Tocá *Confirmar* para reservarlo, o elegí otro profesional:`
+
+            await enviarBotonesWhatsApp(creds, cleanPhone, textoPropuesta, [
+                { id: s.payload, title: '✅ Confirmar' },
+                { id: 'MENU_TURNOS', title: '🔄 Otro profesional' },
+                { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
+            ], { ...trackingBase, accion: 'ofrecido_primer_slot_profesional' })
+
+            await setReservaCtx(admin, conversacionId, {
+                paso: 'SLOTS_OFRECIDOS',
+                fecha: '', hora: '', fechaLegible: '',
+                profesionalId: profId,
+                profesionalNombre: profNombre,
+                slots: [{ payload: s.payload }],
+                expiresAt: Date.now() + 30 * 60 * 1000
+            })
+            return { handled: true, action: 'ofrecido_primer_slot_profesional' }
+        }
+
+        // El profesional elegido no tiene turnos próximos.
+        const msgSinSlotsProf = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+            `Por ahora *Dr/a. ${profNombre}* no tiene turnos próximos disponibles.\n\n` +
+            `Podés elegir otro profesional o ver las semanas siguientes en nuestro portal:\n` +
+            `👉 ${reservaUrl}`
+
+        await enviarBotonesWhatsApp(creds, cleanPhone, msgSinSlotsProf, [
+            { id: 'MENU_TURNOS', title: '🔄 Otro profesional' },
+            { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
+        ], { ...trackingBase, accion: 'sin_slots_profesional' })
+        await setReservaCtx(admin, conversacionId, null)
+        return { handled: true, action: 'sin_slots_profesional' }
+    }
+
+    // ── OPT-OUT "BAJA" DE RECORDATORIOS DE CONTROL (RECALL) ──
+    // Las plantillas de recall ofrecen darse de baja respondiendo "BAJA".
+    // Desactivamos todos los recall del paciente en este tenant (compliance Marketing).
+    if (normText === 'baja' || normText === 'darme de baja' || normText.includes('no quiero recibir') || normText.includes('no me manden mas')) {
+        console.log(`[WA AUTO-FLOW] Opt-out BAJA de ${cleanPhone}. Desactivando recall...`)
+        const pacienteBaja = await buscarPacientePorTelefono(tenantId, cleanPhone)
+        if (pacienteBaja) {
+            await admin
+                .from('recall_configs')
+                .update({ activo: false })
+                .eq('tenant_id', tenantId)
+                .eq('paciente_id', pacienteBaja.id)
+        }
+        await enviarTextoWhatsApp(creds, cleanPhone,
+            `Listo ✅ No vas a recibir más recordatorios automáticos de control. Si en algún momento querés un turno, escribinos por acá cuando quieras. 🦷`,
+            { ...trackingBase, accion: 'recall_opt_out_baja' }
+        )
+        return { handled: true, action: 'recall_opt_out_baja' }
     }
 
     // ─────────────────────────────────────────────────────────────
@@ -1302,49 +1472,53 @@ export async function procesarMensajeAutonomo({
         buttonPayload === 'MENU_TURNOS'
 
     if (pideTurno) {
-        console.log(`[WA AUTO-FLOW] Petición de turno conversacional por ${cleanPhone}...`)
+        console.log(`[WA AUTO-FLOW] Petición de turno conversacional por ${cleanPhone}. Pidiendo elegir profesional...`)
 
-        // Obtener los 3 primeros slots reales sin superposición
-        const slotsCandidatos = await obtenerProximosTresSlots(tenant?.slug || '')
+        // El cliente exige elegir profesional ANTES de ver horarios.
+        const profs = await getProfesionalesPublicos(tenant?.slug || '') as any[]
 
-        if (slotsCandidatos.length > 0) {
-            const listaTxt = slotsCandidatos.map((s, idx) => `${idx + 1}️⃣ *${s.fechaLegible}*`).join('\n')
-
-            const textoPropuesta = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
-                `Para que elijas el que más cómodo te quede, estos son los primeros horarios disponibles más cercanos:\n\n` +
-                `${listaTxt}\n\n` +
-                `👇 *Tocá el botón del horario que prefieras:*`
-
-            const botonesSlots = slotsCandidatos.map(s => ({
-                id: s.payload,
-                title: s.btnTitulo
-            }))
-
-            await enviarBotonesWhatsApp(creds, cleanPhone, textoPropuesta, botonesSlots, {
-                ...trackingBase,
-                accion: 'ofrecidos_slots_conversacionales'
-            })
-            // RC9: recordamos qué slots se ofrecieron para poder mapear "1/2/3".
-            await setReservaCtx(admin, conversacionId, {
-                paso: 'SLOTS_OFRECIDOS',
-                fecha: '', hora: '', fechaLegible: '',
-                slots: botonesSlots.map(b => ({ payload: b.id })),
-                expiresAt: Date.now() + 30 * 60 * 1000
-            })
-            return { handled: true, action: 'ofrecidos_slots_conversacionales' }
-        } else {
-            // Fallback si no hay slots en los próximos días
-            const msgSinSlots = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
-                `En este momento los primeros días están completos. Podés ver las semanas siguientes en nuestro portal digital:\n` +
+        if (!profs || profs.length === 0) {
+            // Sin profesionales activos: derivamos al portal / urgencia.
+            const msgSinProfs = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+                `En este momento no hay profesionales con agenda abierta. Podés ver el portal digital:\n` +
                 `👉 ${reservaUrl}\n\n` +
                 `O si tenés dolor, podés activar la guardia de urgencia:`
-
-            await enviarBotonesWhatsApp(creds, cleanPhone, msgSinSlots, [
+            await enviarBotonesWhatsApp(creds, cleanPhone, msgSinProfs, [
                 { id: 'ACTIVAR_GUARDIA_URGENCIA', title: '🚨 Tengo Urgencia' },
                 { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
-            ], { ...trackingBase, accion: 'sin_slots_link_portal' })
-            return { handled: true, action: 'sin_slots_link_portal' }
+            ], { ...trackingBase, accion: 'sin_profesionales_link_portal' })
+            return { handled: true, action: 'sin_profesionales_link_portal' }
         }
+
+        const textoElegirProf = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+            `Para darte el primer turno libre, elegí con qué profesional querés atenderte:`
+
+        // ≤3 profesionales → botones (Consultorio Alvarez). 4+ → lista (Curadent Moreno).
+        if (profs.length <= 3) {
+            const botonesProfs = profs.map(p => ({
+                id: `SEL_PROF_${p.id}`,
+                title: `👨‍⚕️ ${p.nombre} ${p.apellido}`.trim()
+            }))
+            await enviarBotonesWhatsApp(creds, cleanPhone, textoElegirProf, botonesProfs, {
+                ...trackingBase, accion: 'pidiendo_profesional_botones'
+            })
+        } else {
+            const filasProfs = profs.map(p => ({
+                id: `SEL_PROF_${p.id}`,
+                title: `${p.nombre} ${p.apellido}`.trim(),
+                description: p.especialidad || undefined
+            }))
+            await enviarListaWhatsApp(creds, cleanPhone, textoElegirProf, 'Elegir profesional', filasProfs, {
+                ...trackingBase, accion: 'pidiendo_profesional_lista'
+            })
+        }
+
+        await setReservaCtx(admin, conversacionId, {
+            paso: 'PIDIENDO_PROFESIONAL',
+            fecha: '', hora: '', fechaLegible: '',
+            expiresAt: Date.now() + 30 * 60 * 1000
+        })
+        return { handled: true, action: 'pidiendo_profesional' }
     }
 
     // ─────────────────────────────────────────────────────────────

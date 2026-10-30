@@ -6,7 +6,7 @@ import { es } from 'date-fns/locale'
 import { motion, AnimatePresence } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { estadoEfectivo, fechaVencimiento } from '@/lib/presupuestos/vigencia'
-import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box, Plus, Zap, HeartPulse, Printer } from 'lucide-react'
+import { CalendarDays, FileText, Stethoscope, ClipboardList, DollarSign, Paperclip, Box, Plus, Zap, HeartPulse, Printer, BellRing } from 'lucide-react'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { OdontogramaInteractivo } from '@/components/pacientes/OdontogramaInteractivo'
 import type { OdontogramaTipo } from '@/lib/pacientes/odontograma'
@@ -14,6 +14,7 @@ import { TabAdjuntos } from '@/components/pacientes/TabAdjuntos'
 import { TabEscaneos3D } from '@/components/pacientes/TabEscaneos3D'
 import { TabEvoluciones } from '@/components/pacientes/TabEvoluciones'
 import { AntecedentesSaludTab } from '@/components/pacientes/AntecedentesSaludTab'
+import { TabRecall } from '@/components/pacientes/TabRecall'
 import type { AntecedentesSalud } from '@/lib/pacientes/antecedentes-salud'
 import { ModalCrearPresupuesto } from '@/components/pacientes/ModalCrearPresupuesto'
 import { cambiarEstadoPresupuesto, eliminarPresupuesto } from '@/lib/actions/presupuestos'
@@ -31,6 +32,7 @@ const TABS = [
     { id: 'escaneos3d', label: 'Escaneos 3D', icon: Box },
     { id: 'presupuestos', label: 'Presupuestos', icon: DollarSign },
     { id: 'adjuntos', label: 'Adjuntos', icon: Paperclip },
+    { id: 'recall', label: 'Controles', icon: BellRing },
 ] as const
 
 type TabId = typeof TABS[number]['id']
@@ -205,6 +207,7 @@ export function FichaPacienteTabs({
                         />
                     )}
                     {tab === 'adjuntos' && <TabAdjuntos pacienteId={pacienteId} adjuntos={effectiveAdjuntos} />}
+                    {tab === 'recall' && <TabRecall pacienteId={pacienteId} tiposTratamiento={tiposTratamiento} />}
                 </motion.div>
             </AnimatePresence>
         </div>

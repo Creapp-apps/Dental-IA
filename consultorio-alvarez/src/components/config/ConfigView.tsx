@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, CreditCard, Clock, CalendarCheck, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown, ChevronUp, Stethoscope, Sparkles, MapPin, Mail, Phone, Info, Sun, Moon, Eye, EyeOff, SlidersHorizontal } from 'lucide-react'
+import { Building2, Users, CreditCard, Clock, CalendarCheck, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown, ChevronUp, Stethoscope, Sparkles, MapPin, Mail, Phone, Info, Sun, Moon, Eye, EyeOff, SlidersHorizontal, AlertTriangle } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -207,7 +207,7 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
                     >
                         {tab === 'consultorio' && <TabConsultorio tenant={tenant} />}
                         {tab === 'tratamientos' && <TabTratamientos tiposTratamiento={tiposTratamiento} />}
-                        {tab === 'profesionales' && <TabProfesionales tenantId={tenant.id} profesionales={profesionales} router={router} />}
+                        {tab === 'profesionales' && <TabProfesionales tenantId={tenant.id} profesionales={profesionales} horarios={tenant.horarios} onIrAHorarios={() => setTab('horarios')} router={router} />}
                         {tab === 'obras_sociales' && <TabObrasSociales obrasSociales={obrasSociales} />}
                         {tab === 'horarios' && <TabHorarios horarios={tenant.horarios} profesionales={profesionales} />}
                         {tab === 'reservas_online' && <TabReservasOnline tenant={tenant} />}
@@ -705,7 +705,7 @@ function TabTratamientos({ tiposTratamiento }: { tiposTratamiento: any[] }) {
 }
 
 /* ──────────── Tab: Profesionales ──────────── */
-function TabProfesionales({ tenantId, profesionales, router }: { tenantId: string; profesionales: any[]; router: ReturnType<typeof useRouter> }) {
+function TabProfesionales({ tenantId, profesionales, horarios, onIrAHorarios, router }: { tenantId: string; profesionales: any[]; horarios?: any[]; onIrAHorarios?: () => void; router: ReturnType<typeof useRouter> }) {
     const [isPending, startTransition] = useTransition()
     const [showForm, setShowForm] = useState(false)
     const [editingId, setEditingId] = useState<string | null>(null)
@@ -716,6 +716,25 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
     const [cropperOpen, setCropperOpen] = useState(false)
     const [selectedImage, setSelectedImage] = useState<string | null>(null)
+
+    // Diagnóstico de carga de horario por profesional: avisa qué falta para que
+    // el profesional ofrezca turnos correctamente (web y bot de WhatsApp).
+    const horariosArr: any[] = Array.isArray(horarios) ? horarios : []
+    const diagnosticoHorario = (p: any): { nivel: 'info' | 'alerta'; msg: string } | null => {
+        if (!p.activo) return null // los desactivados no listan ni dan turno: no aplica
+        if (p.modo_disponibilidad === 'fechas') {
+            const n = Array.isArray(p.fechas_atencion) ? p.fechas_atencion.length : 0
+            if (n === 0) return { nivel: 'alerta', msg: 'Sin fechas de atención cargadas: no ofrece turnos.' }
+            return null
+        }
+        const tieneConfigPropia = horariosArr.some(h => h.profesional_id === p.id)
+        const tieneDiaActivoPropio = horariosArr.some(h => h.profesional_id === p.id && h.activo)
+        if (!tieneConfigPropia) return { nivel: 'info', msg: 'Sin horario propio: usa el horario general del consultorio.' }
+        if (!tieneDiaActivoPropio) return { nivel: 'alerta', msg: 'Horario propio sin días activos: no ofrece turnos.' }
+        return null
+    }
+    const profsConFalta = profesionales.filter(p => diagnosticoHorario(p))
+    const hayAlerta = profsConFalta.some(p => diagnosticoHorario(p)?.nivel === 'alerta')
 
     function abrirNuevo() {
         setForm({ nombre: '', apellido: '', especialidad: '', matricula: '', email: '', password: '', color_agenda: '#2563eb', avatar_url: '', aclaracion_web: '', rol: 'profesional' })
@@ -935,6 +954,42 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                     </div>
                 </div>
             )}
+            {profsConFalta.length > 0 && (
+                <div className={cn(
+                    'rounded-xl border p-3.5 flex items-start gap-3',
+                    hayAlerta
+                        ? 'bg-destructive/10 border-destructive/30 text-destructive'
+                        : 'bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-400'
+                )}>
+                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                    <div className="text-xs leading-relaxed min-w-0">
+                        <p className="font-semibold">
+                            {hayAlerta
+                                ? 'Hay profesionales que no van a ofrecer turnos hasta cargar su horario'
+                                : 'Hay profesionales sin horario propio'}
+                        </p>
+                        <ul className="mt-1 space-y-0.5">
+                            {profsConFalta.map((p: any) => {
+                                const d = diagnosticoHorario(p)!
+                                return (
+                                    <li key={p.id}>
+                                        <span className="font-medium">{p.nombre} {p.apellido}</span>
+                                        {' — '}{d.msg}
+                                    </li>
+                                )
+                            })}
+                        </ul>
+                        {onIrAHorarios && (
+                            <button
+                                onClick={onIrAHorarios}
+                                className="mt-2 inline-flex items-center gap-1.5 font-semibold underline underline-offset-2 hover:opacity-80"
+                            >
+                                <Clock className="h-3.5 w-3.5" /> Ir a Horarios de Atención
+                            </button>
+                        )}
+                    </div>
+                </div>
+            )}
             <div className="space-y-2 mt-4">
                 {profesionales.map((p: any) => (
                     <div key={p.id} className="flex flex-col sm:flex-row sm:items-center gap-3 py-3 px-3 glass-subtle rounded-xl group transition-colors hover:bg-muted/30">
@@ -973,6 +1028,24 @@ function TabProfesionales({ tenantId, profesionales, router }: { tenantId: strin
                                             Sin cuenta
                                         </span>
                                     )}
+                                    {(() => {
+                                        const d = diagnosticoHorario(p)
+                                        if (!d) return null
+                                        return (
+                                            <span
+                                                className={cn(
+                                                    'text-[10px] px-1.5 py-0.5 rounded border font-medium flex items-center gap-1',
+                                                    d.nivel === 'alerta'
+                                                        ? 'bg-destructive/10 text-destructive border-destructive/20'
+                                                        : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20'
+                                                )}
+                                                title={d.msg}
+                                            >
+                                                <AlertTriangle className="h-2.5 w-2.5" />
+                                                {d.nivel === 'alerta' ? 'Sin turnos' : 'Sin horario propio'}
+                                            </span>
+                                        )
+                                    })()}
                                 </div>
                                 <p className="text-xs text-muted-foreground truncate">{p.especialidad ?? 'Sin especialidad'} · {p.email}</p>
                             </div>
