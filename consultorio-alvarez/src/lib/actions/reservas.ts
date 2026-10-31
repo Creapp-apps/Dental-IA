@@ -41,6 +41,7 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
         .select('id, nombre, apellido, especialidad, matricula, color_agenda, activo, avatar_url, foto_url, aclaracion_web, modo_disponibilidad, fechas_atencion, fechas_horario')
         .eq('tenant_id', tenant.id)
         .eq('activo', true)
+        .neq('visible_web', false) // oculto de todos los canales públicos si el admin lo apagó
         .order('nombre')
 
     if (!allProfs || allProfs.length === 0) return []

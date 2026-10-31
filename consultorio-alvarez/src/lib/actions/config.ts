@@ -254,6 +254,24 @@ export async function toggleProfesionalEstado(id: string, activo: boolean) {
     return { success: true }
 }
 
+// Oculta/muestra al profesional en los canales públicos (landing, reserva online
+// y bot de WhatsApp) sin tocar su estado `activo` ni su agenda interna.
+export async function toggleProfesionalVisibleWeb(id: string, visible: boolean) {
+    const { ok, actor, error: denied } = await requireAdmin()
+    if (!ok) return { error: denied }
+    const supabase = getAdmin()
+
+    const { error } = await supabase
+        .from('profesionales')
+        .update({ visible_web: visible })
+        .eq('id', id)
+        .eq('tenant_id', actor.tenantId)
+    if (error) return { error: error.message }
+
+    revalidatePath('/configuracion')
+    return { success: true }
+}
+
 export async function eliminarProfesional(id: string) {
     const { ok, actor, error: denied } = await requireAdmin()
     if (!ok) return { error: denied }

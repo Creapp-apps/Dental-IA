@@ -11,7 +11,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { cn } from '@/lib/utils'
 import {
     actualizarTenant, actualizarHorarios,
-    crearProfesional, actualizarProfesional, toggleProfesionalEstado, eliminarProfesional,
+    crearProfesional, actualizarProfesional, toggleProfesionalEstado, toggleProfesionalVisibleWeb, eliminarProfesional,
     crearObraSocial, toggleObraSocial, actualizarObraSocial, eliminarObraSocial,
     crearTipoTratamiento, toggleTipoTratamiento,
     actualizarTipoTratamiento, eliminarTipoTratamiento, importarTiposTratamiento,
@@ -1055,6 +1055,32 @@ function TabProfesionales({ tenantId, profesionales, horarios, onIrAHorarios, ro
                             {p.matricula && <span className={cn("text-xs glass px-2 py-1 rounded-lg shrink-0", !p.activo && "opacity-50")}>MP {p.matricula}</span>}
 
                             <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                {(() => {
+                                    const visible = p.visible_web !== false
+                                    return (
+                                        <button
+                                            onClick={() => {
+                                                startTransition(async () => {
+                                                    const r = await toggleProfesionalVisibleWeb(p.id, !visible)
+                                                    if (r.error) glassAlert.error({ title: 'Error', description: r.error })
+                                                    else {
+                                                        glassAlert.success({ title: visible ? 'Profesional oculto en la web' : 'Profesional visible en la web' })
+                                                        router.refresh()
+                                                    }
+                                                })
+                                            }}
+                                            className={cn(
+                                                'p-1.5 rounded-md transition-colors',
+                                                visible
+                                                    ? 'hover:bg-sidebar-accent text-muted-foreground hover:text-foreground'
+                                                    : 'bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20'
+                                            )}
+                                            title={visible ? 'Visible en la web — click para ocultar' : 'Oculto en la web — click para mostrar'}
+                                        >
+                                            {visible ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                                        </button>
+                                    )
+                                })()}
                                 <button
                                     onClick={() => abrirEditar(p)}
                                     className="p-1.5 rounded-md hover:bg-sidebar-accent text-muted-foreground hover:text-foreground transition-colors"
