@@ -5,7 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { normalizarTelefonoArgentino, limpiarTituloProfesional } from '@/lib/utils'
 import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
 import { calcularSenia } from '@/lib/pagos/senia'
-import { capHorizonte, horizonteMaximo, fechaEnLista, esquemaFechasAHorario } from '@/lib/disponibilidad/disponibilidad-core'
+import { capHorizonte, horizonteMaximo, fechaEnLista, esquemaFechasAHorario, slotColisiona } from '@/lib/disponibilidad/disponibilidad-core'
 
 async function getTenantBySlug(slug: string) {
     const supabase = createAdminClient()
@@ -35,6 +35,8 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
     const supabase = createAdminClient()
     const tenant = await getTenantBySlug(tenantSlug)
     if (!tenant) return []
+
+    const sillonCompartido = (tenant as any).agenda_sillon_compartido === true
 
     const { data: allProfs } = await supabase
         .from('profesionales')
@@ -113,22 +115,35 @@ export async function getProfesionalesPublicos(tenantSlug: string, fecha?: strin
         return checkRange(h.apertura, h.cierre)
     }
 
-    // Build the UTC timestamp for the selected slot (Argentina = UTC-3)
-    const localDateTime = new Date(`${fecha}T${hora}:00-03:00`)
-    const utcStr = localDateTime.toISOString()
+    // Intervalo del slot elegido (Argentina = UTC-3), 20 min por defecto.
+    const slotStartMs = new Date(`${fecha}T${hora}:00-03:00`).getTime()
+    const slotEndMs = slotStartMs + 20 * 60 * 1000
 
-    // Find professionals who already have a booking at this exact time
-    const { data: ocupados } = await supabase
+    // Turnos del día: se comprueba solapamiento real (un turno largo de otro
+    // profesional también ocupa este slot cuando el sillón es compartido).
+    const dayStartIso = new Date(`${fecha}T00:00:00-03:00`).toISOString()
+    const dayEndIso = new Date(`${fecha}T23:59:59-03:00`).toISOString()
+    const { data: turnosDelDia } = await supabase
         .from('turnos')
-        .select('profesional_id')
+        .select('profesional_id, fecha_inicio, fecha_fin')
         .eq('tenant_id', tenant.id)
-        .eq('fecha_inicio', utcStr)
         .in('estado', ['CONFIRMADO', 'PENDIENTE', 'EN_SALA'])
+        .gte('fecha_fin', dayStartIso)
+        .lte('fecha_inicio', dayEndIso)
 
-    const ocupadosIds = new Set((ocupados ?? []).map(t => t.profesional_id))
+    const turnosRangos = (turnosDelDia ?? []).map(t => {
+        const startMs = new Date(t.fecha_inicio).getTime()
+        let endMs = t.fecha_fin ? new Date(t.fecha_fin).getTime() : startMs + 20 * 60 * 1000
+        if (endMs <= startMs) endMs = startMs + 20 * 60 * 1000
+        return { profesional_id: t.profesional_id, startMs, endMs }
+    })
 
-    // Filter out busy professionals or those without this web slot
-    return availableProfs.filter(p => !ocupadosIds.has(p.id) && checkProfHasSlot(p.id, hora))
+    // Descarta profesionales ocupados en este slot (global si el sillón es
+    // compartido) o que no tienen este horario web.
+    return availableProfs.filter(p =>
+        !slotColisiona(turnosRangos, slotStartMs, slotEndMs, p.id, sillonCompartido) &&
+        checkProfHasSlot(p.id, hora)
+    )
 }
 
 export async function getObrasSocialesPublicas(tenantSlug: string) {
@@ -150,6 +165,10 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
     const supabase = createAdminClient()
     const tenant = await getTenantBySlug(tenantSlug)
     if (!tenant) return []
+
+    // Sillón compartido: un turno de cualquier profesional bloquea el horario
+    // para todos (consultorio de un solo box). Default false = agendas paralelas.
+    const sillonCompartido = (tenant as any).agenda_sillon_compartido === true
 
     // Get count of active professionals
     const { data: activeProfs } = await supabase
@@ -317,13 +336,9 @@ export async function getTurnosDisponibles(tenantSlug: string, profesionalId?: s
                 const slotStartMs = new Date(`${dateStr}T${slot}:00-03:00`).getTime()
                 const slotEndMs = slotStartMs + 20 * 60 * 1000
 
-                // Un slot colisiona si un turno existente se solapa con el intervalo del slot:
-                // (t.startMs < slotEndMs && t.endMs > slotStartMs)
-                const estaOcupado = turnosRangos.some(t =>
-                    t.profesional_id === prof.id &&
-                    t.startMs < slotEndMs &&
-                    t.endMs > slotStartMs
-                )
+                // Un slot colisiona si un turno existente se solapa con el intervalo del slot.
+                // Con sillón compartido chocan los turnos de cualquier profesional.
+                const estaOcupado = slotColisiona(turnosRangos, slotStartMs, slotEndMs, prof.id, sillonCompartido)
 
                 if (!estaOcupado) {
                     availableSlotsSet.add(slot)
@@ -371,6 +386,8 @@ export async function crearReservaPublica(data: {
     const supabase = createAdminClient()
     const tenant = await getTenantBySlug(data.tenantSlug)
     if (!tenant) return { error: 'Consultorio no encontrado' }
+
+    const sillonCompartido = (tenant as any).agenda_sillon_compartido === true
 
     // Build the turno datetime (Argentina = UTC-3)
     const fechaInicio = new Date(`${data.fecha}T${data.hora}:00-03:00`)
@@ -466,16 +483,24 @@ export async function crearReservaPublica(data: {
         .lte('fecha_inicio', dayEndIso)
 
     const ocupadosSet = new Set<string>()
+    // Sillón compartido: cualquier turno que se solape (aunque sea de otro
+    // profesional o sin asignar) ocupa el recurso para todos.
+    let slotOcupadoGlobal = false
     for (const t of turnosDelDia ?? []) {
         const tStart = new Date(t.fecha_inicio).getTime()
         let tEnd = t.fecha_fin ? new Date(t.fecha_fin).getTime() : tStart + 20 * 60 * 1000
         if (tEnd <= tStart) tEnd = tStart + 20 * 60 * 1000
 
         // Regla matemática de solapamiento: (tStart < localEndMs && tEnd > localStartMs)
-        if (tStart < localEndMs && tEnd > localStartMs && t.profesional_id) {
-            ocupadosSet.add(t.profesional_id)
+        if (tStart < localEndMs && tEnd > localStartMs) {
+            slotOcupadoGlobal = true
+            if (t.profesional_id) ocupadosSet.add(t.profesional_id)
         }
     }
+
+    // ¿Este profesional tiene el horario ocupado? Con sillón compartido basta con
+    // que el recurso esté tomado por cualquiera.
+    const profOcupado = (pid: string) => sillonCompartido ? slotOcupadoGlobal : ocupadosSet.has(pid)
 
     // Determine profesional
     const eligeProfesional = (tenant as any).reserva_web_elige_profesional !== false
@@ -486,7 +511,7 @@ export async function crearReservaPublica(data: {
         // El consultorio no deja elegir: el turno entra sin asignar. Igual se
         // exige que alguien tenga el horario libre, para no sobrevender el slot.
         const hayLugar = profs.some(p => {
-            if (ocupadosSet.has(p.id)) return false
+            if (profOcupado(p.id)) return false
             const h = horarioEfectivo(p)
             return profTieneSlot(h, data.hora)
         })
@@ -499,7 +524,7 @@ export async function crearReservaPublica(data: {
     } else if (!profesionalId || profesionalId === 'sin-preferencia') {
         // Find professional who works on this day, at this specific hour, and is NOT occupied
         const candidateProf = profs.find(p => {
-            if (ocupadosSet.has(p.id)) return false
+            if (profOcupado(p.id)) return false
             const h = horarioEfectivo(p)
             return profTieneSlot(h, data.hora)
         })
@@ -516,8 +541,10 @@ export async function crearReservaPublica(data: {
             return { error: 'El profesional seleccionado no se encuentra activo o no existe' }
         }
 
-        if (ocupadosSet.has(profesionalId)) {
-            return { error: 'El profesional seleccionado ya se encuentra ocupado en ese horario' }
+        if (profOcupado(profesionalId)) {
+            return { error: sillonCompartido
+                ? 'Ese horario ya está ocupado en la agenda'
+                : 'El profesional seleccionado ya se encuentra ocupado en ese horario' }
         }
 
         const h = horarioEfectivo(selectedProf)
