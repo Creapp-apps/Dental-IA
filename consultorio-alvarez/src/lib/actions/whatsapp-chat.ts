@@ -95,7 +95,44 @@ export async function getConversaciones(filtro: 'todos' | 'pendientes' | 'mis_ch
             return { conversaciones: [], error: error.message }
         }
 
-        return { conversaciones: (data as any[]) || [] }
+        const rows = (data as any[]) || []
+
+        // Las conversaciones entrantes no tienen `paciente_id`, así que en la
+        // bandeja se veían como un número suelto. Enriquecemos esas filas con el
+        // paciente que coincida por teléfono (últimos 8 dígitos, para ignorar
+        // prefijos de país/área y separadores). Si el paciente no está
+        // registrado, queda el número como hasta ahora.
+        const sinPaciente = rows.filter(r => !r.paciente && r.telefono)
+        if (sinPaciente.length > 0) {
+            const soloDigitos = (s: string) => (s || '').replace(/\D/g, '')
+            const last8 = (s: string) => soloDigitos(s).slice(-8)
+
+            const pacientes: any[] = []
+            for (let from = 0; ; from += 1000) {
+                const { data: pg } = await admin
+                    .from('pacientes')
+                    .select('id, nombre, apellido, dni, telefono, foto_url')
+                    .eq('tenant_id', tenantId)
+                    .not('telefono', 'is', null)
+                    .range(from, from + 999)
+                if (!pg || pg.length === 0) break
+                pacientes.push(...pg)
+                if (pg.length < 1000) break
+            }
+
+            const porTelefono = new Map<string, any>()
+            for (const p of pacientes) {
+                const k = last8(p.telefono)
+                if (k.length === 8 && !porTelefono.has(k)) porTelefono.set(k, p)
+            }
+
+            for (const r of sinPaciente) {
+                const match = porTelefono.get(last8(r.telefono))
+                if (match) r.paciente = match
+            }
+        }
+
+        return { conversaciones: rows }
     } catch (err: any) {
         console.error('[WA CHAT] Excepción al obtener conversaciones:', err)
         return { conversaciones: [], error: err.message || 'Error inesperado' }
