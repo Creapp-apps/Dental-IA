@@ -3,7 +3,7 @@
 import { useState, useTransition, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Building2, Users, CreditCard, Clock, CalendarCheck, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown, ChevronUp, Stethoscope, Sparkles, MapPin, Mail, Phone, Info, Sun, Moon, Eye, EyeOff, SlidersHorizontal, AlertTriangle } from 'lucide-react'
+import { Building2, Users, CreditCard, Clock, CalendarCheck, Save, Plus, Check, X, Pencil, Globe, Blocks, Camera, Trash, Key, Volume2, ChevronDown, ChevronUp, Stethoscope, Sparkles, MapPin, Mail, Phone, Info, Sun, Moon, Eye, EyeOff, SlidersHorizontal, AlertTriangle, Banknote } from 'lucide-react'
 import { GlassButton } from '@/components/ui/glass-button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -33,9 +33,10 @@ type TabId =
     | 'profesionales' 
     | 'obras_sociales' 
     | 'horarios' 
-    | 'reservas_online' 
-    | 'sonidos' 
-    | 'mi_web' 
+    | 'reservas_online'
+    | 'sonidos'
+    | 'pagos'
+    | 'mi_web'
     | 'integraciones'
 
 interface NavItem {
@@ -81,6 +82,7 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
             items: [
                 { id: 'profesionales', label: 'Profesionales', shortLabel: 'Equipo', icon: Users, desc: 'Odontólogos y matrículas', badge: profesionales.length },
                 { id: 'obras_sociales', label: 'Obras Sociales', shortLabel: 'Prepagas', icon: CreditCard, desc: 'Obras sociales y planes', badge: obrasSociales.length },
+                { id: 'pagos', label: 'Información de Pagos', shortLabel: 'Pagos', icon: Banknote, desc: 'Alias y datos de transferencia' },
             ]
         },
         {
@@ -212,6 +214,7 @@ export function ConfigView({ tenant, profesionales, obrasSociales, tiposTratamie
                         {tab === 'horarios' && <TabHorarios horarios={tenant.horarios} profesionales={profesionales} />}
                         {tab === 'reservas_online' && <TabReservasOnline tenant={tenant} />}
                         {tab === 'sonidos' && <TabSonidos />}
+                        {tab === 'pagos' && <TabPagos tenant={tenant} />}
                         {tab === 'mi_web' && landingConfig && <TabMiWeb config={landingConfig} slug={slug} />}
                         {tab === 'mi_web' && !landingConfig && (
                             <div className="glass rounded-2xl p-8 text-center text-muted-foreground text-sm">
@@ -361,6 +364,69 @@ function TabConsultorio({ tenant }: { tenant: any }) {
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Info className="h-4 w-4 text-primary shrink-0" />
                         <span>Estos datos se sincronizan automáticamente en comprobantes y recordatorios.</span>
+                    </div>
+                    <GlassButton onClick={guardar} loading={isPending} className="w-full sm:w-auto">
+                        <Save className="h-4 w-4 mr-2" />
+                        Guardar cambios
+                    </GlassButton>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+/* ──────────── Tab: Información de Pagos ──────────── */
+function TabPagos({ tenant }: { tenant: any }) {
+    const [isPending, startTransition] = useTransition()
+    const [datosPago, setDatosPago] = useState<string>(tenant.datos_pago || '')
+
+    function guardar() {
+        startTransition(async () => {
+            const r = await actualizarTenant({ datos_pago: datosPago.trim() || null })
+            r.error
+                ? glassAlert.error({ title: 'Error', description: r.error })
+                : glassAlert.success({ title: 'Información de pagos actualizada' })
+        })
+    }
+
+    return (
+        <div className="space-y-6">
+            <div className="glass rounded-2xl shadow-glass border border-border/60 overflow-hidden">
+                <div className="p-6 border-b border-border/40 flex items-start justify-between gap-4">
+                    <div className="flex items-center gap-3.5">
+                        <div className="p-2.5 rounded-xl bg-primary/10 text-primary border border-primary/20 shrink-0">
+                            <Banknote className="h-5 w-5" />
+                        </div>
+                        <div>
+                            <h2 className="text-lg font-semibold text-foreground">Información de Pagos</h2>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                                Alias, CBU/CVU y datos de transferencia o pago online. El asistente de WhatsApp los comparte cuando un paciente pregunta cómo pagar o pide el alias.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="p-6 space-y-4">
+                    <Field label="Datos de transferencia / pago online">
+                        <Textarea
+                            value={datosPago}
+                            onChange={e => setDatosPago(e.target.value)}
+                            placeholder={"Ej:\nAlias: CONSULTORIO.ALVAREZ\nCBU: 0000003100010000000001\nTitular: Odontología Álvarez SRL\nTambién podés pagar online: https://..."}
+                            className="min-h-[160px] font-mono text-sm"
+                        />
+                    </Field>
+                    <div className="flex items-start gap-2 text-xs text-muted-foreground bg-amber-500/10 border border-amber-500/30 rounded-xl p-3">
+                        <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                        <span>
+                            Se envía <strong>tal cual</strong> lo escribís por WhatsApp. Verificá que el alias y el CBU sean correctos. Si lo dejás vacío, el bot deriva al paciente a recepción para pasar los datos.
+                        </span>
+                    </div>
+                </div>
+
+                <div className="bg-muted/20 border-t border-border/40 px-6 py-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <Info className="h-4 w-4 text-primary shrink-0" />
+                        <span>El bot usa estos datos en la respuesta de “Medios de Pago”.</span>
                     </div>
                     <GlassButton onClick={guardar} loading={isPending} className="w-full sm:w-auto">
                         <Save className="h-4 w-4 mr-2" />
