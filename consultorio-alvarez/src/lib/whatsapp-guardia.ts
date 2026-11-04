@@ -178,6 +178,124 @@ export async function buscarPrimerTurnoLibre(tenantId: string): Promise<{
 }
 
 /**
+ * Agenda automáticamente el turno de guardia que el paciente confirmó por
+ * WhatsApp: ubica (o crea) su ficha, elige el primer profesional libre en ese
+ * horario y crea el turno como sobreturno prioritario en estado PENDIENTE para
+ * que recepción lo valide. Idempotente: si el paciente ya tiene un turno en ese
+ * horario, no duplica.
+ */
+export async function agendarTurnoGuardiaWhatsApp(params: {
+    tenantId: string
+    tenantSlug: string
+    telefono: string
+    fecha: string // YYYY-MM-DD
+    hora: string  // HH:MM
+}): Promise<
+    | { ok: true; turnoId: string; profesionalId: string | null; pacienteId: string }
+    | { ok: false; motivo: 'sin_profesional' | 'sin_slug' | 'error' }
+> {
+    const { tenantId, tenantSlug, telefono, fecha, hora } = params
+    if (!tenantSlug) return { ok: false, motivo: 'sin_slug' }
+
+    const admin = createAdminClient()
+    try {
+        // 1) Primer profesional libre en el slot (respeta sillón compartido).
+        const { getProfesionalesPublicos } = await import('@/lib/actions/reservas')
+        const libres = await getProfesionalesPublicos(tenantSlug, fecha, hora)
+        const profesionalId = (libres as any[])?.[0]?.id ?? null
+        if (!profesionalId) return { ok: false, motivo: 'sin_profesional' }
+
+        // 2) Paciente: buscar por los últimos 8 dígitos del teléfono; si no está,
+        //    crear una ficha incompleta (la completa recepción). El
+        //    nro_historia_clinica lo asigna el trigger de la DB.
+        const ultimos8 = telefono.slice(-8)
+        const { data: pacExistente } = await admin
+            .from('pacientes')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .ilike('telefono', `%${ultimos8}%`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+        let pacienteId = pacExistente?.id ?? null
+
+        if (!pacienteId) {
+            const { data: creado } = await admin
+                .from('pacientes')
+                .insert({
+                    tenant_id: tenantId,
+                    nombre: 'Guardia',
+                    apellido: 'WhatsApp',
+                    telefono,
+                    registro_completo: false,
+                })
+                .select('id')
+                .single()
+            pacienteId = creado?.id ?? null
+        }
+        if (!pacienteId) return { ok: false, motivo: 'error' }
+
+        // 3) tipo_tratamiento (la columna es NOT NULL): preferimos uno de
+        //    urgencia/guardia/consulta; si no hay, el primer tipo activo.
+        const { data: tipos } = await admin
+            .from('tipos_tratamiento')
+            .select('id, nombre')
+            .eq('tenant_id', tenantId)
+            .eq('activo', true)
+        let tipoTratamientoId: string | null = null
+        if (tipos && tipos.length > 0) {
+            const pref = (tipos as any[]).find(t => /urgencia|guardia|consulta/i.test(t.nombre || ''))
+            tipoTratamientoId = (pref || tipos[0]).id
+        }
+        if (!tipoTratamientoId) return { ok: false, motivo: 'error' }
+
+        // 4) Horario del turno en Argentina (UTC-3), duración 20 min.
+        const fechaInicio = new Date(`${fecha}T${hora}:00-03:00`)
+        const fechaFin = new Date(fechaInicio.getTime() + 20 * 60 * 1000)
+
+        // 5) Idempotencia: no duplicar si el paciente ya tiene turno en ese horario.
+        const { data: yaExiste } = await admin
+            .from('turnos')
+            .select('id')
+            .eq('tenant_id', tenantId)
+            .eq('paciente_id', pacienteId)
+            .eq('fecha_inicio', fechaInicio.toISOString())
+            .neq('estado', 'CANCELADO')
+            .limit(1)
+            .maybeSingle()
+        if (yaExiste?.id) return { ok: true, turnoId: yaExiste.id, profesionalId, pacienteId }
+
+        // 6) Crear el turno como sobreturno prioritario, a validar por recepción.
+        //    origen 'ONLINE' (valor permitido); la urgencia se marca con
+        //    es_sobreturno + notas para no chocar con el check de `origen`.
+        const { data: turno, error } = await admin
+            .from('turnos')
+            .insert({
+                tenant_id: tenantId,
+                paciente_id: pacienteId,
+                profesional_id: profesionalId,
+                tipo_tratamiento_id: tipoTratamientoId,
+                fecha_inicio: fechaInicio.toISOString(),
+                fecha_fin: fechaFin.toISOString(),
+                estado: 'PENDIENTE',
+                es_sobreturno: true,
+                origen: 'ONLINE',
+                notas: '[GUARDIA/URGENCIA] Turno prioritario reservado por el bot de WhatsApp. Confirmar con el paciente.',
+            })
+            .select('id')
+            .single()
+        if (error || !turno) {
+            console.error('[WA GUARDIA] Error al crear turno de guardia:', error)
+            return { ok: false, motivo: 'error' }
+        }
+        return { ok: true, turnoId: turno.id, profesionalId, pacienteId }
+    } catch (err) {
+        console.error('[WA GUARDIA] Excepción al agendar turno de guardia:', err)
+        return { ok: false, motivo: 'error' }
+    }
+}
+
+/**
  * Envía el menú principal de WhatsApp con botones de acción directa (Urgencia o Recepción).
  */
 export async function enviarMenuPrincipalWhatsApp(

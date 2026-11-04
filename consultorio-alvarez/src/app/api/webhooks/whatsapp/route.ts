@@ -11,8 +11,9 @@ import {
     getTriagePorCategoria, 
     buscarPrimerTurnoLibre, 
     enviarMenuPrincipalWhatsApp,
-    enviarMenuTriageWhatsApp, 
-    enviarTipsYPropuestaTurno 
+    enviarMenuTriageWhatsApp,
+    enviarTipsYPropuestaTurno,
+    agendarTurnoGuardiaWhatsApp
 } from '@/lib/whatsapp-guardia'
 import { procesarMensajeAutonomo, enviarMenuPrincipalAutonomo, enviarTextoWhatsApp } from '@/lib/whatsapp-auto-flow'
 
@@ -236,9 +237,10 @@ export async function POST(request: NextRequest) {
         // Datos del consultorio para personalizar mensajes (multi-tenant, sin hardcodear Álvarez)
         const { data: tenantInfo } = await admin
             .from('tenants')
-            .select('nombre, direccion, ciudad')
+            .select('nombre, direccion, ciudad, slug')
             .eq('id', tenantId)
             .maybeSingle()
+        const tenantSlug = tenantInfo?.slug || ''
         const nombreConsultorio = tenantInfo?.nombre || 'tu consultorio odontológico'
         const direccionConsultorio = tenantInfo?.direccion
             ? `${tenantInfo.direccion}${tenantInfo.ciudad ? `, ${tenantInfo.ciudad}` : ''}`
@@ -791,30 +793,54 @@ export async function POST(request: NextRequest) {
                     }
                 } catch {}
 
-                // RC11: la selección de guardia NO crea un turno en la agenda todavía;
-                // por eso no afirmamos que está "confirmado". Dejamos la urgencia
-                // registrada y la pasamos a un humano para que agende el turno real.
+                // D: agenda de verdad el turno de guardia (sobreturno prioritario,
+                // PENDIENTE) con el primer profesional libre; crea la ficha del
+                // paciente si no existía. Siempre deja la conversación en espera de
+                // un humano para que recepción valide.
+                const agend = await agendarTurnoGuardiaWhatsApp({ tenantId, tenantSlug, telefono: cleanPhone, fecha, hora })
+
                 if (conversacionId) {
                     await admin.from('whatsapp_conversaciones')
                         .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
                         .eq('id', conversacionId)
                 }
-                await admin.from('notificaciones').insert({
-                    tenant_id: tenantId,
-                    titulo: '🚨 Urgencia — agendar turno prioritario',
-                    mensaje: `El paciente (+${cleanPhone}) eligió el horario de guardia ${fechaLegible} a las ${hora} hs. Confirmar y cargar el turno en la agenda.`,
-                    tipo: 'turno_reprogramado',
-                    referencia_id: conversacionId || '',
-                    leida: false
-                })
-                try {
-                    const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
-                    await sendPushToRole('admin', tenantId, '🚨 Urgencia a agendar', `Paciente (+${cleanPhone}) eligió guardia ${fechaLegible} ${hora} hs.`, '/mensajes')
-                } catch {}
+
+                if (agend.ok) {
+                    await admin.from('notificaciones').insert({
+                        tenant_id: tenantId,
+                        titulo: '🚨 Turno de guardia agendado',
+                        mensaje: `Guardia: se reservó un sobreturno prioritario para +${cleanPhone} el ${fechaLegible} a las ${hora} hs. Revisar y confirmar con el paciente.`,
+                        tipo: 'turno_nuevo',
+                        referencia_id: agend.turnoId,
+                        leida: false
+                    })
+                    try {
+                        const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                        await sendPushToRole('admin', tenantId, '🚨 Turno de guardia agendado', `Sobreturno prioritario +${cleanPhone} ${fechaLegible} ${hora} hs. Confirmar.`, '/agenda')
+                    } catch {}
+                    revalidatePath('/agenda')
+                } else {
+                    // No se pudo agendar automático (sin profesional libre u otro
+                    // problema): dejamos la urgencia para que recepción la cargue.
+                    await admin.from('notificaciones').insert({
+                        tenant_id: tenantId,
+                        titulo: '🚨 Guardia — agendar turno prioritario',
+                        mensaje: `El paciente (+${cleanPhone}) eligió el horario de guardia ${fechaLegible} a las ${hora} hs, pero no se pudo agendar automático (${agend.motivo}). Cargar el turno a mano.`,
+                        tipo: 'turno_reprogramado',
+                        referencia_id: conversacionId || '',
+                        leida: false
+                    })
+                    try {
+                        const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                        await sendPushToRole('admin', tenantId, '🚨 Urgencia a agendar', `Paciente (+${cleanPhone}) eligió guardia ${fechaLegible} ${hora} hs.`, '/mensajes')
+                    } catch {}
+                }
 
                 try {
                     const lineaDireccion = direccionConsultorio ? `\n📍 ${direccionConsultorio}.` : ''
-                    const textoGuardia = `🚨 *¡Recibimos tu urgencia!*\n\nReservamos tu lugar para el *${fechaLegible} a las ${hora} hs* en ${nombreConsultorio}.${lineaDireccion}\n\nUna recepcionista te va a *confirmar el turno* por este chat a la brevedad. Por favor concurrí 5 minutos antes con tu DNI.`
+                    const textoGuardia = agend.ok
+                        ? `🚨 *¡Recibimos tu urgencia!*\n\nReservamos tu turno prioritario para el *${fechaLegible} a las ${hora} hs* en ${nombreConsultorio}.${lineaDireccion}\n\nUna recepcionista te va a *confirmar* por este chat a la brevedad. Por favor concurrí 5 minutos antes con tu DNI.`
+                        : `🚨 *¡Recibimos tu urgencia!*\n\nRegistramos tu pedido para el *${fechaLegible} a las ${hora} hs* en ${nombreConsultorio}.${lineaDireccion}\n\nUna recepcionista te va a *contactar* por este chat para confirmarte el turno a la brevedad.`
                     const res = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
                         method: 'POST',
                         headers: {
@@ -842,7 +868,7 @@ export async function POST(request: NextRequest) {
                             contenido: textoGuardia,
                             wa_message_id: resJson?.messages?.[0]?.id || null,
                             estado_envio: 'enviado',
-                            metadata: { accion: 'confirmacion_guardia' }
+                            metadata: { accion: 'confirmacion_guardia', turnoId: agend.ok ? agend.turnoId : null }
                         })
                         await admin.from('whatsapp_conversaciones').update({
                             ultimo_mensaje_at: new Date().toISOString(),
