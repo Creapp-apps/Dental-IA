@@ -2044,10 +2044,21 @@ export function AgendaView({
             {/* Mobile Timeline & Grid View (Google Calendar Style) */}
             <div className="block md:hidden space-y-3" onTouchStart={handleSwipeStart} onTouchEnd={handleSwipeEnd}>
                 {/* Mobile View selector & Sticky Navigation header */}
-                <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-xl border-b border-border/30 pb-2.5 pt-1 px-1 select-none space-y-2">
+                <div className="sticky top-0 z-30 bg-background/85 backdrop-blur-xl rounded-2xl border border-border/40 shadow-lg shadow-black/20 px-2.5 py-2.5 select-none space-y-2.5">
                     <div className="flex items-center gap-2">
-                        {/* Navegación: ‹ fecha › — fecha central y prominente, tocar = ir a hoy */}
-                        <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                        {/* Buscar (izquierda) — simetría con el selector de vista a la derecha */}
+                        <GlassButton
+                            variant="glass"
+                            size="icon-sm"
+                            onClick={() => setBuscadorOpen(true)}
+                            className="h-9 w-9 rounded-xl border-white/10 shrink-0 text-primary"
+                            title="Buscar turnos"
+                        >
+                            <Search className="h-4 w-4" />
+                        </GlassButton>
+
+                        {/* Navegación central: ‹ fecha › — tocar la fecha = ir a hoy */}
+                        <div className="flex-1 flex items-center justify-center gap-1.5 min-w-0">
                             <GlassButton
                                 variant="glass"
                                 size="icon-sm"
@@ -2087,18 +2098,7 @@ export function AgendaView({
                             </GlassButton>
                         </div>
 
-                        {/* Botón Buscar en Mobile */}
-                        <GlassButton
-                            variant="glass"
-                            size="icon-sm"
-                            onClick={() => setBuscadorOpen(true)}
-                            className="h-9 w-9 rounded-xl border-white/10 shrink-0 text-primary"
-                            title="Buscar turnos"
-                        >
-                            <Search className="h-4 w-4" />
-                        </GlassButton>
-
-                        {/* View Mode Selector Dropdown */}
+                        {/* View Mode Selector Dropdown (derecha) */}
                         <div className="relative shrink-0">
                             <button
                                 onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -2170,7 +2170,7 @@ export function AgendaView({
                             </span>
                         </div>
                     ) : (
-                        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide py-0.5 select-none w-full">
+                        <div className="flex justify-center gap-1.5 overflow-x-auto scrollbar-hide py-0.5 select-none w-full">
                             <button
                                 onClick={() => setFiltroProf('todos')}
                                 className={cn(
