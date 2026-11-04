@@ -2065,7 +2065,7 @@ export function AgendaView({
                         {/* Cambiador de mes */}
                         <div className="flex items-center justify-center gap-3.5">
                             <button
-                                onClick={() => setMesVisible(m => subMonths(m, 1))}
+                                onClick={() => { const t = startOfMonth(subMonths(mesVisible, 1)); setDiaSeleccionado(t); setBaseDate(t); setVistaActiva('hoy') }}
                                 className="h-8 w-8 rounded-xl border border-white/10 bg-card/60 flex items-center justify-center text-foreground active:bg-card"
                                 title="Mes anterior"
                             >
@@ -2075,7 +2075,7 @@ export function AgendaView({
                                 {format(mesVisible, 'MMMM yyyy', { locale: es })}
                             </span>
                             <button
-                                onClick={() => setMesVisible(m => addMonths(m, 1))}
+                                onClick={() => { const t = startOfMonth(addMonths(mesVisible, 1)); setDiaSeleccionado(t); setBaseDate(t); setVistaActiva('hoy') }}
                                 className="h-8 w-8 rounded-xl border border-white/10 bg-card/60 flex items-center justify-center text-foreground active:bg-card"
                                 title="Mes siguiente"
                             >
