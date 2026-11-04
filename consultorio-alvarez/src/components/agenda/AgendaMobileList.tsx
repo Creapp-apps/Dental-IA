@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import { parseISO, isToday, differenceInMinutes, format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { cn } from '@/lib/utils'
@@ -185,6 +186,7 @@ function DiaSection({
     onAgendarLibre?: (profId: string, fecha: Date, hora: string) => void
 }) {
     const esHoy = isToday(grupo.date)
+    const reduce = useReducedMotion()
     const confirmados = grupo.turnos.filter((t) => t.estado === 'CONFIRMADO').length
     const pendientes = grupo.turnos.filter((t) => t.estado === 'PENDIENTE').length
 
@@ -263,7 +265,16 @@ function DiaSection({
                     const mostrarHeaderFranja = mostrarFranjas && franja !== prevFranja
 
                     return (
-                        <div key={ev.kind === 'turno' ? ev.turno.id : `gap-${ev.start.toISOString()}`}>
+                        <motion.div
+                            key={ev.kind === 'turno' ? ev.turno.id : `gap-${ev.start.toISOString()}`}
+                            initial={reduce ? false : { opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{
+                                duration: 0.32,
+                                delay: Math.min(idx, 12) * 0.045,
+                                ease: [0.22, 1, 0.36, 1],
+                            }}
+                        >
                             {mostrarHeaderFranja && (
                                 <div className="flex items-center gap-2.5 mt-2.5 mb-2">
                                     <span className="text-xs font-extrabold tracking-wide text-muted-foreground/80 uppercase">{franja}</span>
@@ -286,7 +297,7 @@ function DiaSection({
                                     }
                                 />
                             )}
-                        </div>
+                        </motion.div>
                     )
                 })}
 

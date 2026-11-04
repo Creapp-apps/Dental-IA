@@ -3391,7 +3391,7 @@ function TurnoDetailModal({
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="dark sm:max-w-[425px] bg-black border border-white/15 text-slate-100 shadow-2xl p-6 rounded-2xl overflow-hidden">
+            <DialogContent mobileSheet className="sm:max-w-[425px] border-white/15 text-slate-100 shadow-2xl">
                 <DialogHeader className="space-y-1">
                     <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-slate-400 flex items-center gap-1">
