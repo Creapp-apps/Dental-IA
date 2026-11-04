@@ -25,6 +25,7 @@ import {
     ESTADO_TURNO_LABEL,
 } from '@/types'
 import { cn } from '@/lib/utils'
+import { AgendaMobileList } from '@/components/agenda/AgendaMobileList'
 import { ConfirmModal } from '@/components/ui/confirm-modal'
 import { NotificarDemoraModal } from '@/components/agenda/NotificarDemoraModal'
 import {
@@ -2284,6 +2285,13 @@ export function AgendaView({
                             })}
                         </div>
                     </div>
+                ) : vistaActiva === 'hoy' ? (
+                    <AgendaMobileList
+                        turnos={turnosMobileFiltrados}
+                        diaSeleccionado={diaSeleccionado}
+                        isLoading={isLoadingTurnos}
+                        onSelectTurno={setSelectedTurnoDetail}
+                    />
                 ) : (
                     <div className="pb-20 select-none">
                         <div className="flex flex-col border border-border/30 rounded-2xl bg-card/5 backdrop-blur-xl shadow-glass overflow-hidden">
@@ -2308,15 +2316,8 @@ export function AgendaView({
                                         <div className={cn(
                                             "flex flex-1 divide-x divide-border/30",
                                             vistaActiva === '3dias' && "grid grid-cols-3 w-full",
-                                            vistaActiva === 'hoy' && filtroProf !== 'todos' && "grid grid-cols-1 w-full",
-                                            vistaActiva === 'hoy' && filtroProf === 'todos' && "grid w-full",
                                             (vistaActiva === 'semana' || vistaActiva === '15dias') && "flex"
                                         )}
-                                        style={
-                                            vistaActiva === 'hoy' && filtroProf === 'todos'
-                                                ? { gridTemplateColumns: `repeat(${mobileColumns.length}, minmax(0, 1fr))` }
-                                                : undefined
-                                        }
                                         >
                                             {mobileColumns.map((col, idx) => (
                                                 <div 
@@ -2353,15 +2354,8 @@ export function AgendaView({
                                             "flex-1 relative min-h-0 divide-x divide-border/30 transition-opacity duration-200",
                                             isLoadingTurnos && "opacity-75",
                                             vistaActiva === '3dias' && "grid grid-cols-3 w-full",
-                                            vistaActiva === 'hoy' && filtroProf !== 'todos' && "grid grid-cols-1 w-full",
-                                            vistaActiva === 'hoy' && filtroProf === 'todos' && "grid w-full",
                                             (vistaActiva === 'semana' || vistaActiva === '15dias') && "flex"
                                         )}
-                                        style={
-                                            vistaActiva === 'hoy' && filtroProf === 'todos'
-                                                ? { gridTemplateColumns: `repeat(${mobileColumns.length}, minmax(0, 1fr))` }
-                                                : undefined
-                                        }
                                         >
                                             {/* Background hour lines */}
                                             <div className="absolute inset-0 pointer-events-none select-none">
@@ -2465,20 +2459,23 @@ export function AgendaView({
                 )}
             </div>
 
-            {/* Mobile Floating Action Button (FAB) Google Calendar style */}
-            <motion.button
-                whileHover={{ scale: 1.08 }}
-                whileTap={{ scale: 0.92 }}
-                onClick={() => {
-                    setTurnoAEditar(null)
-                    setModalProfId(profesionales[0]?.id ?? '')
-                    setModalOpen(true)
-                }}
-                className="fixed bottom-6 right-5 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgba(59,130,246,0.5)] flex items-center justify-center border border-white/20 hover:bg-primary/90 transition-all md:hidden"
-                title="Nuevo turno"
-            >
-                <Plus className="h-7 w-7 stroke-[2.5]" />
-            </motion.button>
+            {/* Mobile Floating Action Button (FAB) Google Calendar style.
+                Oculto para rol profesional: los turnos se dan por administración. */}
+            {!isProfesional && (
+                <motion.button
+                    whileHover={{ scale: 1.08 }}
+                    whileTap={{ scale: 0.92 }}
+                    onClick={() => {
+                        setTurnoAEditar(null)
+                        setModalProfId(profesionales[0]?.id ?? '')
+                        setModalOpen(true)
+                    }}
+                    className="fixed bottom-6 right-5 z-50 h-14 w-14 rounded-full bg-primary text-primary-foreground shadow-[0_8px_30px_rgba(59,130,246,0.5)] flex items-center justify-center border border-white/20 hover:bg-primary/90 transition-all md:hidden"
+                    title="Nuevo turno"
+                >
+                    <Plus className="h-7 w-7 stroke-[2.5]" />
+                </motion.button>
+            )}
 
             {/* Modal nuevo turno */}
             <NuevoTurnoModal
