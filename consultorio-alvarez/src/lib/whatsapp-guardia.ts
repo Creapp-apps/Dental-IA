@@ -242,13 +242,30 @@ export async function enviarMenuPrincipalWhatsApp(
 /**
  * Envía el menú interactivo de triage por WhatsApp Cloud API.
  */
+/**
+ * Recorta un título de botón al límite de WhatsApp (20) sin romper palabras ni
+ * pares sustitutos de emoji. Cuenta por puntos de código (Array.from), así un
+ * emoji como 🦷 (2 unidades UTF-16) no se corta a la mitad ni se come el
+ * presupuesto como lo hacía `substring`, que dejaba "caí" en vez de "caído".
+ */
+export function truncarTituloBoton(texto: string, max = 20): string {
+    const puntos = Array.from(texto)
+    if (puntos.length <= max) return texto
+    // Cortar en el último espacio antes del límite para no partir una palabra.
+    let corte = max
+    for (let i = max; i > 0; i--) {
+        if (puntos[i] === ' ') { corte = i; break }
+    }
+    return puntos.slice(0, corte).join('').trimEnd()
+}
+
 export async function enviarMenuTriageWhatsApp(
     phoneNumberId: string,
     accessToken: string,
     toPhone: string,
     categorias: TriageItem[],
     mensajeBienvenida?: string
-): Promise<boolean> {
+): Promise<{ ok: boolean; waMessageId: string | null; texto: string }> {
     const defaultTexto = mensajeBienvenida || 
         `🚨 *Protocolo de Guardia Odontológica Activado*\n\n` +
         `Entendemos tu urgencia y estamos para asistirte de inmediato.\n` +
@@ -258,14 +275,14 @@ export async function enviarMenuTriageWhatsApp(
     // Meta permite hasta 3 botones en mensajes interactivos tipo 'button'
     const topCategorias = categorias.slice(0, 3)
 
-    if (topCategorias.length === 0) return false
+    if (topCategorias.length === 0) return { ok: false, waMessageId: null, texto: '' }
 
     const buttons = topCategorias.map((cat) => ({
         type: 'reply',
         reply: {
             id: `TRIAGE_CAT_${cat.categoria}`,
-            // Meta limita el título del botón a 20 caracteres
-            title: cat.titulo_boton.length > 20 ? cat.titulo_boton.substring(0, 20) : cat.titulo_boton
+            // Meta limita el título del botón a 20 caracteres (puntos de código).
+            title: truncarTituloBoton(cat.titulo_boton)
         }
     }))
 
@@ -292,12 +309,12 @@ export async function enviarMenuTriageWhatsApp(
         const res = await response.json()
         if (!response.ok) {
             console.error('[WA GUARDIA] Error al enviar menú interactivo:', res)
-            return false
+            return { ok: false, waMessageId: null, texto: defaultTexto }
         }
-        return true
+        return { ok: true, waMessageId: res?.messages?.[0]?.id || null, texto: defaultTexto }
     } catch (err) {
         console.error('[WA GUARDIA] Excepción al despachar menú interactivo:', err)
-        return false
+        return { ok: false, waMessageId: null, texto: defaultTexto }
     }
 }
 
@@ -310,7 +327,7 @@ export async function enviarTipsYPropuestaTurno(
     toPhone: string,
     triageItem: TriageItem,
     primerTurno: { fechaFormateada: string; hora: string; fecha: string } | null
-): Promise<boolean> {
+): Promise<{ ok: boolean; waMessageId: string | null; texto: string }> {
     let cuerpoTexto = `🩺 *CONSEJOS DE ALIVIO INMEDIATO:*\n\n`
     cuerpoTexto += `${triageItem.tips_alivio}\n\n`
     cuerpoTexto += `${triageItem.advertencias}\n\n`
@@ -329,14 +346,14 @@ export async function enviarTipsYPropuestaTurno(
             type: 'reply',
             reply: {
                 id: `CONFIRMAR_GUARDIA_${primerTurno.fecha}_${primerTurno.hora}`,
-                title: '✅ Confirmar Turno'
+                title: truncarTituloBoton('✅ Confirmar turno')
             }
         }] : []),
         {
             type: 'reply',
             reply: {
                 id: 'HABLAR_RECEPCIONISTA',
-                title: '💬 Hablar con Recepción'
+                title: truncarTituloBoton('💬 Recepción')
             }
         }
     ]
@@ -364,11 +381,11 @@ export async function enviarTipsYPropuestaTurno(
         const res = await response.json()
         if (!response.ok) {
             console.error('[WA GUARDIA] Error al enviar tips y propuesta:', res)
-            return false
+            return { ok: false, waMessageId: null, texto: cuerpoTexto }
         }
-        return true
+        return { ok: true, waMessageId: res?.messages?.[0]?.id || null, texto: cuerpoTexto }
     } catch (err) {
         console.error('[WA GUARDIA] Excepción al enviar tips y propuesta:', err)
-        return false
+        return { ok: false, waMessageId: null, texto: cuerpoTexto }
     }
 }

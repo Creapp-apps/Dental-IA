@@ -103,6 +103,41 @@ async function logDebug(event: string, detail: any, tenantId?: string) {
     }
 }
 
+/**
+ * Registra en el inbox (whatsapp_mensajes) un mensaje interactivo que el bot
+ * envió en el flujo de guardia (menú de triage, tips). Sin esto el admin ve el
+ * chat incompleto: el paciente recibía el menú/tips por WhatsApp pero el panel
+ * no mostraba nada, y parecía que "el protocolo no hizo nada".
+ */
+async function registrarMensajeBotGuardia(
+    tenantId: string,
+    conversacionId: string | null,
+    contenido: string,
+    waMessageId: string | null,
+    accion: string
+) {
+    if (!conversacionId) return
+    try {
+        const admin = createAdminClient()
+        await admin.from('whatsapp_mensajes').insert({
+            tenant_id: tenantId,
+            conversacion_id: conversacionId,
+            tipo: 'interactivo',
+            remitente: 'bot',
+            contenido,
+            wa_message_id: waMessageId,
+            estado_envio: 'enviado',
+            metadata: { accion }
+        })
+        await admin.from('whatsapp_conversaciones').update({
+            ultimo_mensaje_at: new Date().toISOString(),
+            ultimo_mensaje_texto: `🤖 ${contenido.slice(0, 80)}`,
+        }).eq('id', conversacionId)
+    } catch (err) {
+        console.error('[WA GUARDIA] No se pudo registrar el mensaje del bot en el inbox:', err)
+    }
+}
+
 function normalizeTextForMatch(text: string): string {
     return text
         .toLowerCase()
@@ -628,15 +663,21 @@ export async function POST(request: NextRequest) {
 
                 const categoriasTriage = await getTriageCategorias(tenantId)
                 if (categoriasTriage.length > 0) {
-                    await enviarMenuTriageWhatsApp(
+                    const envio = await enviarMenuTriageWhatsApp(
                         waCreds.phoneNumberId,
                         waCreds.accessToken,
                         cleanPhone,
                         categoriasTriage
                     )
-                    return NextResponse.json({ success: true })
+                    if (envio.ok) {
+                        await registrarMensajeBotGuardia(tenantId, conversacionId, envio.texto, envio.waMessageId, 'menu_triage_guardia')
+                        return NextResponse.json({ success: true })
+                    }
+                    // Si el envío del menú falló, no dejamos la urgencia sin respuesta:
+                    // caemos a la derivación a humano de abajo.
                 }
-                // RC4: sin triage configurado, no caemos al menú: derivamos la urgencia.
+                // RC4: sin triage configurado (o si falló el envío), no caemos al
+                // menú genérico: derivamos la urgencia a un humano.
                 await derivarUrgenciaAHumano('Activó el botón de Urgencia / Guardia')
                 return NextResponse.json({ success: true })
             }
@@ -717,13 +758,20 @@ export async function POST(request: NextRequest) {
                 const primerTurno = await buscarPrimerTurnoLibre(tenantId)
 
                 if (triageConfig) {
-                    await enviarTipsYPropuestaTurno(
+                    const envio = await enviarTipsYPropuestaTurno(
                         waCreds.phoneNumberId,
                         waCreds.accessToken,
                         cleanPhone,
                         triageConfig,
                         primerTurno
                     )
+                    if (envio.ok) {
+                        await registrarMensajeBotGuardia(tenantId, conversacionId, envio.texto, envio.waMessageId, 'tips_guardia')
+                        return NextResponse.json({ success: true })
+                    }
+                    // Falló el envío de los tips: derivamos a un humano para no
+                    // dejar al paciente en urgencia sin ninguna respuesta.
+                    await derivarUrgenciaAHumano(`Seleccionó triage "${categoria}" pero no se pudieron enviar los consejos`)
                     return NextResponse.json({ success: true })
                 }
             }
@@ -821,13 +869,14 @@ export async function POST(request: NextRequest) {
                 const categoriasTriage = await getTriageCategorias(tenantId)
                 if (categoriasTriage.length > 0) {
                     console.log(`[WA WEBHOOK] Urgencia detectada de ${from} por palabras clave. Enviando menú de triage...`)
-                    const enviado = await enviarMenuTriageWhatsApp(
+                    const envio = await enviarMenuTriageWhatsApp(
                         waCreds.phoneNumberId,
                         waCreds.accessToken,
                         cleanPhone,
                         categoriasTriage
                     )
-                    if (enviado) {
+                    if (envio.ok) {
+                        await registrarMensajeBotGuardia(tenantId, conversacionId, envio.texto, envio.waMessageId, 'menu_triage_guardia')
                         return NextResponse.json({ success: true })
                     }
                 }

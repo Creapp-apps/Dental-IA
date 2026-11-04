@@ -58,7 +58,20 @@ export function DashboardLiveAlerts() {
 
     const displayedAlerts = showAllAlerts ? unreadNotifications : unreadNotifications.slice(0, 3)
 
-    const getNotificationStyle = (tipo: Notificacion['tipo']) => {
+    const getNotificationStyle = (tipo: Notificacion['tipo'], titulo?: string) => {
+        // Guardia / urgencia se graban con tipo 'turno_reprogramado' (no hay un
+        // tipo propio en la DB), así que se detectan por el título para no
+        // mostrarlas mal como "Reprogramación solicitada".
+        const t = (titulo || '').toLowerCase()
+        if (t.includes('guardia') || t.includes('urgencia')) {
+            return {
+                icon: <AlertTriangle className="h-4 w-4 text-red-500 shrink-0 animate-pulse" />,
+                bg: 'bg-red-500/10 border-red-500/30 text-red-900 dark:text-red-200',
+                badge: 'bg-red-500/20 text-red-700 dark:text-red-300 border-red-500/40',
+                label: 'Guardia / Urgencia',
+                borderLeft: 'border-l-red-500'
+            }
+        }
         switch (tipo) {
             case 'turno_reprogramado':
                 return {
@@ -175,7 +188,7 @@ export function DashboardLiveAlerts() {
                         className="divide-y divide-border/30 p-2.5 sm:p-4 space-y-2 max-h-[380px] overflow-y-auto"
                     >
                         {displayedAlerts.map((notif) => {
-                            const style = getNotificationStyle(notif.tipo)
+                            const style = getNotificationStyle(notif.tipo, notif.titulo)
                             return (
                                 <div
                                     key={notif.id}
