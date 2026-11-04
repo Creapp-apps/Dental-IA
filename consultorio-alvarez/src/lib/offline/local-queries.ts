@@ -49,6 +49,18 @@ export async function getPacienteLocal(id: string): Promise<LocalPaciente | unde
 }
 
 /**
+ * Borra un paciente del cache local IndexedDB.
+ *
+ * Se usa cuando el server confirma que la fila ya no existe (delete de 0 filas
+ * estando online + admin): el pull incremental nunca purga bajas, así que sin
+ * esto un paciente borrado en la nube sobrevive como "fantasma" en la búsqueda
+ * local y vuelve a aparecer en cada recarga.
+ */
+export async function eliminarPacienteLocal(id: string): Promise<void> {
+    await localDb.pacientes.delete(id)
+}
+
+/**
  * Guarda o actualiza un paciente en la base de datos local y maneja su sincronización con la nube.
  */
 export async function guardarPacienteLocal(

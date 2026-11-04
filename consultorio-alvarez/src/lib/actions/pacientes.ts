@@ -364,13 +364,28 @@ export async function eliminarPaciente(id: string) {
     const supabase = await createClient()
     const tenantId = actor.tenantId
 
-    const { error } = await supabase
+    // `.select('id')` hace que el delete devuelva las filas efectivamente
+    // borradas. Sin esto, un delete de 0 filas (bloqueado por RLS o tenant que
+    // no coincide) vuelve con `error: null` y la UI festeja un borrado que nunca
+    // ocurrió. Con el select distinguimos "no borró nada" de "borró de verdad".
+    const { data: borrados, error } = await supabase
         .from('pacientes')
         .delete()
         .eq('id', id)
         .eq('tenant_id', tenantId)
+        .select('id')
 
     if (error) return { error: error.message }
+
+    if (!borrados || borrados.length === 0) {
+        // 0 filas. El actor ya pasó requireAdmin() y el tenant se fuerza arriba,
+        // así que la policy DELETE (`tenant_id = get_user_tenant_id() AND
+        // es_admin()`) no puede estar ocultando una fila real: para este rol y
+        // tenant, 0 filas significa que la fila NO existe en el server. Es un
+        // "fantasma" de un cache local viejo (p. ej. previo a la renumeración de
+        // HC). Se lo avisamos al cliente para que lo purgue de IndexedDB.
+        return { notFound: true }
+    }
 
     revalidatePath('/pacientes')
     return { success: true }

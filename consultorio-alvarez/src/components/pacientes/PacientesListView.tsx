@@ -207,13 +207,28 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
 
     function onConfirmDelete() {
         if (!deleteCandidate) return
+        const deletedId = deleteCandidate.id
         startDeleting(async () => {
-            const res = await eliminarPaciente(deleteCandidate.id)
+            const res = await eliminarPaciente(deletedId)
             setDeleteCandidate(null)
             if (res.error) {
                 glassAlert.error({ title: 'Error', description: res.error })
             } else {
-                glassAlert.success({ title: 'Paciente eliminado' })
+                // Éxito o notFound: en ambos la fila debe irse de la pantalla y
+                // del cache. La lista es estado de un client component, así que
+                // revalidatePath del server no la toca: la filtramos a mano.
+                setAllLoadedPacientes(prev => prev.filter((p: any) => p.id !== deletedId))
+                setLocalDbResults(prev => prev.filter((p: any) => p.id !== deletedId))
+                setServerResults(prev => prev.filter((p: any) => p.id !== deletedId))
+                // Purga IndexedDB: el pull incremental nunca borra bajas, así que
+                // sin esto el "fantasma" reaparece en la próxima búsqueda local.
+                const { eliminarPacienteLocal } = await import('@/lib/offline/local-queries')
+                await eliminarPacienteLocal(deletedId).catch(() => {})
+                router.refresh()
+                glassAlert.success({
+                    title: res.notFound ? 'Paciente quitado de la lista' : 'Paciente eliminado',
+                    description: res.notFound ? 'Ya no existía en la nube; se limpió del cache local.' : undefined,
+                })
             }
         })
     }
