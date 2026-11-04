@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/client'
 import {
     format, startOfWeek, endOfWeek, addWeeks, subWeeks,
     addDays, subDays, addMonths, subMonths, isSameDay, parseISO, isToday,
-    startOfMonth, endOfMonth,
+    startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth,
 } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { ChevronLeft, ChevronRight, Plus, Clock, Maximize, Minimize, Edit2, Trash2, MessageSquare, User, Activity, ZoomIn, ZoomOut, Printer, Bell, CalendarDays, ChevronUp, ChevronDown, Search, RefreshCw, AlertCircle, Globe } from 'lucide-react'
@@ -210,6 +210,22 @@ export function AgendaView({
     const [showDayStrip, setShowDayStrip] = useState(true)
     const [turnoExpandeMobile, setTurnoExpandeMobile] = useState<string | null>(null)
     const [dropdownOpen, setDropdownOpen] = useState(false)
+
+    // Mes que muestra la franja de días en mobile (se navega con ‹ ›, independiente del día seleccionado).
+    const [mesVisible, setMesVisible] = useState<Date>(() => startOfMonth(new Date()))
+    // Si el día seleccionado cae en otro mes (p. ej. por swipe o "ir a hoy"), la franja lo sigue.
+    useEffect(() => {
+        setMesVisible(prev => isSameMonth(prev, diaSeleccionado) ? prev : startOfMonth(diaSeleccionado))
+    }, [diaSeleccionado])
+    const diasDelMes = useMemo(
+        () => eachDayOfInterval({ start: startOfMonth(mesVisible), end: endOfMonth(mesVisible) }),
+        [mesVisible]
+    )
+    // Auto-centra el día seleccionado en la franja del mes (mobile).
+    useEffect(() => {
+        const el = document.getElementById(`mday-${format(diaSeleccionado, 'yyyy-MM-dd')}`)
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    }, [diaSeleccionado, mesVisible])
 
     const selectedProfObj = useMemo(() => {
         if (filtroProf === 'todos' || filtroProf === SIN_ASIGNAR) return null
@@ -1705,7 +1721,7 @@ export function AgendaView({
             {vistaActiva !== 'mes' && showDayStrip && (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible"
                     className={cn(
-                        'flex gap-1.5 overflow-x-auto scrollbar-hide snap-x snap-mandatory',
+                        'max-md:hidden flex gap-1.5 overflow-x-auto scrollbar-hide snap-x snap-mandatory',
                         (vistaActiva === 'semana' || vistaActiva === 'hoy') && 'md:grid md:grid-cols-7 md:overflow-x-visible md:snap-none'
                     )}
                 >
@@ -2043,6 +2059,73 @@ export function AgendaView({
 
             {/* Mobile Timeline & Grid View (Google Calendar Style) */}
             <div className="block md:hidden space-y-3" onTouchStart={handleSwipeStart} onTouchEnd={handleSwipeEnd}>
+                {/* Cambiador de mes + franja del mes completo (solo mobile, reemplaza al strip compartido) */}
+                {vistaActiva !== 'mes' && (
+                    <div className="space-y-2">
+                        {/* Cambiador de mes */}
+                        <div className="flex items-center justify-center gap-3.5">
+                            <button
+                                onClick={() => setMesVisible(m => subMonths(m, 1))}
+                                className="h-8 w-8 rounded-xl border border-white/10 bg-card/60 flex items-center justify-center text-foreground active:bg-card"
+                                title="Mes anterior"
+                            >
+                                <ChevronLeft className="h-4 w-4" />
+                            </button>
+                            <span className="text-sm font-extrabold capitalize min-w-[150px] text-center">
+                                {format(mesVisible, 'MMMM yyyy', { locale: es })}
+                            </span>
+                            <button
+                                onClick={() => setMesVisible(m => addMonths(m, 1))}
+                                className="h-8 w-8 rounded-xl border border-white/10 bg-card/60 flex items-center justify-center text-foreground active:bg-card"
+                                title="Mes siguiente"
+                            >
+                                <ChevronRight className="h-4 w-4" />
+                            </button>
+                        </div>
+
+                        {/* Franja del mes (1–30/31), scroll horizontal, auto-centra el día seleccionado */}
+                        <div className="flex gap-1.5 overflow-x-auto scrollbar-hide snap-x pb-1">
+                            {diasDelMes.map((dia) => {
+                                const turnosBase = filtroProf === 'todos' ? turnos : turnos.filter((t: any) => t.profesional_id === filtroProf)
+                                const turnosDelDia = turnosBase.filter((t: any) => isSameDay(parseISO(t.fecha_inicio), dia))
+                                const totalDia = turnosDelDia.length
+                                const pendientesDia = turnosDelDia.filter((t: any) => t.estado === 'PENDIENTE').length
+                                const esHoy = isToday(dia)
+                                const isSelected = isSameDay(dia, diaSeleccionado)
+                                const esFinde = dia.getDay() === 0
+                                return (
+                                    <button
+                                        key={dia.toISOString()}
+                                        id={`mday-${format(dia, 'yyyy-MM-dd')}`}
+                                        onClick={() => {
+                                            setDiaSeleccionado(dia)
+                                            setBaseDate(dia)
+                                            setVistaActiva('hoy')
+                                        }}
+                                        className={cn(
+                                            'relative shrink-0 w-[46px] rounded-xl py-1.5 flex flex-col items-center gap-0.5 snap-center border transition-colors',
+                                            isSelected
+                                                ? 'bg-primary border-primary text-primary-foreground'
+                                                : 'border-transparent text-muted-foreground active:bg-card/60',
+                                            !isSelected && esHoy && 'text-primary',
+                                            !isSelected && esFinde && 'opacity-45'
+                                        )}
+                                    >
+                                        <span className={cn('text-[9.5px] font-bold uppercase tracking-wide', isSelected ? 'opacity-90' : 'opacity-70')}>
+                                            {format(dia, 'EEE', { locale: es })}
+                                        </span>
+                                        <span className="text-base font-extrabold leading-none">{format(dia, 'd')}</span>
+                                        <span className={cn(
+                                            'h-1 w-1 rounded-full',
+                                            totalDia === 0 ? 'opacity-0' : pendientesDia > 0 ? 'bg-amber-400' : isSelected ? 'bg-white' : 'bg-primary'
+                                        )} />
+                                    </button>
+                                )
+                            })}
+                        </div>
+                    </div>
+                )}
+
                 {/* Mobile View selector & Sticky Navigation header */}
                 <div className="sticky top-0 z-30 bg-background/85 backdrop-blur-xl rounded-2xl border border-border/40 shadow-lg shadow-black/20 px-2.5 py-2.5 select-none space-y-2.5">
                     <div className="flex items-center gap-2">
@@ -2057,16 +2140,8 @@ export function AgendaView({
                             <Search className="h-4 w-4" />
                         </GlassButton>
 
-                        {/* Navegación central: ‹ fecha › — tocar la fecha = ir a hoy */}
-                        <div className="flex-1 flex items-center justify-center gap-1.5 min-w-0">
-                            <GlassButton
-                                variant="glass"
-                                size="icon-sm"
-                                onClick={navAnterior}
-                                className="h-9 w-9 rounded-xl border-white/10 shrink-0"
-                            >
-                                <ChevronLeft className="h-4 w-4" />
-                            </GlassButton>
+                        {/* Fecha seleccionada (central) — tocar = ir a hoy. El día se cambia en la franja o con swipe. */}
+                        <div className="flex-1 flex items-center justify-center min-w-0">
                             <button
                                 onClick={irAHoy}
                                 title="Ir a hoy"
@@ -2088,14 +2163,6 @@ export function AgendaView({
                                     </span>
                                 )}
                             </button>
-                            <GlassButton
-                                variant="glass"
-                                size="icon-sm"
-                                onClick={navSiguiente}
-                                className="h-9 w-9 rounded-xl border-white/10 shrink-0"
-                            >
-                                <ChevronRight className="h-4 w-4" />
-                            </GlassButton>
                         </div>
 
                         {/* View Mode Selector Dropdown (derecha) */}

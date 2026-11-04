@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spike · Franja de mes + cambiador de mes</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --brand:#2563eb;--brand-deep:#1d4ed8;
+    --bg:#0a0f1c;--bg-2:#0e1627;--card:#141d31;--card-2:#172036;
+    --line:#223049;--line-soft:#1b2740;
+    --txt:#f1f5f9;--txt-2:#aeb9cc;--txt-3:#7c8aa3;
+    --eduardo:#3b82f6;--pedro:#22c55e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#05080f;color:var(--txt);min-height:100vh;display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:flex-start;padding:40px 20px}
+  .phone{width:390px;max-width:100%;background:var(--bg);border-radius:30px;border:9px solid #000;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+
+  .appbar{display:flex;align-items:center;gap:11px;padding:16px 16px 12px;background:linear-gradient(180deg,var(--bg-2),var(--bg));border-bottom:1px solid var(--line-soft)}
+  .wm{display:flex;align-items:center;gap:9px}
+  .wm .a{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#334155,#1e293b);display:flex;align-items:center;justify-content:center;font-weight:800;color:#cbd5e1;box-shadow:0 0 0 2px var(--brand) inset}
+  .wm .t{font-size:14.5px;font-weight:800;line-height:1.05}.wm .t b{color:var(--brand)}
+  .wm .s{color:var(--txt-3);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .burger{margin-left:auto;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--txt-2)}
+
+  .wrap{padding:12px 12px 14px}
+
+  /* ===== cambiador de mes ===== */
+  .month{display:flex;align-items:center;justify-content:center;gap:14px;margin-bottom:10px}
+  .month .arw{width:34px;height:34px;border-radius:11px;border:1px solid var(--line);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--txt);font-size:17px;font-weight:800}
+  .month .lbl{font-size:15px;font-weight:800;text-align:center;min-width:150px;text-transform:capitalize}
+
+  /* ===== franja del mes (scroll 1–30) ===== */
+  .strip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding:2px 2px 8px}
+  .strip::-webkit-scrollbar{display:none}
+  .d{flex:0 0 auto;width:46px;padding:7px 0 6px;border-radius:13px;display:flex;flex-direction:column;align-items:center;gap:3px;border:1px solid transparent;background:transparent}
+  .d .dw{font-size:9.5px;font-weight:700;color:var(--txt-3);text-transform:uppercase}
+  .d .dn{font-size:16px;font-weight:800;color:var(--txt-2)}
+  .d .dot{width:5px;height:5px;border-radius:50%;background:var(--brand);opacity:0}
+  .d.has .dot{opacity:1}
+  .d.today:not(.on) .dn{color:var(--brand)}
+  .d.on{background:var(--brand)}
+  .d.on .dw{color:#dbeafe}.d.on .dn{color:#fff}.d.on .dot{background:#fff;opacity:1}
+  .d.dim{opacity:.35}
+
+  /* ===== recuadro de control (sin flechas de día) ===== */
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:11px 12px;margin-top:4px;box-shadow:0 8px 24px rgba(0,0,0,.25);display:flex;flex-direction:column;gap:10px}
+  .ctrl{display:flex;align-items:center;gap:10px}
+  .ctrl .act{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--card-2);display:flex;align-items:center;justify-content:center;color:var(--brand);font-size:16px}
+  .ctrl .center{flex:1;display:flex;flex-direction:column;align-items:center;line-height:1.05}
+  .ctrl .center .d{font-size:16px;font-weight:800}
+  .ctrl .center .sub{font-size:10.5px;font-weight:700;color:var(--brand);margin-top:2px}
+  .ctrl .sel{height:38px;padding:0 13px;border-radius:12px;border:1px solid rgba(37,99,235,.4);background:rgba(37,99,235,.14);color:#93b4fb;font-weight:800;font-size:13px;display:flex;align-items:center;gap:6px}
+  .filters{display:flex;justify-content:center;gap:8px;overflow-x:auto;scrollbar-width:none}
+  .filters::-webkit-scrollbar{display:none}
+  .f{flex:0 0 auto;height:36px;padding:0 15px;border-radius:999px;border:1px solid var(--line);background:var(--card-2);color:var(--txt-2);font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:8px}
+  .f.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .f .dot{width:10px;height:10px;border-radius:50%}
+
+  .ctx{padding:6px 12px 18px;opacity:.5}
+  .ctx .c{display:flex;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:9px}
+  .ctx .ac{width:5px}.ctx .tm{width:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.2);padding:8px 0}
+  .ctx .tm .h{font-size:17px;font-weight:800}.ctx .tm .du{font-size:10px;color:var(--txt-3);font-weight:700}
+  .ctx .bd{flex:1;padding:8px 12px;display:flex;flex-direction:column;gap:5px;justify-content:center}
+  .ctx .nm{font-size:15px;font-weight:800}.ctx .mt{font-size:11.5px;color:var(--txt-3);font-weight:700}
+
+  .caption{max-width:360px;color:#94a3b8;font-size:13.5px;line-height:1.6}
+  .caption h2{color:#e2e8f0;font-size:17px;margin-bottom:10px}
+  .caption li{margin:6px 0 6px 18px}.caption b{color:#cbd5e1}
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="appbar">
+    <div class="wm"><span class="a">A</span><div><div class="t">Consultorio <b>ALVAREZ</b></div><div class="s">Agenda</div></div></div>
+    <div class="burger">☰</div>
+  </div>
+
+  <div class="wrap">
+    <!-- Cambiador de mes -->
+    <div class="month">
+      <div class="arw">‹</div>
+      <div class="lbl">Noviembre 2026</div>
+      <div class="arw">›</div>
+    </div>
+
+    <!-- Franja del MES completo (scroll 1–30). VIE 6 seleccionado -->
+    <div class="strip" id="strip"></div>
+
+    <!-- Recuadro de control: sin flechas de día (el strip + swipe mueven el día) -->
+    <div class="card">
+      <div class="ctrl">
+        <div class="act">⌕</div>
+        <div class="center"><span class="d">Viernes 6 nov</span><span class="sub">Ir a hoy</span></div>
+        <div class="sel">Día ▾</div>
+      </div>
+      <div class="filters">
+        <div class="f on">Todos</div>
+        <div class="f"><span class="dot" style="background:var(--eduardo)"></span>Dr. Eduardo</div>
+        <div class="f"><span class="dot" style="background:var(--pedro)"></span>Dr. Pedro</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ctx">
+    <div class="c"><div class="ac" style="background:var(--eduardo)"></div><div class="tm"><span class="h">09:00</span><span class="du">45 min</span></div><div class="bd"><span class="nm">Lucía Pérez</span><span class="mt">● Dr. Eduardo · Limpieza</span></div></div>
+    <div class="c"><div class="ac" style="background:#f97316"></div><div class="tm"><span class="h">10:00</span><span class="du">90 min</span></div><div class="bd"><span class="nm">Fiorina Malgieri</span><span class="mt">● Dr. Eduardo · Cirugía de implante</span></div></div>
+  </div>
+</div>
+
+<div class="caption">
+  <h2>Cómo funciona</h2>
+  <ul>
+    <li><b>Cambiador de mes</b> arriba: <b>‹ Noviembre 2026 ›</b>. Las flechas cambian el mes y repueblan la franja.</li>
+    <li><b>Franja del mes completo:</b> recorre del 1 al 30/31, scroll horizontal. El día de hoy en azul claro, el seleccionado en azul lleno, punto = tiene turnos. Al abrir, auto-centra el día seleccionado.</li>
+    <li><b>Tocar un día</b> lo selecciona y muestra sus turnos abajo.</li>
+    <li>El recuadro de control <b>ya no tiene flechas de día</b> (eran redundantes): quedan <b>🔍 Buscar</b>, la <b>fecha seleccionada</b> (tocar = ir a hoy) y <b>Día ▾</b>. Mover de día se hace tocando en la franja o con swipe.</li>
+  </ul>
+</div>
+
+<script>
+  // Genera la franja del mes (Noviembre 2026: 30 días, arranca sábado)
+  const dias = ['dom','lun','mar','mié','jue','vie','sáb'];
+  const start = new Date(2026,10,1); // Nov = 10
+  const strip = document.getElementById('strip');
+  const conTurnos = new Set([2,3,4,5,6,9,10,11,12,13,16,17,18,19,20]);
+  for(let n=1;n<=30;n++){
+    const dt = new Date(2026,10,n);
+    const dw = dias[dt.getDay()];
+    const el = document.createElement('div');
+    el.className = 'd' + (conTurnos.has(n)?' has':'') + (n===6?' on today':'') + (dt.getDay()===0?' dim':'');
+    el.innerHTML = `<span class="dw">${dw}</span><span class="dn">${n}</span><span class="dot"></span>`;
+    strip.appendChild(el);
+  }
+  // auto-centrar el seleccionado
+  requestAnimationFrame(()=>{ const on=strip.querySelector('.on'); if(on) on.scrollIntoView({inline:'center',block:'nearest'}); });
+</script>
+
+</body>
+</html>
