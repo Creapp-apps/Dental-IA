@@ -517,6 +517,19 @@ export async function procesarMensajeAutonomo({
         .eq('id', tenantId)
         .single()
 
+    // Datos de pago/transferencia (RC19). Va en consulta aparte y tolerante:
+    // si la migración 047 todavía no corrió, la columna no existe y no debe
+    // romper el flujo del bot (queda como string vacío).
+    let datosPagoTenant = ''
+    try {
+        const { data: dp, error: dpErr } = await admin
+            .from('tenants')
+            .select('datos_pago')
+            .eq('id', tenantId)
+            .maybeSingle()
+        if (!dpErr && dp) datosPagoTenant = ((dp as any).datos_pago || '').trim()
+    } catch { /* columna aún inexistente: se ignora */ }
+
     const nombreClinica = tenant?.nombre || 'Consultorio Odontológico'
     const direccionClinica = tenant?.direccion 
         ? `${tenant.direccion}${tenant.ciudad ? `, ${tenant.ciudad}` : ''}`
@@ -1019,8 +1032,16 @@ export async function procesarMensajeAutonomo({
         ['ok', 'oka', 'okis', 'okey', 'dale', 'listo', 'perfecto', 'perfe',
          'genial', 'barbaro', 'buenisimo', 'joya', 'de una', 'ok dale',
          'dale gracias', 'ok gracias', 'listo gracias', 'perfecto dale',
-         'ok perfecto', 'buenisimo gracias', 'excelente', 'excelente gracias'
+         'ok perfecto', 'buenisimo gracias', 'excelente', 'excelente gracias',
+         // RC20: confirmaciones de asistencia y cierres conformes que caían al
+         // fallback. "asistire" (futuro) no colisiona con el bloque de
+         // impedimento, que mira "no puedo asistir" / "no voy a asistir".
+         'todo ok', 'todo bien', 'todo ok gracias', 'todo bien gracias',
+         'bien', 'muy bien', 'bien gracias', 'todo perfecto', 'buen dia gracias',
+         'asistire', 'asistire gracias', 'ok asistire', 'si asistire',
+         'confirmado', 'ahi estare gracias'
         ].includes(soloTexto) ||
+        soloTexto.includes('asistire') ||
         soloTexto.includes('alli estare') ||
         soloTexto.includes('ahi estare') ||
         soloTexto.includes('ahi estoy') ||
@@ -1424,7 +1445,7 @@ export async function procesarMensajeAutonomo({
     // ─────────────────────────────────────────────────────────────
     // 6. INTENCIÓN: FAQ - PRECIOS, ARANCELES Y MEDIOS DE PAGO
     // ─────────────────────────────────────────────────────────────
-    const pidePrecios = 
+    const pidePrecios =
         normText.includes('cuanto sale') ||
         normText.includes('precio') ||
         normText.includes('precios') ||
@@ -1432,14 +1453,37 @@ export async function procesarMensajeAutonomo({
         normText.includes('arancel') ||
         normText.includes('medios de pago') ||
         normText.includes('formas de pago') ||
+        normText.includes('forma de pago') ||
         normText.includes('tarjeta') ||
         normText.includes('efectivo') ||
         normText.includes('cuotas') ||
+        // RC19: preguntas de transferencia / alias / copago / seña caían al
+        // fallback por no estar listadas acá.
+        normText.includes('transferencia') ||
+        normText.includes('transferir') ||
+        normText.includes('alias') ||
+        normText.includes('cbu') ||
+        normText.includes('cvu') ||
+        normText.includes('copago') ||
+        normText.includes('co-pago') ||
+        normText.includes('senia') ||
+        normText.includes('seña') ||
+        normText.includes('debito') ||
+        normText.includes('credito') ||
+        normText.includes('pago online') ||
+        normText.includes('pagar online') ||
         buttonPayload === 'FAQ_PRECIOS'
 
     if (pidePrecios) {
+        // Datos de transferencia / pago online del consultorio, si están
+        // cargados (tenants.datos_pago). Si no, se aclara que recepción los pasa.
+        const bloquePago = datosPagoTenant
+            ? `\n💠 *Datos para transferencia / pago online:*\n${datosPagoTenant}\n`
+            : `\n💠 *Transferencia / pago online:* escribinos "recepción" y te pasamos el alias y los datos para transferir.\n`
+
         const msgPrecios = `💳 *Aranceles y Medios de Pago — ${nombreClinica}*\n\n` +
-            `• *Medios de pago:* Efectivo, Transferencia bancaria, Tarjetas de Débito y Crédito en cuotas.\n\n` +
+            `• *Medios de pago:* Efectivo, Transferencia bancaria, Tarjetas de Débito y Crédito en cuotas.\n` +
+            bloquePago + `\n` +
             `🔍 *Presupuestos y Diagnósticos:*\n` +
             `Para tratamientos como ortodoncia, prótesis o implantes, se realiza una primera consulta diagnóstica para evaluar tu caso puntual y darte un presupuesto a medida.`
 
@@ -1589,6 +1633,66 @@ export async function procesarMensajeAutonomo({
 
         await enviarTextoWhatsApp(creds, cleanPhone, msgRecepcion, { ...trackingBase, accion: 'derivado_recepcion' })
         return { handled: true, action: 'derivado_recepcion' }
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // 8.5 (RC7) PEDIDO DE FECHA / REPROGRAMACIÓN EN TEXTO LIBRE
+    // Llega acá solo texto que ningún flujo anterior resolvió. Si menciona una
+    // fecha concreta o pide reprogramar/cambiar el turno, no tiramos el menú
+    // genérico: derivamos a una persona con el contexto para que coordine.
+    // (La reserva en curso, "mi turno", impedimento y FAQ ya retornaron arriba.)
+    // ─────────────────────────────────────────────────────────────
+    {
+        const DIAS = '(lunes|martes|miercoles|jueves|viernes|sabado|domingo)'
+        const MESES = '(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)'
+        const pideFechaOReprograma =
+            normText.includes('reprogram') ||
+            normText.includes('cambiar el turno') ||
+            normText.includes('cambiar mi turno') ||
+            normText.includes('cambiar de dia') ||
+            normText.includes('cambiar el dia') ||
+            normText.includes('cambiar de horario') ||
+            normText.includes('cambiar el horario') ||
+            normText.includes('mover el turno') ||
+            normText.includes('correr el turno') ||
+            normText.includes('adelantar el turno') ||
+            normText.includes('otra fecha') ||
+            normText.includes('otro dia') ||
+            normText.includes('otra semana') ||
+            normText.includes('para la otra') ||
+            normText.includes('semana que viene') ||
+            normText.includes('proxima semana') ||
+            normText.includes('semana proxima') ||
+            normText.includes('mas adelante') ||
+            new RegExp(`para (el |la )?${DIAS}`).test(normText) ||
+            new RegExp(`${DIAS} \\d{1,2}`).test(normText) ||
+            new RegExp(`para ${MESES}`).test(normText)
+
+        if (pideFechaOReprograma) {
+            console.log(`[WA AUTO-FLOW] ${cleanPhone} pide fecha/reprogramación en texto libre. Derivando a humano con contexto.`)
+            if (conversacionId) {
+                await admin.from('whatsapp_conversaciones').update({
+                    estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+                }).eq('id', conversacionId)
+            }
+            await admin.from('notificaciones').insert({
+                tenant_id: tenantId,
+                titulo: '📅 Paciente pide fecha / reprogramar por chat',
+                mensaje: `El paciente (+${cleanPhone}) escribió: "${textBody.slice(0, 160)}". Coordinar la fecha del turno por chat.`,
+                tipo: 'turno_reprogramado',
+                referencia_id: conversacionId || '',
+                leida: false
+            })
+            try {
+                const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                await sendPushToRole('admin', tenantId, '📅 Pide fecha / reprogramar', `Paciente +${cleanPhone}: "${textBody.slice(0, 80)}"`, '/mensajes')
+            } catch (e) {}
+            await enviarTextoWhatsApp(creds, cleanPhone,
+                `¡Dale! 🙏 Para coordinar esa fecha te paso con una persona de nuestro equipo, que te va a escribir por acá a la brevedad.`,
+                { ...trackingBase, accion: 'pide_fecha_reprograma_derivado' }
+            )
+            return { handled: true, action: 'pide_fecha_reprograma_derivado' }
+        }
     }
 
     // ─────────────────────────────────────────────────────────────
