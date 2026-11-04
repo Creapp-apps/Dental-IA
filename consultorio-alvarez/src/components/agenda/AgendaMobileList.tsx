@@ -141,8 +141,8 @@ export function AgendaMobileList({
 
     if (!isLoading && totalTurnos === 0 && !mostrarEncabezadoDia) {
         return (
-            <div className="pb-24 select-none">
-                <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
+            <div className="pb-24 select-none min-h-[58dvh] flex flex-col">
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 pb-24 text-center">
                     <span className="text-4xl">🗓️</span>
                     <p className="text-sm font-semibold text-muted-foreground">No hay turnos para este día</p>
                 </div>
@@ -151,7 +151,7 @@ export function AgendaMobileList({
     }
 
     return (
-        <div className={cn('pb-24 select-none transition-opacity', isLoading && 'opacity-60')}>
+        <div className={cn('pb-24 select-none min-h-[58dvh] transition-opacity', isLoading && 'opacity-60')}>
             {grupos.map((grupo) => (
                 <DiaSection
                     key={grupo.date.toISOString()}
