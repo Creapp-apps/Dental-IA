@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spike · Header agenda mobile · Consultorio Álvarez</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --brand:#2563eb; --brand-deep:#1d4ed8;
+    --bg:#0a0f1c; --bg-2:#0e1627; --card:#141d31; --card-2:#172036;
+    --line:#223049; --line-soft:#1b2740;
+    --txt:#f1f5f9; --txt-2:#aeb9cc; --txt-3:#7c8aa3;
+    --eduardo:#3b82f6; --pedro:#22c55e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#05080f;color:var(--txt);min-height:100vh;display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:flex-start;padding:40px 20px}
+  .col{display:flex;flex-direction:column;align-items:center;gap:10px}
+  .tag{font-size:12px;font-weight:800;letter-spacing:.1em;text-transform:uppercase;color:#64748b}
+  .tag.bad{color:#f87171}.tag.good{color:#4ade80}
+
+  .phone{width:390px;max-width:100%;background:var(--bg);border-radius:30px;border:9px solid #000;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+
+  /* ===== APP BAR ===== */
+  .appbar{display:flex;align-items:center;gap:11px;padding:16px 16px 12px;background:linear-gradient(180deg,var(--bg-2),var(--bg));border-bottom:1px solid var(--line-soft)}
+  .wm{display:flex;align-items:center;gap:9px}
+  .wm .a{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#334155,#1e293b);display:flex;align-items:center;justify-content:center;font-weight:800;color:#cbd5e1;box-shadow:0 0 0 2px var(--brand) inset}
+  .wm .t{font-size:14.5px;font-weight:800;line-height:1.05}
+  .wm .t b{color:var(--brand)}
+  .wm .s{color:var(--txt-3);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .burger{margin-left:auto;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--txt-2)}
+
+  .nav{padding:12px 14px 12px}
+
+  /* ================== VARIANTE A: actual (recargada) ================== */
+  .A .row{display:flex;align-items:center;gap:6px;margin-bottom:10px}
+  .A .btn{height:34px;border:1px solid var(--line);background:var(--card);border-radius:11px;display:flex;align-items:center;justify-content:center;color:var(--txt);font-weight:800;font-size:13px}
+  .A .ico{width:34px}.A .hoy{padding:0 11px;font-size:12px}
+  .A .date{flex:1;text-align:center;font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;margin:0 auto}
+  .A .search{width:34px;color:var(--brand)}
+  .A .sel{height:34px;padding:0 12px;border-radius:11px;border:1px solid rgba(37,99,235,.4);background:rgba(37,99,235,.12);color:#93b4fb;font-weight:800;font-size:12px;display:flex;align-items:center;gap:6px}
+  .daystripA{display:flex;gap:7px;overflow-x:auto;scrollbar-width:none;margin-bottom:10px}
+  .daystripA::-webkit-scrollbar{display:none}
+  .dA{flex:0 0 auto;width:62px;height:62px;border-radius:16px;border:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+  .dA .dw{font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase}
+  .dA .dn{font-size:17px;font-weight:800}
+  .dA.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .dA.on .dw{color:#dbeafe}
+  .dA .dots{display:flex;gap:3px}.dA .dots i{width:5px;height:5px;border-radius:50%}
+  .filtersA{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+  .filtersA::-webkit-scrollbar{display:none}
+  .fA{flex:0 0 auto;height:34px;padding:0 15px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--txt-2);font-weight:700;font-size:13px;display:flex;align-items:center;gap:7px}
+  .fA.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .fA .dot{width:9px;height:9px;border-radius:50%}
+
+  /* ================== VARIANTE B: rediseño ================== */
+  /* Fila 1: fecha prominente centrada entre flechas + acciones */
+  .B .ctrl{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+  .B .nav-ico{flex:0 0 auto;width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--txt);font-size:18px;font-weight:800}
+  .B .center{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.05;cursor:pointer}
+  .B .center .d{font-size:16px;font-weight:800}
+  .B .center .sub{font-size:10.5px;font-weight:700;color:var(--brand);letter-spacing:.02em;margin-top:2px}
+  .B .right{flex:0 0 auto;display:flex;align-items:center;gap:7px}
+  .B .act{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--card);display:flex;align-items:center;justify-content:center;color:var(--txt-2)}
+  .B .sel{height:38px;padding:0 13px;border-radius:12px;border:1px solid rgba(37,99,235,.4);background:rgba(37,99,235,.14);color:#93b4fb;font-weight:800;font-size:13px;display:flex;align-items:center;gap:6px}
+
+  /* Fila 2: franja de días compacta */
+  .daystrip{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px}
+  .daystrip::-webkit-scrollbar{display:none}
+  .d{flex:0 0 auto;width:46px;padding:7px 0 6px;border-radius:13px;background:transparent;display:flex;flex-direction:column;align-items:center;gap:3px;border:1px solid transparent}
+  .d .dw{font-size:10px;font-weight:700;color:var(--txt-3);text-transform:uppercase}
+  .d .dn{font-size:16px;font-weight:800;color:var(--txt-2)}
+  .d .dot{width:5px;height:5px;border-radius:50%;background:var(--brand);opacity:0}
+  .d.has .dot{opacity:1}
+  .d.on{background:var(--brand)}
+  .d.on .dw{color:#dbeafe}.d.on .dn{color:#fff}.d.on .dot{background:#fff}
+  .d.today:not(.on) .dn{color:var(--brand)}
+
+  /* Fila 3: filtros */
+  .filters{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none}
+  .filters::-webkit-scrollbar{display:none}
+  .f{flex:0 0 auto;height:38px;padding:0 15px;border-radius:999px;border:1px solid var(--line);background:var(--card);color:var(--txt-2);font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:8px}
+  .f.on{background:var(--brand);border-color:var(--brand);color:#fff}
+  .f .dot{width:10px;height:10px;border-radius:50%}
+
+  /* lista de contexto (atenuada) */
+  .ctx{padding:4px 14px 18px;opacity:.5;pointer-events:none}
+  .ctx .card{display:flex;background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;margin-bottom:9px}
+  .ctx .ac{width:5px}.ctx .tm{width:58px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,.2);padding:8px 0}
+  .ctx .tm .h{font-size:17px;font-weight:800}.ctx .tm .du{font-size:10px;color:var(--txt-3);font-weight:700}
+  .ctx .bd{flex:1;padding:8px 12px;display:flex;flex-direction:column;gap:5px;justify-content:center}
+  .ctx .nm{font-size:15px;font-weight:800}
+  .ctx .mt{font-size:11.5px;color:var(--txt-3);font-weight:700}
+
+  .caption{max-width:360px;color:#94a3b8;font-size:13.5px;line-height:1.6}
+  .caption h2{color:#e2e8f0;font-size:17px;margin-bottom:10px}
+  .caption li{margin:6px 0 6px 18px}
+  .caption b{color:#cbd5e1}
+</style>
+</head>
+<body>
+
+<!-- ===== VARIANTE A: ESTADO ACTUAL ===== -->
+<div class="col">
+  <span class="tag bad">Actual · recargado</span>
+  <div class="phone A">
+    <div class="appbar">
+      <div class="wm"><span class="a">A</span><div><div class="t">Consultorio <b>ALVAREZ</b></div><div class="s">Agenda</div></div></div>
+      <div class="burger">☰</div>
+    </div>
+    <div class="nav">
+      <div class="row">
+        <div class="btn ico">‹</div>
+        <div class="btn hoy">Hoy</div>
+        <div class="btn ico">›</div>
+        <div class="date">Jueves 5 De Novie…</div>
+        <div class="btn search">⌕</div>
+        <div class="sel">Día ▾</div>
+      </div>
+      <div class="daystripA">
+        <div class="dA"><span class="dw">Lun</span><span class="dn">2</span></div>
+        <div class="dA"><span class="dw">Mar</span><span class="dn">3</span></div>
+        <div class="dA"><span class="dw">Mié</span><span class="dn">4</span></div>
+        <div class="dA on"><span class="dw">Jue</span><span class="dn">5</span><span class="dots"><i style="background:#fff"></i><i style="background:#fbbf24"></i></span></div>
+        <div class="dA"><span class="dw">Vie</span><span class="dn">6</span></div>
+        <div class="dA"><span class="dw">Sáb</span><span class="dn">7</span></div>
+        <div class="dA"><span class="dw">Dom</span><span class="dn">8</span></div>
+      </div>
+      <div class="filtersA">
+        <div class="fA on">Todos</div>
+        <div class="fA"><span class="dot" style="background:var(--eduardo)"></span>Dr. Eduardo</div>
+        <div class="fA"><span class="dot" style="background:var(--pedro)"></span>Dr. Pedro</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== VARIANTE B: REDISEÑO ===== -->
+<div class="col">
+  <span class="tag good">Rediseño propuesto</span>
+  <div class="phone B">
+    <div class="appbar">
+      <div class="wm"><span class="a">A</span><div><div class="t">Consultorio <b>ALVAREZ</b></div><div class="s">Agenda</div></div></div>
+      <div class="burger">☰</div>
+    </div>
+    <div class="nav">
+      <!-- Fila 1: fecha prominente, sin truncar, entre flechas; a la derecha acciones -->
+      <div class="ctrl">
+        <div class="nav-ico">‹</div>
+        <div class="center">
+          <span class="d">Jueves 5 Nov</span>
+          <span class="sub">Hoy</span>
+        </div>
+        <div class="nav-ico">›</div>
+        <div class="right">
+          <div class="act">⌕</div>
+          <div class="sel">Día ▾</div>
+        </div>
+      </div>
+      <!-- Fila 2: franja de días compacta (punto = tiene turnos) -->
+      <div class="daystrip">
+        <div class="d has"><span class="dw">Lun</span><span class="dn">2</span><span class="dot"></span></div>
+        <div class="d"><span class="dw">Mar</span><span class="dn">3</span><span class="dot"></span></div>
+        <div class="d has"><span class="dw">Mié</span><span class="dn">4</span><span class="dot"></span></div>
+        <div class="d on today"><span class="dw">Jue</span><span class="dn">5</span><span class="dot"></span></div>
+        <div class="d has"><span class="dw">Vie</span><span class="dn">6</span><span class="dot"></span></div>
+        <div class="d"><span class="dw">Sáb</span><span class="dn">7</span><span class="dot"></span></div>
+        <div class="d"><span class="dw">Dom</span><span class="dn">8</span><span class="dot"></span></div>
+      </div>
+      <!-- Fila 3: filtros -->
+      <div class="filters">
+        <div class="f on">Todos</div>
+        <div class="f"><span class="dot" style="background:var(--eduardo)"></span>Dr. Eduardo</div>
+        <div class="f"><span class="dot" style="background:var(--pedro)"></span>Dr. Pedro</div>
+      </div>
+    </div>
+    <!-- contexto -->
+    <div class="ctx">
+      <div class="card"><div class="ac" style="background:var(--eduardo)"></div><div class="tm"><span class="h">08:30</span><span class="du">30 min</span></div><div class="bd"><span class="nm">Ricardo Gómez</span><span class="mt">● Dr. Eduardo · Control</span></div></div>
+      <div class="card"><div class="ac" style="background:#f97316"></div><div class="tm"><span class="h">10:00</span><span class="du">90 min</span></div><div class="bd"><span class="nm">Fiorina Malgieri</span><span class="mt">● Dr. Eduardo · Cirugía de implante</span></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== EXPLICACIÓN ===== -->
+<div class="caption">
+  <h2>Qué cambia en el header</h2>
+  <ul>
+    <li><b>Fecha protagonista y sin truncar:</b> "Jueves 5 Nov" centrada y grande, entre las flechas; abajo un rótulo "Hoy" (tocar la fecha vuelve al día actual).</li>
+    <li><b>Una sola fila de control</b> balanceada: ‹ fecha › a la izquierda/centro, buscar + selector de vista a la derecha. Se elimina el botón "Hoy" suelto (va integrado en la fecha).</li>
+    <li><b>Franja de días más liviana:</b> sin recuadros pesados; el día actual en azul, los días con turnos marcados con un punto. Menos ruido visual.</li>
+    <li><b>Filtros</b> igual, con más aire.</li>
+    <li>Jerarquía clara: primero <b>cuándo</b> (fecha + días), después <b>quién</b> (profesionales), después la lista.</li>
+  </ul>
+</div>
+
+</body>
+</html>

@@ -1181,6 +1181,26 @@ export function AgendaView({
         setModalOpen(true)
     }
 
+    // Swipe horizontal (mobile) para cambiar de período: izquierda = siguiente, derecha = anterior.
+    const swipeStartRef = useRef<{ x: number; y: number } | null>(null)
+    const handleSwipeStart = (e: React.TouchEvent) => {
+        const t = e.touches[0]
+        swipeStartRef.current = { x: t.clientX, y: t.clientY }
+    }
+    const handleSwipeEnd = (e: React.TouchEvent) => {
+        const start = swipeStartRef.current
+        swipeStartRef.current = null
+        if (!start) return
+        const t = e.changedTouches[0]
+        const dx = t.clientX - start.x
+        const dy = t.clientY - start.y
+        // Solo gestos claramente horizontales, para no interferir con el scroll vertical.
+        if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+            if (dx < 0) navSiguiente()
+            else navAnterior()
+        }
+    }
+
     const handleImprimirTicket = (t: any) => {
         const printWindow = window.open('', '_blank', 'width=350,height=650');
         if (!printWindow) {
@@ -1717,13 +1737,14 @@ export function AgendaView({
                                     (vistaActiva === 'semana' || vistaActiva === 'hoy')
                                         ? 'w-14 md:w-auto shrink-0 md:shrink snap-center md:snap-align-none'
                                         : 'min-w-[4.5rem] shrink-0 snap-center',
+                                    // Mobile: aspecto liviano (plano, sin cajas); desktop conserva glass/bordes vía md:
                                     isSelected
                                         ? 'bg-primary border-primary text-primary-foreground shadow-sm'
                                         : esHoy
-                                            ? 'glass border-primary/50 text-primary font-semibold'
+                                            ? 'border-transparent text-primary font-semibold md:glass md:border-primary/50'
                                             : pendientesDia > 0
-                                                ? 'glass border-amber-500/40 text-muted-foreground hover:text-foreground shadow-[0_0_8px_rgba(245,158,11,0.1)] hover:border-amber-500/60'
-                                                : 'glass-subtle border-transparent hover:border-white/20 text-muted-foreground hover:text-foreground'
+                                                ? 'border-transparent text-muted-foreground hover:text-foreground md:glass md:border-amber-500/40 md:shadow-[0_0_8px_rgba(245,158,11,0.1)] md:hover:border-amber-500/60'
+                                                : 'border-transparent text-muted-foreground hover:text-foreground md:glass-subtle md:hover:border-white/20'
                                 )}
                                 whileHover={{ scale: 1.01 }}
                                 whileTap={{ scale: 0.99 }}
@@ -2021,67 +2042,67 @@ export function AgendaView({
             </motion.div>
 
             {/* Mobile Timeline & Grid View (Google Calendar Style) */}
-            <div className="block md:hidden space-y-3">
+            <div className="block md:hidden space-y-3" onTouchStart={handleSwipeStart} onTouchEnd={handleSwipeEnd}>
                 {/* Mobile View selector & Sticky Navigation header */}
                 <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-xl border-b border-border/30 pb-2.5 pt-1 px-1 select-none space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                        {/* Navigation arrows & Hoy button */}
-                        <div className="flex items-center gap-1">
-                            <GlassButton 
-                                variant="glass" 
-                                size="icon-sm" 
+                    <div className="flex items-center gap-2">
+                        {/* Navegación: ‹ fecha › — fecha central y prominente, tocar = ir a hoy */}
+                        <div className="flex-1 flex items-center gap-1.5 min-w-0">
+                            <GlassButton
+                                variant="glass"
+                                size="icon-sm"
                                 onClick={navAnterior}
-                                className="h-8 w-8 rounded-xl border-white/10"
+                                className="h-9 w-9 rounded-xl border-white/10 shrink-0"
                             >
                                 <ChevronLeft className="h-4 w-4" />
                             </GlassButton>
-                            <GlassButton 
-                                variant="glass" 
-                                size="sm" 
+                            <button
                                 onClick={irAHoy}
-                                className="h-8 px-2.5 text-xs font-extrabold rounded-xl border-white/10"
+                                title="Ir a hoy"
+                                className="flex-1 min-w-0 flex flex-col items-center justify-center leading-tight px-1"
                             >
-                                Hoy
-                            </GlassButton>
-                            <GlassButton 
-                                variant="glass" 
-                                size="icon-sm" 
+                                <span className="font-extrabold text-sm text-foreground truncate max-w-full">
+                                    {vistaActiva === 'hoy'
+                                        ? (() => { const s = format(diaSeleccionado, "EEEE d MMM", { locale: es }); return s.charAt(0).toUpperCase() + s.slice(1) })()
+                                        : getRangeLabel()}
+                                </span>
+                                {isLoadingTurnos ? (
+                                    <span className="inline-flex items-center gap-1 text-[9px] font-bold text-primary animate-pulse">
+                                        <RefreshCw className="h-2.5 w-2.5 animate-spin" />
+                                        <span>Cargando...</span>
+                                    </span>
+                                ) : (
+                                    <span className="text-[10px] font-bold text-primary mt-0.5">
+                                        {isToday(diaSeleccionado) ? 'Hoy' : 'Ir a hoy'}
+                                    </span>
+                                )}
+                            </button>
+                            <GlassButton
+                                variant="glass"
+                                size="icon-sm"
                                 onClick={navSiguiente}
-                                className="h-8 w-8 rounded-xl border-white/10"
+                                className="h-9 w-9 rounded-xl border-white/10 shrink-0"
                             >
                                 <ChevronRight className="h-4 w-4" />
                             </GlassButton>
                         </div>
 
-                        {/* Current Date Range Label */}
-                        <div className="flex flex-col items-center justify-center text-center">
-                            <span className="font-extrabold text-xs text-foreground capitalize truncate max-w-[130px]">
-                                {getRangeLabel()}
-                            </span>
-                            {isLoadingTurnos && (
-                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-primary animate-pulse">
-                                    <RefreshCw className="h-2.5 w-2.5 animate-spin" />
-                                    <span>Cargando...</span>
-                                </span>
-                            )}
-                        </div>
-
                         {/* Botón Buscar en Mobile */}
-                        <GlassButton 
-                            variant="glass" 
-                            size="icon-sm" 
+                        <GlassButton
+                            variant="glass"
+                            size="icon-sm"
                             onClick={() => setBuscadorOpen(true)}
-                            className="h-8 w-8 rounded-xl border-white/10 shrink-0 text-primary"
+                            className="h-9 w-9 rounded-xl border-white/10 shrink-0 text-primary"
                             title="Buscar turnos"
                         >
                             <Search className="h-4 w-4" />
                         </GlassButton>
 
                         {/* View Mode Selector Dropdown */}
-                        <div className="relative">
+                        <div className="relative shrink-0">
                             <button
                                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-extrabold rounded-xl border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-all shadow-sm"
+                                className="flex items-center gap-1.5 h-9 px-3 text-xs font-extrabold rounded-xl border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-all shadow-sm"
                             >
                                 <span className="capitalize">
                                     {vistaActiva === 'hoy' ? 'Día' : 
@@ -2287,10 +2308,28 @@ export function AgendaView({
                     </div>
                 ) : vistaActiva === 'hoy' ? (
                     <AgendaMobileList
-                        turnos={turnosMobileFiltrados}
-                        diaSeleccionado={diaSeleccionado}
+                        grupos={[{
+                            date: diaSeleccionado,
+                            turnos: turnosMobileFiltrados,
+                            profesionalId: filtroProf !== 'todos' && filtroProf !== SIN_ASIGNAR ? filtroProf : undefined,
+                        }]}
                         isLoading={isLoadingTurnos}
                         onSelectTurno={setSelectedTurnoDetail}
+                        horarios={horarios}
+                        onAgendarLibre={!isProfesional ? (profId, fecha, hora) => abrirModalConProf(profId, format(fecha, 'yyyy-MM-dd'), hora) : undefined}
+                    />
+                ) : (vistaActiva === '3dias' || vistaActiva === 'semana') ? (
+                    <AgendaMobileList
+                        grupos={mobileColumns.map((col) => ({
+                            date: col.date,
+                            turnos: col.turnos,
+                            profesionalId: typeof col.profesionalId === 'string' && col.profesionalId !== SIN_ASIGNAR ? col.profesionalId : undefined,
+                        }))}
+                        isLoading={isLoadingTurnos}
+                        onSelectTurno={setSelectedTurnoDetail}
+                        mostrarEncabezadoDia
+                        horarios={horarios}
+                        onAgendarLibre={!isProfesional ? (profId, fecha, hora) => abrirModalConProf(profId, format(fecha, 'yyyy-MM-dd'), hora) : undefined}
                     />
                 ) : (
                     <div className="pb-20 select-none">
@@ -2298,13 +2337,9 @@ export function AgendaView({
                             {/* Scroll container for grid */}
                             <div className="flex-1 overflow-auto max-h-[620px] scrollbar-hide flex flex-col min-w-0 w-full relative">
                                 {/* Width setter inside scroll container */}
-                                <div 
+                                <div
                                     className="flex flex-col flex-1 min-w-0 w-full"
-                                    style={
-                                        (vistaActiva === 'semana' || vistaActiva === '15dias')
-                                            ? { width: `${55 + mobileColumns.length * 100}px` }
-                                            : undefined
-                                    }
+                                    style={{ width: `${55 + mobileColumns.length * 100}px` }}
                                 >
                                     {/* Header row: sticky to top */}
                                     <div className="flex sticky top-0 z-30 border-b border-border/30 bg-[#080a16] select-none w-full">
@@ -2313,20 +2348,11 @@ export function AgendaView({
                                             Hora
                                         </div>
                                         {/* Column headers wrapper */}
-                                        <div className={cn(
-                                            "flex flex-1 divide-x divide-border/30",
-                                            vistaActiva === '3dias' && "grid grid-cols-3 w-full",
-                                            (vistaActiva === 'semana' || vistaActiva === '15dias') && "flex"
-                                        )}
-                                        >
+                                        <div className="flex flex-1 divide-x divide-border/30">
                                             {mobileColumns.map((col, idx) => (
-                                                <div 
-                                                    key={idx} 
-                                                    style={
-                                                        (vistaActiva === 'semana' || vistaActiva === '15dias')
-                                                            ? { width: '100px', minWidth: '100px' }
-                                                            : undefined
-                                                    }
+                                                <div
+                                                    key={idx}
+                                                    style={{ width: '100px', minWidth: '100px' }}
                                                     className={cn(
                                                         "flex-1 py-2 text-center flex flex-col items-center justify-center transition-colors min-w-0",
                                                         isSameDay(col.date, new Date()) && "bg-primary/5"
@@ -2351,10 +2377,8 @@ export function AgendaView({
 
                                         {/* Columns grid */}
                                         <div className={cn(
-                                            "flex-1 relative min-h-0 divide-x divide-border/30 transition-opacity duration-200",
-                                            isLoadingTurnos && "opacity-75",
-                                            vistaActiva === '3dias' && "grid grid-cols-3 w-full",
-                                            (vistaActiva === 'semana' || vistaActiva === '15dias') && "flex"
+                                            "flex-1 relative min-h-0 divide-x divide-border/30 transition-opacity duration-200 flex",
+                                            isLoadingTurnos && "opacity-75"
                                         )}
                                         >
                                             {/* Background hour lines */}
@@ -2380,11 +2404,7 @@ export function AgendaView({
                                                 return (
                                                     <div
                                                         key={colIdx}
-                                                        style={
-                                                            (vistaActiva === 'semana' || vistaActiva === '15dias')
-                                                                ? { width: '100px', minWidth: '100px' }
-                                                                : undefined
-                                                        }
+                                                        style={{ width: '100px', minWidth: '100px' }}
                                                         className={cn(
                                                             "flex-1 relative h-[1120px] transition-colors min-w-0",
                                                             isColToday && "bg-primary/[0.01]"
