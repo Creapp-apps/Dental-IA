@@ -57,6 +57,13 @@ export interface IncrementalPullResult {
     rol?: string | null
     pacientes: LocalPaciente[]
     turnos: LocalTurno[]
+    /**
+     * Bajas (DELETE) ocurridas desde el último sync, leídas de la tabla de
+     * lápidas `registros_eliminados`. El cliente borra estos ids de IndexedDB:
+     * sin esto, un paciente/turno borrado en la nube vive para siempre en la
+     * base local porque el pull por `updated_at` nunca lo trae.
+     */
+    eliminados?: { pacientes: string[]; turnos: string[] }
     server_time: string
     error?: string
 }
@@ -323,11 +330,34 @@ export async function fetchIncrementalPullAction(sinceIsoDate: string): Promise<
             tipo_tratamiento_color: t.tipo_tratamiento?.color
         }))
 
+        // Lápidas de bajas desde el último sync. Va en su propio try: si la
+        // migración 046 todavía no corrió, la tabla no existe y no debe tirar
+        // abajo el pull entero (degrada a "sin bajas"). Un profesional recibe
+        // también ids que nunca tuvo: el bulkDelete del cliente los ignora.
+        const eliminados = { pacientes: [] as string[], turnos: [] as string[] }
+        try {
+            const tombs = await fetchAllRows(async (from, to) => {
+                return admin
+                    .from('registros_eliminados')
+                    .select('entidad, registro_id')
+                    .eq('tenant_id', tenantId)
+                    .gt('deleted_at', sinceIsoDate)
+                    .range(from, to)
+            })
+            for (const t of (tombs as any[]) || []) {
+                if (t.entidad === 'pacientes') eliminados.pacientes.push(t.registro_id)
+                else if (t.entidad === 'turnos') eliminados.turnos.push(t.registro_id)
+            }
+        } catch (e) {
+            console.warn('[OFFLINE SYNC] No se pudieron leer las lápidas de bajas:', e)
+        }
+
         return {
             success: true,
             rol: alcance.esProfesional ? 'profesional' : 'admin',
             pacientes: (pacientesNuevos as unknown as LocalPaciente[]) || [],
             turnos: turnosMapeados,
+            eliminados,
             server_time
         }
     } catch (err: any) {

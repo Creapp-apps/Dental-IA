@@ -501,6 +501,18 @@ class OfflineSyncManager {
                     await localDb.turnos.bulkPut(pullRes.turnos)
                     pulledCount += pullRes.turnos.length
                 }
+                // Bajas: se aplican DESPUÉS del bulkPut a propósito. Si una fila
+                // se modificó y después se borró en el mismo intervalo, viene en
+                // las dos listas y debe ganar la baja. bulkDelete ignora ids que
+                // no están en la base local (p. ej. turnos de otro profesional).
+                if (pullRes.eliminados) {
+                    if (pullRes.eliminados.pacientes.length > 0) {
+                        await localDb.pacientes.bulkDelete(pullRes.eliminados.pacientes)
+                    }
+                    if (pullRes.eliminados.turnos.length > 0) {
+                        await localDb.turnos.bulkDelete(pullRes.eliminados.turnos)
+                    }
+                }
                 await localDb.sync_meta.put({
                     key: 'last_synced_at',
                     value: pullRes.server_time,
