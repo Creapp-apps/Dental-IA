@@ -210,3 +210,51 @@ conversaciones):
 - Límite conocido: detecta las menciones comunes, pero **no** capta marcas
   sueltas mal escritas (p. ej. "Aplixaban" por apixaban). Ese caso puntual todavía
   cae al flujo general.
+
+---
+
+## Relevamiento de producción — 2026-11-04
+
+Tercer análisis (`whatsapp_mensajes`), ventana **2026-10-24 → 2026-11-04**: 675
+mensajes. Señal de "pared de IA": paciente escribe texto real y el bot responde
+`menu_principal_fallback`. 21 casos; descartado el ruido (toques accidentales:
+"Apreté sin querer", "Ay Nono", "Otros"). Además, mismo día se parchearon los
+botones de guardia (truncado ≤20), el rótulo de la notificación, el logueo del
+flujo de guardia en el inbox y el auto-agendado del turno de guardia (commits
+d20c3a6 / 87c9b8d).
+
+**Fallas vigentes nuevas (posteriores al 2026-10-24):**
+
+### RC19 · FAQ de pagos no capta "transferencia" / "alias" / "copago"
+- `faq_precios` (`whatsapp-auto-flow.ts:1427`) dispara con "precio", "efectivo",
+  "tarjeta", "cuotas"… pero **no** con "transferencia", "alias" ni "copago".
+- Casos reales: "se puede pagar por transferencia??" (11-03), "Me pasas el alias
+  porfavor" (10-29), "Tengo que pagar copago?" (11-03) → todos a fallback.
+- Fix propuesto: sumar keywords (`transferencia`, `alias`, `cbu`, `copago`,
+  `seña/senia`, `debito`, `credito`). Para "alias" puntual, el texto del FAQ no
+  da el alias: o se agrega el dato del tenant, o se aclara que recepción lo pasa.
+
+### RC20 · Confirmación de asistencia por texto libre cae al fallback
+- La cortesía (`cortesia_agradecimiento`, línea ~1004) atrapa agradecimientos,
+  pero no "asistiré/ahí estaré/ok asistiré" sueltos ni algunos cierres.
+- Casos: "Asistiré gracias" (10-28), "Ok asistiré" (11-02), "Todo ok, gracias"
+  (10-27), "Bien!!" (11-02) → fallback.
+- Fix propuesto: ampliar el match de cortesía/cierre con "asistir(é)", "ahí
+  estaré", "todo ok/bien" (sobre texto sin emoji, como RC15).
+
+### RC7 (pendiente) · Reprogramación / fecha en texto libre — sigue vigente
+- El handler "pide otra fecha" (línea 686) solo corre dentro del flujo de slots
+  recién ofrecidos; fuera de él, pedidos de fecha caen al fallback.
+- Casos: "Podrá ser para el viernes, en cualquier hora?" (11-03), "Miercoles 18
+  en cualqier horario" (10-29), "Para lo otra semana" (11-03).
+- Fix propuesto: detectar intención de fecha/reprograma fuera del flujo de slots
+  y derivar con contexto (o, como feature, la auto-reprogramación de RC7).
+
+### Menores / no urgentes
+- "No conozco a nadie" (respuesta a "¿con qué profesional?"): podría ofrecer
+  "cualquiera / el primero libre" en vez de caer al fallback.
+- Saludos sueltos ("Buenos días") → a veces fallback en vez del menú.
+
+**Lo que anda bien:** `cortesia_agradecimiento` (17), FAQ ubicación/precios,
+`turno_creado_con_exito` (4), dedupe de reclick (RC16), nota de voz (RC14), dato
+clínico (RC18): sin reincidencias en la ventana.
