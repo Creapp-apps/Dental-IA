@@ -4,7 +4,7 @@ import { Calendar, Clock, Users, AlertCircle, DollarSign, Stethoscope } from 'lu
 import { redirect } from 'next/navigation'
 import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario, getTurnosSinConfirmar, alcanceAgenda } from '@/lib/supabase/queries'
 import { DashboardKPI } from '@/components/dashboard/DashboardKPI'
-import { TurnoCardGlass } from '@/components/dashboard/TurnoCardGlass'
+import { TurnosProfesionalList } from '@/components/dashboard/TurnosProfesionalList'
 import { TurnosSinConfirmarSection } from '@/components/dashboard/TurnosSinConfirmarSection'
 import { DashboardLiveAlerts } from '@/components/dashboard/DashboardLiveAlerts'
 import { getBillingConfig } from '@/lib/actions/billing'
@@ -239,16 +239,7 @@ export default async function DashboardPage(props: {
                                     Sin turnos para hoy
                                 </div>
                             ) : (
-                                <div className="space-y-2">
-                                    {turnosProf.map((turno: any, i: number) => (
-                                        <TurnoCardGlass
-                                            key={turno.id}
-                                            turno={turno}
-                                            colorProf={prof.color_agenda}
-                                            index={i}
-                                        />
-                                    ))}
-                                </div>
+                                <TurnosProfesionalList turnos={turnosProf} colorProf={prof.color_agenda} />
                             )}
                         </div>
                     )

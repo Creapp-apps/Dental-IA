@@ -143,10 +143,10 @@ export function TurnoCardGlass({ turno, colorProf, index }: TurnoCardGlassProps)
                             <MessageSquare className="h-3 w-3" />
                         </GlassButton>
                     )}
-                    <GlassButton size="sm" variant="glass" className="h-6 text-xs px-2 text-primary border-primary/20 hover:border-primary/50"
+                    <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 sm:w-auto sm:px-2 text-xs text-primary border-primary/20 hover:border-primary/50"
                         onClick={() => router.push(`/agenda?edit=${turno.id}`)} disabled={isPending} title="Editar">
-                        <Edit2 className="h-3 w-3 mr-1" />
-                        Editar
+                        <Edit2 className="h-3 w-3 sm:mr-1" />
+                        <span className="hidden sm:inline">Editar</span>
                     </GlassButton>
                     <GlassButton size="sm" variant="glass" className="h-6 w-6 p-0 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-500/10"
                         onClick={handleDelete} disabled={isPending} title="Eliminar">
