@@ -370,7 +370,7 @@ export function ChatInboxView({
     const pendientesCount = conversaciones.filter(c => c.estado === 'HUMANO_PENDIENTE').length
 
     return (
-        <div className="flex h-[calc(100dvh-5.5rem)] rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xl backdrop-blur-md">
+        <div className="flex h-[calc(100dvh-4rem)] lg:h-[calc(100dvh-5.5rem)] rounded-none border-0 shadow-none lg:rounded-2xl lg:border lg:border-border/80 lg:shadow-xl bg-card overflow-hidden backdrop-blur-md">
             {/* ── COLUMNA IZQUIERDA: LISTA DE CHATS ──
                 En mobile es una sola columna por vez: la lista se oculta cuando hay
                 una conversación abierta (se vuelve con la flecha del header). */}
