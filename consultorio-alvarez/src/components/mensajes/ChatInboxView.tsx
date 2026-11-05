@@ -370,7 +370,7 @@ export function ChatInboxView({
     const pendientesCount = conversaciones.filter(c => c.estado === 'HUMANO_PENDIENTE').length
 
     return (
-        <div className="flex h-[calc(100dvh-4rem)] lg:h-[calc(100dvh-5.5rem)] rounded-none border-0 shadow-none lg:rounded-2xl lg:border lg:border-border/80 lg:shadow-xl bg-card overflow-hidden backdrop-blur-md">
+        <div className="flex h-[calc(100dvh-4.5rem)] lg:h-[calc(100dvh-5.5rem)] rounded-none border-0 shadow-none lg:rounded-2xl lg:border lg:border-border/80 lg:shadow-xl bg-card overflow-hidden backdrop-blur-md">
             {/* ── COLUMNA IZQUIERDA: LISTA DE CHATS ──
                 En mobile es una sola columna por vez: la lista se oculta cuando hay
                 una conversación abierta (se vuelve con la flecha del header). */}
@@ -554,7 +554,7 @@ export function ChatInboxView({
 
             {/* ── COLUMNA DERECHA: CHAT ACTIVO & MULTIATENCIÓN ── */}
             {conversacionActiva ? (
-                <div className="flex-1 flex flex-col bg-background/50">
+                <div className="flex-1 min-w-0 flex flex-col bg-background/50 overflow-x-hidden">
                     {/* Header del Chat */}
                     <div className="px-3 sm:px-5 py-3 sm:py-3.5 border-b border-border bg-card/40 flex items-center justify-between gap-2 sm:gap-4">
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -604,30 +604,32 @@ export function ChatInboxView({
                                 <button
                                     onClick={handleTomarChat}
                                     disabled={isPendingAction}
-                                    className="px-3 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs flex items-center gap-1.5 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                                    className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-primary text-primary-foreground font-semibold text-xs flex items-center gap-1.5 shadow-sm hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
                                 >
-                                    <UserCheck className="h-3.5 w-3.5" />
-                                    <span>Tomar conversación</span>
+                                    <UserCheck className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="sm:hidden">Tomar</span>
+                                    <span className="hidden sm:inline">Tomar conversación</span>
                                 </button>
                             ) : (
                                 <>
                                     <button
                                         onClick={() => handleCambiarEstado('BOT')}
                                         disabled={isPendingAction}
-                                        className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-medium text-xs flex items-center gap-1.5 hover:bg-emerald-500/25 transition-all cursor-pointer"
+                                        className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 font-medium text-xs flex items-center gap-1.5 hover:bg-emerald-500/25 transition-all cursor-pointer"
                                         title="Reactivar respuesta automática del bot"
                                     >
-                                        <Bot className="h-3.5 w-3.5" />
-                                        <span>Reactivar Bot</span>
+                                        <Bot className="h-3.5 w-3.5 shrink-0" />
+                                        <span className="hidden sm:inline">Reactivar Bot</span>
                                     </button>
 
                                     {conversacionActiva.estado !== 'CERRADO' && (
                                         <button
                                             onClick={() => handleCambiarEstado('CERRADO')}
                                             disabled={isPendingAction}
-                                            className="px-3 py-1.5 rounded-xl bg-muted text-muted-foreground border border-border font-medium text-xs hover:bg-muted/80 transition-all cursor-pointer"
+                                            className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-muted text-muted-foreground border border-border font-medium text-xs hover:bg-muted/80 transition-all cursor-pointer whitespace-nowrap"
                                         >
-                                            <span>Finalizar Chat</span>
+                                            <span className="sm:hidden">Cerrar</span>
+                                            <span className="hidden sm:inline">Finalizar Chat</span>
                                         </button>
                                     )}
                                 </>
@@ -661,7 +663,7 @@ export function ChatInboxView({
                     )}
 
                     {/* Feed de Mensajes */}
-                    <div className="flex-1 overflow-y-auto p-5 space-y-3.5">
+                    <div className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 space-y-3.5">
                         {isLoadingMensajes ? (
                             <div className="flex items-center justify-center h-full">
                                 <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -749,7 +751,7 @@ export function ChatInboxView({
 
                     {/* Input y Botón de Envío */}
                     <form onSubmit={handleEnviarMensaje} className="p-3 border-t border-border bg-card/60 flex items-end gap-2">
-                        <div className="flex-1 bg-background border border-border rounded-xl focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary transition-all p-2">
+                        <div className="flex-1 min-w-0 bg-background border border-border rounded-xl focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary transition-all p-2">
                             <textarea
                                 ref={textareaRef}
                                 rows={2}
@@ -764,11 +766,11 @@ export function ChatInboxView({
                                 placeholder="Escribí un mensaje... (Presioná Enter para enviar, Shift+Enter para nueva línea)"
                                 className="w-full text-xs md:text-sm bg-transparent border-0 focus:outline-none resize-none placeholder:text-muted-foreground/60 leading-relaxed"
                             />
-                            <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-1 border-t border-border/40">
-                                <span className="flex items-center gap-1 font-mono">
+                            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                                <span className="flex items-center gap-1 font-mono min-w-0 truncate">
                                     Firma: <strong>[{currentUsuario.nombre} {currentUsuario.apellido}]</strong>
                                 </span>
-                                <span className="text-[10px]">Shift+Enter para salto de línea</span>
+                                <span className="hidden sm:inline text-[10px] shrink-0">Shift+Enter para salto de línea</span>
                             </div>
                         </div>
 

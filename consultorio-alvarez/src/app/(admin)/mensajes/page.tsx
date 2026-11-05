@@ -35,8 +35,10 @@ export default async function MensajesPage() {
     return (
         // En mobile (<lg) va full-bleed: cancela el padding del layout admin
         // (p-4 / sm:p-6) con márgenes negativos y saca su propio padding, para
-        // aprovechar todo el ancho. En lg+ vuelve a tarjeta centrada.
-        <div className="w-full max-w-[1600px] -m-4 sm:-m-6 p-0 lg:m-0 lg:mx-auto lg:p-4">
+        // aprovechar todo el ancho. Sin `w-full`: con width:auto los márgenes
+        // negativos EXPANDEN el ancho (si no, w-full lo fija y solo lo desplaza,
+        // dejando una franja a la derecha). En lg+ vuelve a tarjeta centrada.
+        <div className="max-w-[1600px] -m-4 sm:-m-6 p-0 lg:m-0 lg:mx-auto lg:p-4">
             <ChatInboxView
                 initialConversaciones={conversaciones}
                 currentUsuario={{
