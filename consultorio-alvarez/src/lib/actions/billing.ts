@@ -58,6 +58,7 @@ export async function getBillingConfig(tenantId: string) {
         banco_transferencia: '',
         mp_link: '',
         estado: 'PENDIENTE_PAGO',
+        avisos_vencimiento_activos: true,
     }
 
     const defaultPayments = {
@@ -79,12 +80,23 @@ export async function updateBillingSettings(tenantId: string, settings: any) {
 
     const supabase = getAdmin()
 
+    // Leemos los credentials actuales para no pisar flags que el admin del
+    // consultorio no edita (p. ej. `avisos_vencimiento_activos`, que sólo
+    // controla el superadmin). El merge preserva lo que no se re-escribe acá.
+    const { data: current } = await supabase
+        .from('tenant_integrations')
+        .select('credentials')
+        .eq('tenant_id', tenantId)
+        .eq('provider', 'billing_settings')
+        .maybeSingle()
+
     const { error } = await supabase
         .from('tenant_integrations')
         .upsert({
             tenant_id: tenantId,
             provider: 'billing_settings',
             credentials: {
+                ...(current?.credentials || {}),
                 monto_abono: Number(settings.monto_abono) || 0,
                 fecha_vencimiento: settings.fecha_vencimiento || '',
                 alias_transferencia: settings.alias_transferencia || '',

@@ -67,6 +67,10 @@ export default async function AdminLayout({
     let showSidebarAlert = false
     let diffDays = 999
 
+    // Avisos de vencimiento (banner/alerta/modal) on/off por tenant (superadmin).
+    // La suspensión real (isBlocked) no depende de este flag.
+    const avisosVencimientoActivos = settings?.avisos_vencimiento_activos !== false
+
     const headersList = await headers()
     const rawHost = headersList.get('x-tenant-host') || headersList.get('host')
     const cleanHost = rawHost ? rawHost.split(':')[0].toLowerCase() : ''
@@ -106,8 +110,10 @@ export default async function AdminLayout({
         const suspended = settings.estado === 'SUSPENDIDO' || settings.estado === 'VENCIDO'
 
         isBlocked = expired || suspended
-        // Mostrar alerta en sidebar si faltan 7 días o menos, o está vencido
-        showSidebarAlert = diffDays <= 7
+        // Mostrar alerta en sidebar si faltan 7 días o menos, o está vencido.
+        // Respeta el switch del superadmin: si los avisos están desactivados para
+        // este tenant, no se muestra el nag (la suspensión real sigue vigente).
+        showSidebarAlert = avisosVencimientoActivos && diffDays <= 7
     }
 
     // Inyectamos el tema CSS dinámico armonizado para toda la suite de componentes
@@ -123,15 +129,17 @@ export default async function AdminLayout({
                 <div className="relative z-10 flex w-full h-full flex-col lg:flex-row">
                     <NotificationProvider tenantId={usuario.tenant_id}>
                         <SessionResumeHandler themeColor={primaryStr} />
-                        <BillingDueModalToast
-                            tenantId={usuario.tenant_id}
-                            clinicName={config?.logo_config?.text || 'Consultorio'}
-                            fechaVencimiento={settings?.fecha_vencimiento || ''}
-                            montoAbono={settings?.monto_abono || 0}
-                            isSuperadmin={Boolean(isSuperadmin)}
-                            diffDays={diffDays}
-                            themeColor={primaryStr}
-                        />
+                        {avisosVencimientoActivos && (
+                            <BillingDueModalToast
+                                tenantId={usuario.tenant_id}
+                                clinicName={config?.logo_config?.text || 'Consultorio'}
+                                fechaVencimiento={settings?.fecha_vencimiento || ''}
+                                montoAbono={settings?.monto_abono || 0}
+                                isSuperadmin={Boolean(isSuperadmin)}
+                                diffDays={diffDays}
+                                themeColor={primaryStr}
+                            />
+                        )}
                         <Sidebar 
                             tenantId={usuario.tenant_id}
                             userEmail={user.email} 

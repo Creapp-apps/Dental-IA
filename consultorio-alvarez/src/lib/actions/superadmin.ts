@@ -28,6 +28,10 @@ export interface TenantBillingInfo {
     cbu_transferencia?: string
     banco_transferencia?: string
     mp_link?: string
+    /** Si es false, el tenant NO ve los avisos de vencimiento (banner, alerta de
+     * sidebar, modal). La suspensión real (BillingGuard) no se ve afectada.
+     * Default: true (muestra avisos). */
+    avisos_vencimiento_activos?: boolean
     updated_at?: string
 }
 
@@ -144,6 +148,7 @@ export async function getSaasOverview(): Promise<{
             cbu_transferencia: rawSettings.cbu_transferencia || '',
             banco_transferencia: rawSettings.banco_transferencia || '',
             mp_link: rawSettings.mp_link || '',
+            avisos_vencimiento_activos: rawSettings.avisos_vencimiento_activos !== false,
             updated_at: rawSettings.updated_at
         }
 
@@ -348,6 +353,7 @@ export async function updateTenantBillingDetails(
         cbu_transferencia?: string
         banco_transferencia?: string
         mp_link?: string
+        avisos_vencimiento_activos?: boolean
     }
 ): Promise<{ success: boolean; error?: string }> {
     try {

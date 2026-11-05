@@ -61,7 +61,7 @@ export default async function DashboardPage(props: {
     // Calcular banner de alerta de vencimiento
     let alertBanner = null
 
-    if (settings?.fecha_vencimiento && !isSuperadmin) {
+    if (settings?.fecha_vencimiento && !isSuperadmin && settings?.avisos_vencimiento_activos !== false) {
         const today = new Date()
         today.setHours(0, 0, 0, 0)
         const [year, month, day] = settings.fecha_vencimiento.split('-').map(Number)

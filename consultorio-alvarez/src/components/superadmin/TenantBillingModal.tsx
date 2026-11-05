@@ -19,6 +19,7 @@ export function TenantBillingModal({ tenant, isOpen, onClose, onSuccess }: Tenan
     const [cbu, setCbu] = useState(tenant.billing.cbu_transferencia || '')
     const [banco, setBanco] = useState(tenant.billing.banco_transferencia || '')
     const [mpLink, setMpLink] = useState(tenant.billing.mp_link || '')
+    const [avisosVencimiento, setAvisosVencimiento] = useState(tenant.billing.avisos_vencimiento_activos !== false)
 
     const [isPending, startTransition] = useTransition()
     const [errorMsg, setErrorMsg] = useState('')
@@ -38,7 +39,8 @@ export function TenantBillingModal({ tenant, isOpen, onClose, onSuccess }: Tenan
                     alias_transferencia: alias.trim(),
                     cbu_transferencia: cbu.trim(),
                     banco_transferencia: banco.trim(),
-                    mp_link: mpLink.trim()
+                    mp_link: mpLink.trim(),
+                    avisos_vencimiento_activos: avisosVencimiento
                 })
                 if (!res.success) {
                     setErrorMsg(res.error || 'Error al guardar los cambios.')
@@ -127,6 +129,26 @@ export function TenantBillingModal({ tenant, isOpen, onClose, onSuccess }: Tenan
                             <option value="SUSPENDIDO">SUSPENDIDO (Bloqueo inmediato por BillingGuard)</option>
                             <option value="VENCIDO">VENCIDO (Bloqueo por falta de pago)</option>
                         </select>
+                    </div>
+
+                    {/* Avisos de vencimiento (nag al consultorio) */}
+                    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2.5">
+                        <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-200">Mostrar avisos de vencimiento</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5 leading-snug">
+                                Banner, alerta de menú y modal de &quot;plan por vencer&quot; en el panel del consultorio. La suspensión real (bloqueo) no se ve afectada.
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            role="switch"
+                            aria-checked={avisosVencimiento}
+                            onClick={() => setAvisosVencimiento(v => !v)}
+                            className={`relative shrink-0 h-6 w-11 rounded-full transition-colors ${avisosVencimiento ? 'bg-cyan-500' : 'bg-slate-700'}`}
+                            title={avisosVencimiento ? 'Avisos activados — clic para ocultarlos' : 'Avisos ocultos — clic para mostrarlos'}
+                        >
+                            <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${avisosVencimiento ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+                        </button>
                     </div>
 
                     <div className="pt-2 border-t border-white/10">
