@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spike · Dashboard mobile — Centro de Alertas (Fase A)</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --brand:#2563eb;--brand-deep:#1d4ed8;
+    --bg:#0a0f1c;--bg-2:#0e1627;--card:#141d31;--card-2:#172036;
+    --line:#223049;--line-soft:#1b2740;
+    --txt:#f1f5f9;--txt-2:#aeb9cc;--txt-3:#7c8aa3;
+    --emerald:#10b981;--rose:#f43f5e;--indigo:#6366f1;--amber:#f59e0b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;background:#05080f;color:var(--txt);min-height:100vh;display:flex;flex-wrap:wrap;gap:40px;justify-content:center;align-items:flex-start;padding:40px 20px}
+  .col{display:flex;flex-direction:column;align-items:center;gap:14px}
+  .tag{font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:var(--txt-3)}
+  .phone{width:390px;max-width:100%;background:var(--bg);border-radius:30px;border:9px solid #000;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.6)}
+
+  .appbar{display:flex;align-items:center;gap:11px;padding:14px 16px 12px;background:linear-gradient(180deg,var(--bg-2),var(--bg));border-bottom:1px solid var(--line-soft)}
+  .wm{display:flex;align-items:center;gap:9px}
+  .wm .a{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#334155,#1e293b);display:flex;align-items:center;justify-content:center;font-weight:800;color:#cbd5e1;box-shadow:0 0 0 2px var(--brand) inset}
+  .wm .t{font-size:14.5px;font-weight:800;line-height:1.05}.wm .t b{color:var(--brand)}
+  .wm .s{color:var(--txt-3);font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase}
+  .burger{margin-left:auto;width:34px;height:34px;border-radius:10px;border:1px solid var(--line);display:flex;align-items:center;justify-content:center;color:var(--txt-2)}
+
+  .body{padding:14px 13px 20px}
+  .hi{font-size:19px;font-weight:800;margin-bottom:2px}
+  .hi-sub{font-size:12px;color:var(--txt-3);font-weight:700;margin-bottom:13px}
+
+  /* banner cobro compacto */
+  .bill{display:flex;align-items:center;gap:10px;background:rgba(244,63,94,.1);border:1px solid rgba(244,63,94,.3);border-radius:15px;padding:11px 12px;margin-bottom:13px}
+  .bill .ic{color:var(--rose);font-size:17px;flex:0 0 auto}
+  .bill .tx{font-size:11.5px;font-weight:700;color:#fda4af;line-height:1.35;flex:1}
+  .bill .tx b{color:#fff;text-decoration:underline}
+  .bill .go{flex:0 0 auto;font-size:11px;font-weight:800;color:#fff;background:var(--rose);border-radius:9px;padding:6px 10px}
+
+  /* ===== KPIs 2x2 ===== */
+  .kpis{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:13px}
+  .kpi{background:var(--card);border:1px solid var(--line);border-radius:15px;padding:11px 12px;display:flex;align-items:center;gap:10px}
+  .kpi .ki{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex:0 0 auto}
+  .kpi .kn{font-size:20px;font-weight:800;line-height:1}
+  .kpi .kl{font-size:10px;font-weight:700;color:var(--txt-3);margin-top:2px}
+  .ki.b{background:rgba(37,99,235,.15);color:#60a5fa}
+  .ki.a{background:rgba(245,158,11,.15);color:#fbbf24}
+  .ki.r{background:rgba(244,63,94,.15);color:#fb7185}
+  .ki.g{background:rgba(16,185,129,.15);color:#34d399}
+
+  /* ===== Centro de Alertas ===== */
+  .alerts{background:var(--card);border:1px solid rgba(37,99,235,.25);border-radius:17px;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+  .ahead{display:flex;align-items:center;gap:11px;padding:13px 13px;background:rgba(37,99,235,.06);border-bottom:1px solid var(--line-soft)}
+  .ahead.closed{border-bottom:none}
+  .abell{position:relative;width:38px;height:38px;border-radius:11px;background:rgba(37,99,235,.12);border:1px solid rgba(37,99,235,.25);display:flex;align-items:center;justify-content:center;color:var(--brand);font-size:17px;flex:0 0 auto}
+  .abell .pp{position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;background:var(--rose);border:2px solid var(--card)}
+  . atitle{flex:1;min-width:0}
+  .arow1{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .arow1 h2{font-size:14px;font-weight:800}
+  .pend{font-size:11px;font-weight:800;color:#fff;background:var(--rose);border-radius:999px;padding:2px 9px}
+  .arow2{font-size:10.5px;color:var(--txt-3);font-weight:700;margin-top:2px}
+  .achev{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--txt-2);font-size:13px;flex:0 0 auto}
+
+  .alist{padding:9px;display:flex;flex-direction:column;gap:8px}
+  .markall{display:flex;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:700;color:var(--txt-2);background:var(--card-2);border:1px solid var(--line);border-radius:10px;padding:8px;margin:0 9px 2px}
+
+  /* tarjeta de alerta — alineada a la izquierda, 2 filas, borde color, tappable */
+  .al{position:relative;display:flex;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--card-2)}
+  .al .edge{width:4px;flex:0 0 auto}
+  .al .in{flex:1;min-width:0;padding:10px 11px 9px}
+  .al .l1{display:flex;align-items:center;gap:7px;min-width:0}
+  .al .ico{font-size:13px;flex:0 0 auto}
+  .al .ti{font-size:13px;font-weight:800;flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .al .badge{font-size:9.5px;font-weight:800;padding:2px 7px;border-radius:999px;white-space:nowrap;flex:0 0 auto}
+  .al .msg{font-size:11.5px;color:var(--txt);font-weight:600;line-height:1.35;margin-top:4px}
+  .al .msg b{font-weight:800;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:0 5px;font-size:10px;letter-spacing:.04em;text-transform:uppercase}
+  .al .l3{display:flex;align-items:center;gap:7px;margin-top:7px}
+  .al .time{font-size:10px;color:var(--txt-3);font-weight:700}
+  .al .cta{margin-left:auto;font-size:11px;font-weight:800;color:var(--brand);display:flex;align-items:center;gap:4px}
+  .al .dismiss{position:absolute;top:7px;right:7px;width:22px;height:22px;border-radius:7px;background:rgba(255,255,255,.05);border:1px solid var(--line);color:var(--txt-3);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800}
+
+  /* colores por tipo (solo el borde + icono + badge, resto neutro = menos ruido) */
+  .t-ok .edge{background:var(--emerald)} .t-ok .badge{background:rgba(16,185,129,.15);color:#6ee7b7}
+  .t-new .edge{background:var(--indigo)} .t-new .badge{background:rgba(99,102,241,.15);color:#a5b4fc}
+  .t-cancel .edge{background:var(--rose)} .t-cancel .badge{background:rgba(244,63,94,.15);color:#fda4af}
+  .t-urg .edge{background:var(--rose)} .t-urg .badge{background:rgba(244,63,94,.18);color:#fda4af}
+
+  .vermas{text-align:center;font-size:11.5px;font-weight:800;color:var(--txt-2);background:var(--card-2);border:1px solid var(--line);border-radius:10px;padding:8px;margin:2px 9px 9px}
+
+  .caption{max-width:380px;color:#94a3b8;font-size:13.5px;line-height:1.65}
+  .caption h2{color:#e2e8f0;font-size:17px;margin-bottom:10px}
+  .caption li{margin:7px 0 7px 18px}.caption b{color:#cbd5e1}
+  .caption .bad{color:#fca5a5;font-weight:800}
+  .caption .good{color:#6ee7b7;font-weight:800}
+</style>
+</head>
+<body>
+
+<!-- ============ PHONE 1 · estado por defecto (colapsado) ============ -->
+<div class="col">
+  <span class="tag">Por defecto en mobile · alertas colapsadas</span>
+  <div class="phone">
+    <div class="appbar">
+      <div class="wm"><span class="a">A</span><div><div class="t">Consultorio <b>ALVAREZ</b></div><div class="s">Panel admin</div></div></div>
+      <div class="burger">☰</div>
+    </div>
+    <div class="body">
+      <div class="hi">¡Hola, Admin Álvarez! 👋</div>
+      <div class="hi-sub">Miércoles 4 de noviembre · panel de administración</div>
+
+      <div class="bill">
+        <span class="ic">⚠️</span>
+        <span class="tx">Regularizá el abono en <b>Mis Pagos</b> — vence en 1 día.</span>
+        <span class="go">Mis Pagos</span>
+      </div>
+
+      <!-- KPIs primero: resumen del día de un vistazo -->
+      <div class="kpis">
+        <div class="kpi"><span class="ki b">📅</span><div><div class="kn">8</div><div class="kl">Turnos hoy</div></div></div>
+        <div class="kpi"><span class="ki a">⏱️</span><div><div class="kn">3</div><div class="kl">Pendientes</div></div></div>
+        <div class="kpi"><span class="ki r">❗</span><div><div class="kn">1</div><div class="kl">Urgencias</div></div></div>
+        <div class="kpi"><span class="ki g">👥</span><div><div class="kn">412</div><div class="kl">Pacientes</div></div></div>
+      </div>
+
+      <!-- Centro de alertas COLAPSADO: una barra, sin comerse el fold -->
+      <div class="alerts">
+        <div class="ahead closed">
+          <div class="abell">🔔<span class="pp"></span></div>
+          <div class="atitle">
+            <div class="arow1"><h2>Centro de Alertas</h2><span class="pend">47 pendientes</span></div>
+            <div class="arow2">Tocá para ver respuestas de WhatsApp, cancelaciones y reservas.</div>
+          </div>
+          <div class="achev">▾</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ PHONE 2 · expandido (tarjetas rediseñadas, sin scroll anidado) ============ -->
+<div class="col">
+  <span class="tag">Expandido · tarjetas alineadas, sin scroll interno</span>
+  <div class="phone">
+    <div class="appbar">
+      <div class="wm"><span class="a">A</span><div><div class="t">Consultorio <b>ALVAREZ</b></div><div class="s">Panel admin</div></div></div>
+      <div class="burger">☰</div>
+    </div>
+    <div class="body">
+      <div class="alerts">
+        <div class="ahead">
+          <div class="abell">🔔<span class="pp"></span></div>
+          <div class="atitle">
+            <div class="arow1"><h2>Centro de Alertas</h2><span class="pend">47 pendientes</span></div>
+            <div class="arow2">WhatsApp, cancelaciones y reservas en tiempo real.</div>
+          </div>
+          <div class="achev">▴</div>
+        </div>
+
+        <div class="markall">✓✓ Marcar todas como leídas</div>
+
+        <div class="alist">
+          <!-- cada tarjeta = tappable (va a Agenda + marca leída). ✓ chico = descartar -->
+          <div class="al t-ok">
+            <span class="edge"></span>
+            <div class="in">
+              <div class="l1"><span class="ico">✅</span><span class="ti">Turno confirmado</span><span class="badge">WhatsApp</span></div>
+              <div class="msg"><b>Casserly</b> Pedro confirmó su Consulta para el jue 5 nov · 09:00.</div>
+              <div class="l3"><span class="time">hace 4 h</span><span class="cta">Ver en agenda →</span></div>
+            </div>
+            <div class="dismiss">✓</div>
+          </div>
+
+          <div class="al t-new">
+            <span class="edge"></span>
+            <div class="in">
+              <div class="l1"><span class="ico">✨</span><span class="ti">Nueva reserva web</span><span class="badge">Online</span></div>
+              <div class="msg"><b>Gómez</b> Lucía reservó Limpieza para el vie 6 nov · 10:30.</div>
+              <div class="l3"><span class="time">hace 20 min</span><span class="cta">Ver en agenda →</span></div>
+            </div>
+            <div class="dismiss">✓</div>
+          </div>
+
+          <div class="al t-urg">
+            <span class="edge"></span>
+            <div class="in">
+              <div class="l1"><span class="ico">🚨</span><span class="ti">Guardia / Urgencia</span><span class="badge">Urgencia</span></div>
+              <div class="msg"><b>Pérez</b> Juan pidió turno de urgencia por dolor agudo.</div>
+              <div class="l3"><span class="time">hace 35 min</span><span class="cta">Ver en agenda →</span></div>
+            </div>
+            <div class="dismiss">✓</div>
+          </div>
+        </div>
+
+        <div class="vermas">▾ Ver 44 alertas restantes</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ explicación ============ -->
+<div class="caption">
+  <h2>Fase A — qué cambia</h2>
+  <ul>
+    <li><span class="bad">Antes:</span> el Centro de Alertas tenía <b>scroll propio</b> (<code>max-h-[380px] overflow-y-auto</code>) dentro del scroll de página → doble scroll, gesto atrapado.<br>
+        <span class="good">Ahora:</span> sin scroll interno en mobile. Muestra 3 + <b>"Ver más"</b> inline (expande hacia abajo, un solo scroll).</li>
+    <li><span class="bad">Antes:</span> expandido por defecto con 47 alertas → tapaba turnos y KPIs.<br>
+        <span class="good">Ahora:</span> <b>colapsado por defecto</b> en mobile (barra con "47 pendientes"). KPIs <b>2×2</b> arriba = resumen del día de un vistazo.</li>
+    <li><span class="bad">Antes:</span> tarjetas centradas, apiladas, con 2 botones.<br>
+        <span class="good">Ahora:</span> tarjeta <b>alineada a la izquierda</b> tipo las de la agenda — título + badge + mensaje + hora. <b>Toda la tarjeta es tappable</b> (va a Agenda y marca leída); un <b>✓ chico</b> arriba a la derecha descarta.</li>
+    <li><span class="bad">Antes:</span> header con bounce + ping + spin a la vez.<br>
+        <span class="good">Ahora:</span> un solo punto rojo sobrio, sin animación cansadora.</li>
+    <li><b>Color sólo en el borde + ícono + badge</b> (verde confirmado, índigo reserva, rojo urgencia); el fondo queda neutro para no gritar.</li>
+  </ul>
+</div>
+
+</body>
+</html>

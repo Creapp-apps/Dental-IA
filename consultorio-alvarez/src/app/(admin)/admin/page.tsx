@@ -174,11 +174,8 @@ export default async function DashboardPage(props: {
             {/* Banner de Cobro */}
             {alertBanner}
 
-            {/* Centro de Alertas y Novedades en Tiempo Real */}
-            <DashboardLiveAlerts />
-
-            {/* KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* KPIs — resumen del día de un vistazo (2×2 en mobile) */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
                 <DashboardKPI
                     icon={<Calendar className="h-4 w-4" />}
                     label="Turnos hoy"
@@ -212,6 +209,9 @@ export default async function DashboardPage(props: {
                     delay={0.3}
                 />
             </div>
+
+            {/* Centro de Alertas y Novedades en Tiempo Real */}
+            <DashboardLiveAlerts />
 
             {/* Turnos sin confirmar */}
             <TurnosSinConfirmarSection initialTurnos={turnosSinConfirmar} />
