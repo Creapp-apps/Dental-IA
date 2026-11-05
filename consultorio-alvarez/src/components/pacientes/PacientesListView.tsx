@@ -307,41 +307,41 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
                     )}
                 </motion.div>
             ) : (
-                <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="grid gap-2">
+                <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="grid gap-1.5 sm:gap-2">
                     {displayedPacientes.map((p: any) => {
                         const iniciales = `${p.nombre.charAt(0)}${p.apellido.charAt(0)}`
 
                         return (
                             <div
                                 key={p.id}
-                                className="flex items-center gap-4 glass rounded-xl px-4 py-3.5 shadow-glass transition-all duration-200 group relative overflow-hidden hover:shadow-glass-lg hover:-translate-y-0.5 hover:border-primary/40 active:scale-[0.99]"
+                                className="flex items-center gap-2.5 sm:gap-4 glass rounded-xl px-3 py-2.5 sm:px-4 sm:py-3.5 shadow-glass transition-all duration-200 group relative overflow-hidden hover:shadow-glass-lg hover:-translate-y-0.5 hover:border-primary/40 active:scale-[0.99]"
                             >
                                 {/* Link directo de apertura instantánea 0ms */}
                                 <Link
                                     href={`/pacientes/${p.id}`}
                                     prefetch={true}
-                                    className="flex items-center gap-4 flex-1 min-w-0"
+                                    className="flex items-center gap-2.5 sm:gap-4 flex-1 min-w-0"
                                 >
                                     {/* Avatar */}
-                                    <div className="h-10 w-10 rounded-full flex items-center justify-center shrink-0 transition-colors bg-primary/10 group-hover:bg-primary/20">
-                                        <span className="text-sm font-bold text-primary">{iniciales}</span>
+                                    <div className="h-9 w-9 sm:h-10 sm:w-10 rounded-full flex items-center justify-center shrink-0 transition-colors bg-primary/10 group-hover:bg-primary/20">
+                                        <span className="text-xs sm:text-sm font-bold text-primary">{iniciales}</span>
                                     </div>
 
                                     {/* Info */}
                                     <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2 flex-wrap">
+                                        <div className="flex items-center gap-2 min-w-0">
                                             <p className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors">
                                                 {p.apellido}, {p.nombre}
                                             </p>
                                             {p.registro_completo === false && (
-                                                <span className="inline-flex items-center rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400 border border-red-500/30 animate-pulse shrink-0">
-                                                    ⚠️ Incompleto
+                                                <span className="inline-flex items-center rounded-full bg-red-500/15 px-1.5 py-0.5 text-[10px] font-medium text-red-600 dark:text-red-400 border border-red-500/30 shrink-0">
+                                                    ⚠️<span className="hidden sm:inline">&nbsp;Incompleto</span>
                                                 </span>
                                             )}
                                         </div>
-                                        <div className="flex items-center gap-3 mt-1">
+                                        <div className="flex items-center gap-3 mt-0.5">
                                             {/* DNI oculto a pedido del cliente */}
-                                            <span className="text-sm font-bold text-foreground tracking-wide">HC {p.nro_historia_clinica}</span>
+                                            <span className="text-xs font-semibold text-muted-foreground tracking-wide">HC {p.nro_historia_clinica}</span>
                                         </div>
                                     </div>
 
@@ -370,11 +370,11 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
                                 {/* Acciones fuera del enlace. El profesional no
                                     edita demográficos ni elimina pacientes. */}
                                 {!esProfesional && (
-                                    <div className="flex items-center gap-1 opacity-90 sm:opacity-70 group-hover:opacity-100 transition-opacity ml-2 shrink-0">
+                                    <div className="flex items-center gap-0.5 sm:gap-1 opacity-90 sm:opacity-70 group-hover:opacity-100 transition-opacity ml-1 sm:ml-2 shrink-0">
                                         <Link
                                             href={`/pacientes/${p.id}/editar`}
                                             prefetch={true}
-                                            className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 active:scale-90"
+                                            className="p-2 sm:p-2.5 rounded-xl transition-all text-muted-foreground hover:text-foreground hover:bg-white/20 dark:hover:bg-white/10 active:scale-90"
                                             title="Editar paciente"
                                         >
                                             <Pencil className="h-4 w-4" />
@@ -382,7 +382,7 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
                                         <button
                                             type="button"
                                             onClick={(e) => handleEliminar(e, p.id, `${p.nombre} ${p.apellido}`)}
-                                            className="p-2.5 rounded-xl transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/15 active:scale-90 cursor-pointer"
+                                            className="p-2 sm:p-2.5 rounded-xl transition-all text-muted-foreground hover:text-red-500 hover:bg-red-500/15 active:scale-90 cursor-pointer"
                                             title="Eliminar paciente"
                                         >
                                             <Trash className="h-4 w-4" />
