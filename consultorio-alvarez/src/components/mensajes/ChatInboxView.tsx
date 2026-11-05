@@ -25,8 +25,9 @@ import {
     Phone, 
     Calendar, 
     Sparkles, 
-    RefreshCw, 
+    RefreshCw,
     ChevronRight,
+    ChevronLeft,
     MessageSquare,
     Zap,
     ExternalLink,
@@ -369,9 +370,14 @@ export function ChatInboxView({
     const pendientesCount = conversaciones.filter(c => c.estado === 'HUMANO_PENDIENTE').length
 
     return (
-        <div className="flex h-[calc(100vh-5.5rem)] rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xl backdrop-blur-md">
-            {/* ── COLUMNA IZQUIERDA: LISTA DE CHATS ── */}
-            <div className="w-80 md:w-96 border-r border-border flex flex-col bg-muted/20 shrink-0">
+        <div className="flex h-[calc(100dvh-5.5rem)] rounded-2xl border border-border/80 bg-card overflow-hidden shadow-xl backdrop-blur-md">
+            {/* ── COLUMNA IZQUIERDA: LISTA DE CHATS ──
+                En mobile es una sola columna por vez: la lista se oculta cuando hay
+                una conversación abierta (se vuelve con la flecha del header). */}
+            <div className={cn(
+                'w-full md:w-96 border-r border-border flex-col bg-muted/20 shrink-0',
+                conversacionActivaId ? 'hidden md:flex' : 'flex'
+            )}>
                 {/* Cabecera & Buscador */}
                 <div className="p-4 border-b border-border space-y-3 bg-card/60">
                     <div className="flex items-center justify-between">
@@ -550,8 +556,17 @@ export function ChatInboxView({
             {conversacionActiva ? (
                 <div className="flex-1 flex flex-col bg-background/50">
                     {/* Header del Chat */}
-                    <div className="px-5 py-3.5 border-b border-border bg-card/40 flex items-center justify-between gap-4">
-                        <div className="flex items-center gap-3 min-w-0">
+                    <div className="px-3 sm:px-5 py-3 sm:py-3.5 border-b border-border bg-card/40 flex items-center justify-between gap-2 sm:gap-4">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <button
+                                type="button"
+                                onClick={() => setConversacionActivaId(null)}
+                                className="md:hidden shrink-0 -ml-1 h-9 w-9 rounded-xl flex items-center justify-center text-muted-foreground hover:bg-muted/60 active:bg-muted transition-colors"
+                                title="Volver a la lista"
+                                aria-label="Volver a la lista de chats"
+                            >
+                                <ChevronLeft className="h-5 w-5" />
+                            </button>
                             <div className="h-10 w-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-sm shrink-0">
                                 {conversacionActiva.paciente 
                                     ? conversacionActiva.paciente.nombre.slice(0, 1) + conversacionActiva.paciente.apellido.slice(0, 1)
@@ -777,7 +792,7 @@ export function ChatInboxView({
                     </form>
                 </div>
             ) : (
-                <div className="flex-1 flex flex-col items-center justify-center text-center p-8 bg-muted/10 space-y-3">
+                <div className="flex-1 hidden md:flex flex-col items-center justify-center text-center p-8 bg-muted/10 space-y-3">
                     <div className="h-16 w-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
                         <MessageSquare className="h-8 w-8" />
                     </div>
