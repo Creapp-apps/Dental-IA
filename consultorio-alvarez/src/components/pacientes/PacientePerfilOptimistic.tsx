@@ -187,7 +187,7 @@ export function PacientePerfilOptimistic({ initialPaciente, esProfesional = fals
     ]
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
             {/* Registro Incompleto Alert */}
             {p.registro_completo === false && (
                 <div className="glass rounded-xl p-4 border-l-4 border-red-500 shadow-glass bg-red-500/5 dark:bg-red-500/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 animate-pulse">

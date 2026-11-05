@@ -108,7 +108,7 @@ export default async function FichaPacientePage({
             </div>
 
             {/* Layout: Profile sidebar + Tabbed content */}
-            <div className="grid gap-6 lg:grid-cols-[300px_1fr]">
+            <div className="grid gap-6 min-w-0 lg:grid-cols-[300px_minmax(0,1fr)]">
                 {/* ── Left: Profile card con soporte reactivo Local-First / Optimistic ── */}
                 <PacientePerfilOptimistic initialPaciente={p} esProfesional={esProfesional} comparteClinica={comparteClinica} profesionales={profesionales} ausencias={ausencias} ausenciasConfirmadas={ausenciasConfirmadas} />
 

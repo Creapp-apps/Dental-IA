@@ -141,7 +141,7 @@ export function FichaPacienteTabs({
     const effectiveEscaneos3d = (escaneos3d && escaneos3d.length > 0) ? escaneos3d : (cachedData?.escaneos3d ?? [])
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
             {/* Tab bar */}
             <div className="flex flex-wrap gap-1 glass rounded-xl p-1 shadow-glass">
                 {TABS.map(t => (
@@ -177,6 +177,7 @@ export function FichaPacienteTabs({
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -8 }}
                     transition={{ duration: 0.2 }}
+                    className="min-w-0"
                 >
                     {tab === 'consulta' && <TabConsulta motivoConsulta={motivoConsulta} />}
                     {tab === 'antecedentes_salud' && <AntecedentesSaludTab pacienteId={pacienteId} inicial={antecedentesSalud} />}
@@ -193,7 +194,9 @@ export function FichaPacienteTabs({
                         />
                     )}
                     {tab === 'odontograma' && (
-                        <OdontogramaInteractivo pacienteId={pacienteId} piezasData={effectiveOdontograma} tipoInicial={odontogramaTipo} />
+                        <div className="min-w-0 overflow-x-auto">
+                            <OdontogramaInteractivo pacienteId={pacienteId} piezasData={effectiveOdontograma} tipoInicial={odontogramaTipo} />
+                        </div>
                     )}
                     {tab === 'escaneos3d' && (
                         <TabEscaneos3D pacienteId={pacienteId} escaneosIniciales={effectiveEscaneos3d} />
