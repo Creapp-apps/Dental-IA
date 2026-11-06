@@ -5,7 +5,12 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 import { normalizarTelefonoArgentino, limpiarTituloProfesional, esTelefonoWhatsAppValido, describirErrorWhatsApp } from '@/lib/utils'
 import { format } from 'date-fns'
+import { formatInTimeZone } from 'date-fns-tz'
 import { es } from 'date-fns/locale'
+
+// Zona horaria del negocio. El server (Vercel) corre en UTC: formatear sin esto
+// desfasa las horas +3hs en las notificaciones push a los profesionales.
+const TZ_AR = 'America/Argentina/Buenos_Aires'
 import { sendPushToUser } from '@/lib/push-notifications/send-push'
 import { Resend } from 'resend'
 import { ConfirmacionTurnoEmail } from '@/components/emails/ConfirmacionTurnoEmail'
@@ -91,7 +96,7 @@ export async function crearTurno(formData: {
             const trat = tratamientoRes.data?.nombre || 'Consulta'
 
             const fechaObj = new Date(formData.fecha_inicio)
-            const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
+            const fechaStr = formatInTimeZone(fechaObj, TZ_AR, "d/M 'a las' HH:mm", { locale: es })
 
             await sendPushToUser(
                 usuarioProf.id,
@@ -119,8 +124,8 @@ export async function crearTurno(formData: {
             const paciente = pacienteRes.data
             if (paciente?.email) {
                 const fechaObj = new Date(formData.fecha_inicio)
-                const fechaStr = format(fechaObj, "EEEE d 'de' MMMM", { locale: es })
-                const horaStr = format(fechaObj, "HH:mm")
+                const fechaStr = formatInTimeZone(fechaObj, TZ_AR, "EEEE d 'de' MMMM", { locale: es })
+                const horaStr = formatInTimeZone(fechaObj, TZ_AR, "HH:mm")
 
                 await resend.emails.send({
                     // 'onboarding@resend.dev' permite hacer tests a uno mismo sin verificar el dominio en la capa gratuita
@@ -259,7 +264,7 @@ export async function cambiarEstadoTurno(turnoId: string, nuevoEstado: string) {
                     const trat = (turno.tipo_tratamiento as any)?.nombre || 'Consulta'
 
                     const fechaObj = new Date(turno.fecha_inicio)
-                    const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
+                    const fechaStr = formatInTimeZone(fechaObj, TZ_AR, "d/M 'a las' HH:mm", { locale: es })
 
                     let title = ''
                     let body = ''
@@ -445,7 +450,7 @@ export async function editarTurno(turnoId: string, formData: {
                 const trat = tratamientoRes.data?.nombre || 'Consulta'
 
                 const fechaObj = new Date(formData.fecha_inicio)
-                const fechaStr = format(fechaObj, "d/M 'a las' HH:mm", { locale: es })
+                const fechaStr = formatInTimeZone(fechaObj, TZ_AR, "d/M 'a las' HH:mm", { locale: es })
 
                 await sendPushToUser(
                     usuarioProf.id,

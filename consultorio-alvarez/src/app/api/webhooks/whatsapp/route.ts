@@ -568,7 +568,7 @@ export async function POST(request: NextRequest) {
                     const pct = turno?.paciente as any
                     const trat = (turno as any)?.tipo_treatment?.nombre || 'Consulta'
                     const fechaObj = new Date(turno?.fecha_inicio || '')
-                    const horaStr = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+                    const horaStr = fechaObj.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Argentina/Buenos_Aires' })
                     
                     let title = ''
                     let body = ''
@@ -881,9 +881,33 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ success: true })
             }
 
-            // 6. Si la conversación ya está en espera de un operador
+            // 6. Si la conversación ya está en espera de un operador: el bot calla, pero
+            //    avisamos (push) cuando el paciente vuelve a escribir, para que no se pierda
+            //    el ida y vuelta. Debounce: a lo sumo 1 aviso cada 5 min por conversación.
             if (estadoConversacion === 'HUMANO_PENDIENTE') {
                 console.log(`[WA WEBHOOK] Conversación ${conversacionId} en espera de operador. Bot en silencio.`)
+                if (conversacionId) {
+                    try {
+                        const hace5min = new Date(Date.now() - 5 * 60 * 1000).toISOString()
+                        const { count: avisosRecientes } = await admin
+                            .from('notificaciones')
+                            .select('id', { count: 'exact', head: true })
+                            .eq('referencia_id', conversacionId)
+                            .gte('created_at', hace5min)
+                        if ((avisosRecientes ?? 0) === 0) {
+                            await admin.from('notificaciones').insert({
+                                tenant_id: tenantId,
+                                titulo: '💬 Paciente esperando respuesta',
+                                mensaje: `El paciente (+${cleanPhone}) escribió de nuevo y espera atención: "${(textBody || buttonTextFallback || '').slice(0, 120)}"`,
+                                tipo: 'turno_reprogramado',
+                                referencia_id: conversacionId,
+                                leida: false
+                            })
+                            const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                            await sendPushToRole('admin', tenantId, '💬 Paciente esperando respuesta', `Paciente (+${cleanPhone}) escribió de nuevo por WhatsApp.`, '/mensajes')
+                        }
+                    } catch {}
+                }
                 return NextResponse.json({ success: true })
             }
 
@@ -955,6 +979,11 @@ export async function POST(request: NextRequest) {
                             referencia_id: conversacionId || '',
                             leida: false
                         })
+                        // Aviso proactivo: el paciente insistió y el bot no entendió → que recepción se entere.
+                        try {
+                            const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                            await sendPushToRole('admin', tenantId, '💬 El bot no pudo ayudar', `Paciente (+${cleanPhone}) necesita atención: "${(textBody || buttonTextFallback || '').slice(0, 80)}"`, '/mensajes')
+                        } catch {}
                         if (waCreds) {
                             await enviarTextoWhatsApp(waCreds, cleanPhone,
                                 `Disculpá, no estoy logrando ayudarte por acá 🙏 Ya avisé a una persona de nuestro equipo para que te responda a la brevedad por este chat.`,

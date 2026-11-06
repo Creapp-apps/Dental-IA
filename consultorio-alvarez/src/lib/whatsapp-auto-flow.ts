@@ -1628,6 +1628,12 @@ export async function procesarMensajeAutonomo({
             leida: false
         })
 
+        // Aviso proactivo a recepción: sin esto el pedido muere en el inbox y el paciente queda sin respuesta.
+        try {
+            const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+            await sendPushToRole('admin', tenantId, '💬 Paciente solicita Recepción', `Paciente (+${cleanPhone}) pidió hablar con una persona por WhatsApp.`, '/mensajes')
+        } catch {}
+
         const msgRecepcion = `¡Entendido! 💬 Derivamos tu chat con nuestro equipo de recepción.\n\n` +
             `Para que puedan ayudarte más rápido apenas tomen tu consulta, por favor indicanos tu **nombre y apellido** y el **motivo de tu consulta** ✍️`
 
