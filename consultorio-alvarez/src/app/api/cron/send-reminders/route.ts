@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { limpiarTituloProfesional } from '@/lib/utils'
+import { limpiarTituloProfesional, normalizarTelefonoArgentino, esTelefonoWhatsAppValido, describirErrorWhatsApp } from '@/lib/utils'
 import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
 
 export async function GET(request: NextRequest) {
@@ -101,12 +101,15 @@ async function handleSendReminders(request: NextRequest) {
                 continue
             }
 
-            // 3. Sanitizar teléfono para Meta API (regla de Argentina: reemplazar 549 por 54)
-            let cleanPhone = pct.telefono.replace(/\D/g, '')
-            if (cleanPhone.startsWith('11') || cleanPhone.length === 10) {
-                cleanPhone = `54${cleanPhone}`
-            } else if (cleanPhone.startsWith('549')) {
-                cleanPhone = cleanPhone.replace(/^549/, '54')
+            // 3. Sanitizar teléfono para Meta API (regla de Argentina) usando helper robusto
+            const cleanPhone = normalizarTelefonoArgentino(pct.telefono)
+
+            // Guard: no enviar a teléfonos que no quedan en formato Meta válido ('54' + 10 díg.).
+            // Evita el error (#131009) en turnos sin paciente real (FERIADO/bloqueos) o con tel roto.
+            if (!esTelefonoWhatsAppValido(cleanPhone)) {
+                console.warn(`⚠️ Teléfono inválido para recordatorio 48hs (turno ${t.id}): "${pct.telefono}" → "${cleanPhone}". No se envía.`)
+                results.push({ turno_id: t.id, status: 'SKIPPED', reason: 'Teléfono inválido' })
+                continue
             }
 
             // 4. Dar formato amigable local a la fecha y hora
@@ -205,7 +208,7 @@ async function handleSendReminders(request: NextRequest) {
                         estado_envio: 'FALLIDO',
                         telefono: cleanPhone,
                         mensaje_enviado: `Nombre: ${pct.nombre}, Fecha: ${fechaStrFormatted}, Hora: ${horaStr}, Profesional: ${nombreProf}`,
-                        error_detalle: resData?.error?.message || 'Error al invocar Meta API'
+                        error_detalle: describirErrorWhatsApp(resData?.error)
                     })
 
                     results.push({ turno_id: t.id, status: 'FAILED', error: resData?.error?.message })

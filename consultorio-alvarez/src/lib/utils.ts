@@ -66,6 +66,36 @@ export function normalizarTelefonoArgentino(telefono: string): string {
 }
 
 /**
+ * Valida que un teléfono ya normalizado tenga el formato exacto que Meta Cloud API
+ * acepta para Argentina: '54' + 10 dígitos (código de área + número local), sin '9' ni '15'.
+ * Rechaza los casos basura que `normalizarTelefonoArgentino` igual arma con su fallback
+ * (ej. input "1" → "541"), que Meta rechaza con el error (#131009) "Parameter value is not valid".
+ */
+export function esTelefonoWhatsAppValido(telefonoNormalizado: string): boolean {
+    if (!telefonoNormalizado) return false
+    // Debe ser exactamente '54' + 10 dígitos, y el área no puede empezar en 0.
+    return /^54[1-9]\d{9}$/.test(telefonoNormalizado)
+}
+
+/**
+ * Traduce un error de la Meta Cloud API a un texto claro para el panel de recordatorios.
+ * Clave para el #132001: NO es un error de nuestro lado, sino que la plantilla quedó
+ * temporalmente en revisión por Meta (típicamente porque administración la editó).
+ */
+export function describirErrorWhatsApp(error: unknown): string {
+    const e = error as { code?: number; message?: string } | null | undefined
+    const code = e?.code
+    const msg = e?.message || 'Error al invocar Meta API'
+    if (code === 132001) {
+        return 'Plantilla en revisión por Meta (edición reciente). Se reanuda sola al re-aprobarse; reintentá en unas horas o enviá un mensaje directo.'
+    }
+    if (code === 131009 || code === 131026 || code === 131047) {
+        return 'Teléfono del destinatario inválido o sin WhatsApp activo.'
+    }
+    return msg
+}
+
+/**
  * Quita los prefijos honoríficos o títulos médicos como "Dr.", "Dr/a.", "Dra." etc.
  * al principio del nombre de un profesional para evitar duplicaciones en plantillas.
  */

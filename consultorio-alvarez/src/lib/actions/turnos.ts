@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
-import { normalizarTelefonoArgentino, limpiarTituloProfesional } from '@/lib/utils'
+import { normalizarTelefonoArgentino, limpiarTituloProfesional, esTelefonoWhatsAppValido, describirErrorWhatsApp } from '@/lib/utils'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { sendPushToUser } from '@/lib/push-notifications/send-push'
@@ -539,6 +539,22 @@ export async function notificarTurnoPorWhatsApp(
         // Sanitizar teléfono para Meta API (regla de Argentina) usando helper robusto
         let cleanPhone = normalizarTelefonoArgentino(pct.telefono)
 
+        // Guard: si el teléfono no queda en formato Meta válido ('54' + 10 díg.) no se envía.
+        // Evita el error (#131009) de Meta en turnos sin paciente real (FERIADO/bloqueos) o con tel roto.
+        if (!esTelefonoWhatsAppValido(cleanPhone)) {
+            console.warn(`[WA LOG] ⚠️ Teléfono inválido para ${templateName} (turno ${turnoId}): "${pct.telefono}" → "${cleanPhone}". No se envía.`)
+            await admin.from('recordatorios').insert({
+                tenant_id: turno.tenant_id,
+                turno_id: turnoId,
+                canal: 'WHATSAPP',
+                estado_envio: 'FALLIDO',
+                telefono: cleanPhone,
+                mensaje_enviado: `Plantilla: ${templateName} (no enviada)`,
+                error_detalle: `Teléfono inválido (no se envió): "${pct.telefono}"`
+            })
+            return
+        }
+
         const fechaObj = new Date(turno.fecha_inicio)
         const fechaStr = fechaObj.toLocaleDateString('es-AR', {
             weekday: 'long',
@@ -628,7 +644,7 @@ export async function notificarTurnoPorWhatsApp(
                 estado_envio: 'FALLIDO',
                 telefono: cleanPhone,
                 mensaje_enviado: `Plantilla: ${templateName}. Parámetros: ${JSON.stringify(parameters)}`,
-                error_detalle: wpResult?.error?.message || 'Error al invocar Meta API'
+                error_detalle: describirErrorWhatsApp(wpResult?.error)
             })
         } else {
             console.log(`[WA LOG] ✅ WhatsApp "${templateName}" enviado con éxito a ${cleanPhone}. Result:`, JSON.stringify(wpResult, null, 2))
@@ -750,6 +766,11 @@ export async function enviarRecordatorioManual(turnoId: string) {
         // Sanitizar teléfono para Meta API (regla de Argentina) usando helper robusto
         const cleanPhone = normalizarTelefonoArgentino(pct.telefono)
 
+        // Guard: no enviar a teléfonos que no quedan en formato Meta válido ('54' + 10 díg.).
+        if (!esTelefonoWhatsAppValido(cleanPhone)) {
+            return { error: `El teléfono del paciente no es válido para WhatsApp: "${pct.telefono}".` }
+        }
+
         const fechaObj = new Date(turno.fecha_inicio)
         const fechaStr = fechaObj.toLocaleDateString('es-AR', {
             weekday: 'long',
@@ -835,10 +856,10 @@ export async function enviarRecordatorioManual(turnoId: string) {
                 estado_envio: 'FALLIDO',
                 telefono: cleanPhone,
                 mensaje_enviado: `Nombre: ${pct.nombre}, Fecha: ${fechaStrFormatted}, Hora: ${horaStr}, Profesional: ${nombreProf}`,
-                error_detalle: resData?.error?.message || 'Error al invocar Meta API'
+                error_detalle: describirErrorWhatsApp(resData?.error)
             })
 
-            return { error: resData?.error?.message || 'Error al invocar Meta API' }
+            return { error: describirErrorWhatsApp(resData?.error) }
         }
 
         // Registrar el envío exitoso
