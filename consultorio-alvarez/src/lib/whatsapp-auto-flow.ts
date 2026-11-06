@@ -727,7 +727,7 @@ export async function procesarMensajeAutonomo({
             console.log(`[WA AUTO-FLOW] ${cleanPhone} pide una fecha fuera de los slots ofrecidos. Derivando a humano.`)
             if (conversacionId) {
                 await admin.from('whatsapp_conversaciones').update({
-                    estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+                    estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'reprogramar', updated_at: new Date().toISOString()
                 }).eq('id', conversacionId)
                 await setReservaCtx(admin, conversacionId, null)
             }
@@ -922,6 +922,8 @@ export async function procesarMensajeAutonomo({
         if (conversacionId) {
             await admin.from('whatsapp_conversaciones').update({
                 estado: 'HUMANO_PENDIENTE',
+                prioridad: 'amarillo',
+                motivo: esNotaVoz ? 'adjunto_audio' : (textBody.includes('[Documento adjunto]') || textBody.includes('📄')) ? 'adjunto_documento' : 'adjunto_foto',
                 updated_at: new Date().toISOString()
             }).eq('id', conversacionId)
         }
@@ -980,7 +982,7 @@ export async function procesarMensajeAutonomo({
         console.log(`[WA AUTO-FLOW] Posible número equivocado / opt-out de ${cleanPhone}. Derivando a humano.`)
         if (conversacionId) {
             await admin.from('whatsapp_conversaciones').update({
-                estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+                estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'numero_equivocado', updated_at: new Date().toISOString()
             }).eq('id', conversacionId)
         }
         await admin.from('notificaciones').insert({
@@ -1120,7 +1122,7 @@ export async function procesarMensajeAutonomo({
         // Sin turno identificado: derivamos a un humano, sin afirmar nada en falso.
         if (conversacionId) {
             await admin.from('whatsapp_conversaciones').update({
-                estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+                estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'cambio_cancelacion', updated_at: new Date().toISOString()
             }).eq('id', conversacionId)
         }
         await admin.from('notificaciones').insert({
@@ -1169,7 +1171,7 @@ export async function procesarMensajeAutonomo({
         console.log(`[WA AUTO-FLOW] Dato clínico de ${cleanPhone}. Acuse + derivar al equipo (no menú).`)
         if (conversacionId) {
             await admin.from('whatsapp_conversaciones').update({
-                estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+                estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'dato_clinico', updated_at: new Date().toISOString()
             }).eq('id', conversacionId)
         }
         await admin.from('notificaciones').insert({
@@ -1214,6 +1216,8 @@ export async function procesarMensajeAutonomo({
         if (conversacionId) {
             await admin.from('whatsapp_conversaciones').update({
                 estado: 'HUMANO_PENDIENTE',
+                prioridad: 'amarillo',
+                motivo: 'turno_especial',
                 updated_at: new Date().toISOString()
             }).eq('id', conversacionId)
         }
@@ -1583,7 +1587,7 @@ export async function procesarMensajeAutonomo({
         console.warn(`[WA AUTO-FLOW] 🚨 Queja o reclamo detectado de ${cleanPhone}. Pausando bot y alertando...`)
         if (conversacionId) {
             await admin.from('whatsapp_conversaciones')
-                .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'rojo', motivo: 'queja', updated_at: new Date().toISOString() })
                 .eq('id', conversacionId)
         }
 
@@ -1615,7 +1619,7 @@ export async function procesarMensajeAutonomo({
         console.log(`[WA AUTO-FLOW] Petición de recepcionista por ${cleanPhone}.`)
         if (conversacionId) {
             await admin.from('whatsapp_conversaciones')
-                .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'pide_recepcion', updated_at: new Date().toISOString() })
                 .eq('id', conversacionId)
         }
 
@@ -1678,7 +1682,7 @@ export async function procesarMensajeAutonomo({
             console.log(`[WA AUTO-FLOW] ${cleanPhone} pide fecha/reprogramación en texto libre. Derivando a humano con contexto.`)
             if (conversacionId) {
                 await admin.from('whatsapp_conversaciones').update({
-                    estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString()
+                    estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'reprogramar', updated_at: new Date().toISOString()
                 }).eq('id', conversacionId)
             }
             await admin.from('notificaciones').insert({

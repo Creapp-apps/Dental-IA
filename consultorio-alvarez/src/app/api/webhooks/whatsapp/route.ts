@@ -499,6 +499,16 @@ export async function POST(request: NextRequest) {
                 .eq('turno_id', turnoIdToUpdate)
                 .eq('tenant_id', tenantId)
 
+            // Triage de bandeja: turno confirmado = "bajo control" (verde), pero solo si
+            // la conversación sigue en BOT. Si hay un humano involucrado (PENDIENTE/ATENDIENDO)
+            // no se toca prioridad/motivo para no tapar un pendiente real.
+            if (respuestaPaciente === 'CONFIRMAR' && conversacionId && estadoConversacion === 'BOT') {
+                await admin.from('whatsapp_conversaciones')
+                    .update({ prioridad: 'verde', motivo: 'turno_confirmado' })
+                    .eq('id', conversacionId)
+                    .eq('estado', 'BOT')
+            }
+
             // --- Enviar mensaje de respuesta automática (Plantilla de WhatsApp) al paciente ---
             try {
                 let templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' = 'turno_confirmado'
@@ -625,7 +635,7 @@ export async function POST(request: NextRequest) {
             const derivarUrgenciaAHumano = async (motivoTexto: string) => {
                 if (conversacionId) {
                     await admin.from('whatsapp_conversaciones')
-                        .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                        .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'rojo', motivo: 'urgencia', updated_at: new Date().toISOString() })
                         .eq('id', conversacionId)
                 }
                 await admin.from('notificaciones').insert({
@@ -696,7 +706,7 @@ export async function POST(request: NextRequest) {
             if (buttonPayload === 'HABLAR_RECEPCIONISTA') {
                 if (conversacionId) {
                     await admin.from('whatsapp_conversaciones')
-                        .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                        .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'pide_recepcion', updated_at: new Date().toISOString() })
                         .eq('id', conversacionId)
                 }
 
@@ -809,7 +819,7 @@ export async function POST(request: NextRequest) {
 
                 if (conversacionId) {
                     await admin.from('whatsapp_conversaciones')
-                        .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                        .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'rojo', motivo: 'guardia', updated_at: new Date().toISOString() })
                         .eq('id', conversacionId)
                 }
 
@@ -977,7 +987,7 @@ export async function POST(request: NextRequest) {
                     if ((fallbacksRecientes ?? 0) >= 2) {
                         console.log(`[WA WEBHOOK] ${fallbacksRecientes} fallbacks recientes en ${conversacionId}. Derivando a humano en vez de repetir menú.`)
                         await admin.from('whatsapp_conversaciones')
-                            .update({ estado: 'HUMANO_PENDIENTE', updated_at: new Date().toISOString() })
+                            .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'bot_no_entendio', updated_at: new Date().toISOString() })
                             .eq('id', conversacionId)
                         await admin.from('notificaciones').insert({
                             tenant_id: tenantId,

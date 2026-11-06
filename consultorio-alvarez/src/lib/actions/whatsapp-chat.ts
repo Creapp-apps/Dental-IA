@@ -478,6 +478,12 @@ export async function cambiarEstadoConversacion(
             updatePayload.asignado_a = null
         }
 
+        // Triage de bandeja: al volver al bot o cerrar, se limpia prioridad/motivo
+        if (nuevoEstado === 'BOT' || nuevoEstado === 'CERRADO') {
+            updatePayload.prioridad = null
+            updatePayload.motivo = null
+        }
+
         const { error } = await admin
             .from('whatsapp_conversaciones')
             .update(updatePayload)
@@ -508,13 +514,29 @@ export async function asignarConversacion(
     const admin = createAdminClient()
 
     try {
+        const updatePayload: Record<string, unknown> = {
+            asignado_a: usuarioId,
+            estado: usuarioId ? 'HUMANO_ATENDIENDO' : 'HUMANO_PENDIENTE',
+            updated_at: new Date().toISOString()
+        }
+
+        // Desasignar vuelve a PENDIENTE: si no tenía prioridad, queda amarillo/revisar; si no, se conserva
+        if (!usuarioId) {
+            const { data: actual } = await admin
+                .from('whatsapp_conversaciones')
+                .select('prioridad')
+                .eq('id', conversacionId)
+                .eq('tenant_id', tenantId)
+                .maybeSingle()
+            if (!actual?.prioridad) {
+                updatePayload.prioridad = 'amarillo'
+                updatePayload.motivo = 'revisar'
+            }
+        }
+
         const { error } = await admin
             .from('whatsapp_conversaciones')
-            .update({
-                asignado_a: usuarioId,
-                estado: usuarioId ? 'HUMANO_ATENDIENDO' : 'HUMANO_PENDIENTE',
-                updated_at: new Date().toISOString()
-            })
+            .update(updatePayload)
             .eq('id', conversacionId)
             .eq('tenant_id', tenantId)
 
