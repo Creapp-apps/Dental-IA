@@ -189,3 +189,43 @@ export async function descargarYGuardarMediaWhatsApp(
     }
 }
 
+/**
+ * Sube un binario (imagen o audio) a Meta Graph API y devuelve el media_id.
+ * Se usa para mensajes SALIENTES del operador: el bucket propio es privado, así que
+ * en vez de pasarle a Meta una URL, le subimos el archivo y referenciamos su id.
+ */
+export async function subirMediaWhatsApp(
+    buffer: Buffer,
+    mimeType: string,
+    filename: string,
+    phoneNumberId: string,
+    accessToken: string
+): Promise<string | null> {
+    if (!buffer?.length || !mimeType || !phoneNumberId || !accessToken) return null
+
+    try {
+        const form = new FormData()
+        form.append('messaging_product', 'whatsapp')
+        form.append('type', mimeType)
+        // Buffer se envuelve en Uint8Array para que el tipo encaje como BlobPart.
+        form.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }), filename)
+
+        const res = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/media`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${accessToken}` },
+            body: form
+        })
+
+        const data = await res.json()
+        if (!res.ok) {
+            console.error('[WA MEDIA OUT] Error al subir media a Meta:', data)
+            return null
+        }
+
+        return data?.id || null
+    } catch (err) {
+        console.error('[WA MEDIA OUT] Excepción al subir media saliente a Meta:', err)
+        return null
+    }
+}
+

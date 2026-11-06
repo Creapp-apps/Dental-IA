@@ -5,6 +5,7 @@ import {
     WhatsAppConversacionRow, 
     WhatsAppMensajeRow,
     enviarMensajeAgente,
+    enviarAdjuntoAgente,
     cambiarEstadoConversacion,
     asignarConversacion,
     marcarConversacionLeida,
@@ -31,8 +32,13 @@ import {
     MessageSquare,
     Zap,
     ExternalLink,
-    ShieldAlert
+    ShieldAlert,
+    Paperclip,
+    Mic,
+    Trash2,
+    FileText
 } from 'lucide-react'
+import type { GrabadorVoz } from '@/lib/audio/grabador-voz'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import Link from 'next/link'
@@ -74,18 +80,19 @@ const RESPUESTAS_RAPIDAS = [
 ]
 
 /**
- * Burbuja de media entrante (foto o nota de voz). Vive aparte porque firmar la URL es un hook
- * y no se puede llamar dentro del .map de mensajes. Mientras firma no muestra nada; si falla, lo avisa.
+ * Burbuja de media entrante (foto, nota de voz o documento). Vive aparte porque firmar la URL es un
+ * hook y no se puede llamar dentro del .map de mensajes. Mientras firma no muestra nada; si falla, lo avisa.
  */
-function MediaMensaje({ tipo, mediaUrl }: { tipo: string, mediaUrl: string }) {
+function MediaMensaje({ tipo, mediaUrl, nombreArchivo }: { tipo: string, mediaUrl: string, nombreArchivo?: string | null }) {
     const { url, cargando } = useUrlFirmada('paciente_adjuntos', mediaUrl)
     if (cargando) return null
 
     // Si no firmó, avisar que había un adjunto en vez de dejar la burbuja sin rastro.
     if (!url) {
+        const queCosa = tipo === 'imagen' ? 'la foto' : tipo === 'documento' ? 'el documento' : 'el audio'
         return (
             <div className="mb-2 text-[11px] italic opacity-70">
-                {tipo === 'imagen' ? 'No se pudo cargar la foto adjunta.' : 'No se pudo cargar el audio adjunto.'}
+                No se pudo cargar {queCosa} adjunto.
             </div>
         )
     }
@@ -94,13 +101,34 @@ function MediaMensaje({ tipo, mediaUrl }: { tipo: string, mediaUrl: string }) {
         return (
             <div className="mb-2.5 rounded-xl overflow-hidden border border-border/40 max-w-xs">
                 <a href={url} target="_blank" rel="noopener noreferrer" className="block relative group">
-                    <img 
-                        src={url} 
-                        alt="Foto enviada por el paciente" 
+                    <img
+                        src={url}
+                        alt="Foto adjunta"
                         className="w-full max-h-72 object-cover rounded-xl hover:opacity-95 transition-opacity"
                     />
                     <span className="absolute bottom-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-md backdrop-blur-sm">
                         🔍 Ver en grande
+                    </span>
+                </a>
+            </div>
+        )
+    }
+
+    if (tipo === 'documento') {
+        return (
+            <div className="mb-2">
+                <a
+                    href={url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 px-3 py-2 rounded-xl border border-border/60 bg-card/60 hover:bg-accent hover:border-primary/40 transition-all max-w-xs"
+                >
+                    <span className="h-9 w-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                        <FileText className="h-4 w-4" />
+                    </span>
+                    <span className="min-w-0">
+                        <span className="block text-xs font-semibold truncate">{nombreArchivo || 'Documento adjunto'}</span>
+                        <span className="block text-[10px] text-muted-foreground">Abrir documento</span>
                     </span>
                 </a>
             </div>
@@ -130,14 +158,28 @@ export function ChatInboxView({
     const [searchQuery, setSearchQuery] = useState('')
     const [textoInput, setTextoInput] = useState('')
     const [isSending, setIsSending] = useState(false)
+    const [isUploading, setIsUploading] = useState(false)
+    const [isRecording, setIsRecording] = useState(false)
+    const [recordSegundos, setRecordSegundos] = useState(0)
     const [isPendingAction, startTransition] = useTransition()
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
+    const fileInputRef = useRef<HTMLInputElement>(null)
+    const grabadorRef = useRef<GrabadorVoz | null>(null)
+    const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
     const conversacionActiva = conversaciones.find(c => c.id === conversacionActivaId) || null
 
     // Scroll to bottom helper
+    // Al desmontar: cortar micrófono y timer si quedó una grabación abierta.
+    useEffect(() => {
+        return () => {
+            grabadorRef.current?.cancel()
+            if (recordTimerRef.current) clearInterval(recordTimerRef.current)
+        }
+    }, [])
+
     const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
         messagesEndRef.current?.scrollIntoView({ behavior })
     }
@@ -296,6 +338,112 @@ export function ChatInboxView({
                 asignado_a: currentUsuario.id
             } : c))
         }
+    }
+
+    // Subir y enviar un adjunto (foto o audio). Lo comparten el selector de archivo y la nota de voz.
+    async function enviarArchivoAdjunto(file: File) {
+        if (!conversacionActivaId || isUploading) return
+
+        const esImagen = file.type.startsWith('image/')
+        const esAudio = file.type.startsWith('audio/')
+        if (!esImagen && !esAudio) {
+            toast.error('Solo se pueden enviar imágenes o audios')
+            return
+        }
+        if (file.size > 16 * 1024 * 1024) {
+            toast.error('El archivo supera el límite de 16 MB')
+            return
+        }
+
+        setIsUploading(true)
+
+        // Burbuja optimista de "enviando"; se reemplaza por el mensaje real al confirmar.
+        const tempId = 'temp-media-' + Date.now()
+        const mensajeOptimista: WhatsAppMensajeRow = {
+            id: tempId,
+            tenant_id: conversacionActiva?.tenant_id || '',
+            conversacion_id: conversacionActivaId,
+            tipo: 'texto',
+            remitente: 'agente',
+            agente_id: currentUsuario.id,
+            agente_nombre: `${currentUsuario.nombre} ${currentUsuario.apellido}`,
+            contenido: esImagen ? '📷 Enviando foto…' : '🎤 Enviando audio…',
+            wa_message_id: null,
+            estado_envio: 'enviado',
+            created_at: new Date().toISOString()
+        }
+        setMensajes(prev => [...prev, mensajeOptimista])
+        setTimeout(() => scrollToBottom('smooth'), 50)
+
+        const formData = new FormData()
+        formData.append('file', file)
+
+        const res = await enviarAdjuntoAgente(conversacionActivaId, formData)
+        setIsUploading(false)
+        setMensajes(prev => prev.filter(m => m.id !== tempId))
+
+        if (!res.success) {
+            toast.error(res.error || 'No se pudo enviar el archivo')
+        } else {
+            if (res.mensaje) setMensajes(prev => [...prev, res.mensaje!])
+            setConversaciones(prev => prev.map(c => c.id === conversacionActivaId ? {
+                ...c,
+                estado: 'HUMANO_ATENDIENDO',
+                asignado_a: currentUsuario.id
+            } : c))
+            setTimeout(() => scrollToBottom('smooth'), 50)
+        }
+    }
+
+    // Elegir foto o audio desde el disco
+    function handleSeleccionarArchivo(e: React.ChangeEvent<HTMLInputElement>) {
+        const file = e.target.files?.[0]
+        e.target.value = '' // permitir re-seleccionar el mismo archivo
+        if (file) enviarArchivoAdjunto(file)
+    }
+
+    // Grabar nota de voz (ogg/opus -> waveform en WhatsApp)
+    async function handleIniciarGrabacion() {
+        if (isRecording || isUploading || !conversacionActivaId) return
+        try {
+            const { iniciarGrabacionVoz } = await import('@/lib/audio/grabador-voz')
+            grabadorRef.current = await iniciarGrabacionVoz()
+            setIsRecording(true)
+            setRecordSegundos(0)
+            recordTimerRef.current = setInterval(() => setRecordSegundos(s => s + 1), 1000)
+        } catch (err: any) {
+            console.error('[VOZ] Error al iniciar grabación:', err)
+            toast.error(err?.message || 'No se pudo acceder al micrófono')
+        }
+    }
+
+    function detenerTimerGrabacion() {
+        if (recordTimerRef.current) {
+            clearInterval(recordTimerRef.current)
+            recordTimerRef.current = null
+        }
+        setIsRecording(false)
+        setRecordSegundos(0)
+    }
+
+    async function handleEnviarGrabacion() {
+        const grabador = grabadorRef.current
+        if (!grabador) return
+        detenerTimerGrabacion()
+        try {
+            const file = await grabador.stop()
+            grabadorRef.current = null
+            await enviarArchivoAdjunto(file)
+        } catch (err: any) {
+            console.error('[VOZ] Error al finalizar grabación:', err)
+            toast.error('No se grabó audio')
+        }
+    }
+
+    function handleCancelarGrabacion() {
+        grabadorRef.current?.cancel()
+        grabadorRef.current = null
+        detenerTimerGrabacion()
     }
 
     // Cambiar estado manual (Tomar chat, Reanudar Bot, Cerrar)
@@ -717,9 +865,9 @@ export function ChatInboxView({
                                                 isAgente && 'bg-primary text-primary-foreground rounded-tr-sm font-medium'
                                             )}
                                         >
-                                            {/* Imagen o audio adjunto si existe */}
-                                            {(msg.tipo === 'imagen' || msg.tipo === 'audio') && msg.metadata?.media_url && (
-                                                <MediaMensaje tipo={msg.tipo} mediaUrl={msg.metadata.media_url} />
+                                            {/* Foto, audio o documento adjunto si existe */}
+                                            {(msg.tipo === 'imagen' || msg.tipo === 'audio' || msg.tipo === 'documento') && msg.metadata?.media_url && (
+                                                <MediaMensaje tipo={msg.tipo} mediaUrl={msg.metadata.media_url} nombreArchivo={msg.metadata?.doc_filename} />
                                             )}
 
                                             <div>{msg.contenido}</div>
@@ -751,46 +899,117 @@ export function ChatInboxView({
 
                     {/* Input y Botón de Envío */}
                     <form onSubmit={handleEnviarMensaje} className="p-3 border-t border-border bg-card/60 flex items-end gap-2">
-                        <div className="flex-1 min-w-0 bg-background border border-border rounded-xl focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary transition-all p-2">
-                            <textarea
-                                ref={textareaRef}
-                                rows={2}
-                                value={textoInput}
-                                onChange={e => setTextoInput(e.target.value)}
-                                onKeyDown={e => {
-                                    if (e.key === 'Enter' && !e.shiftKey) {
-                                        e.preventDefault()
-                                        handleEnviarMensaje()
-                                    }
-                                }}
-                                placeholder="Escribí un mensaje... (Presioná Enter para enviar, Shift+Enter para nueva línea)"
-                                className="w-full text-xs md:text-sm bg-transparent border-0 focus:outline-none resize-none placeholder:text-muted-foreground/60 leading-relaxed"
-                            />
-                            <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
-                                <span className="flex items-center gap-1 font-mono min-w-0 truncate">
-                                    Firma: <strong>[{currentUsuario.nombre} {currentUsuario.apellido}]</strong>
+                        <input
+                            ref={fileInputRef}
+                            type="file"
+                            accept="image/*,audio/*"
+                            className="hidden"
+                            onChange={handleSeleccionarArchivo}
+                        />
+                        {isRecording ? (
+                            <div className="flex-1 flex items-center gap-3 h-11 px-3 rounded-xl border border-red-500/40 bg-red-500/5">
+                                <button
+                                    type="button"
+                                    onClick={handleCancelarGrabacion}
+                                    disabled={isUploading}
+                                    title="Cancelar grabación"
+                                    className="h-9 w-9 rounded-lg flex items-center justify-center text-muted-foreground hover:text-red-600 hover:bg-red-500/10 transition-all shrink-0 cursor-pointer disabled:opacity-50"
+                                >
+                                    <Trash2 className="h-4 w-4" />
+                                </button>
+                                <span className="flex items-center gap-2 text-sm font-mono text-red-600 dark:text-red-400 flex-1 min-w-0">
+                                    <span className="h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+                                    Grabando… {Math.floor(recordSegundos / 60)}:{String(recordSegundos % 60).padStart(2, '0')}
                                 </span>
-                                <span className="hidden sm:inline text-[10px] shrink-0">Shift+Enter para salto de línea</span>
+                                <button
+                                    type="button"
+                                    onClick={handleEnviarGrabacion}
+                                    disabled={isUploading}
+                                    title="Enviar nota de voz"
+                                    className={cn(
+                                        'h-9 w-9 rounded-lg flex items-center justify-center text-white bg-primary transition-all shrink-0 cursor-pointer',
+                                        isUploading ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105 active:scale-95'
+                                    )}
+                                >
+                                    {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                                </button>
                             </div>
-                        </div>
+                        ) : (
+                            <>
+                                <button
+                                    type="button"
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={isUploading || isSending}
+                                    title="Adjuntar foto o audio"
+                                    className={cn(
+                                        'h-11 w-11 rounded-xl flex items-center justify-center border border-border bg-background text-muted-foreground transition-all shrink-0 cursor-pointer',
+                                        isUploading
+                                            ? 'opacity-50 cursor-not-allowed'
+                                            : 'hover:bg-accent hover:text-foreground hover:border-primary/40'
+                                    )}
+                                >
+                                    {isUploading ? (
+                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Paperclip className="h-4 w-4" />
+                                    )}
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={handleIniciarGrabacion}
+                                    disabled={isUploading || isSending}
+                                    title="Grabar nota de voz"
+                                    className={cn(
+                                        'h-11 w-11 rounded-xl flex items-center justify-center border border-border bg-background text-muted-foreground transition-all shrink-0 cursor-pointer',
+                                        isUploading || isSending
+                                            ? 'opacity-50 cursor-not-allowed'
+                                            : 'hover:bg-accent hover:text-foreground hover:border-primary/40'
+                                    )}
+                                >
+                                    <Mic className="h-4 w-4" />
+                                </button>
+                                <div className="flex-1 min-w-0 bg-background border border-border rounded-xl focus-within:ring-2 focus-within:ring-primary/40 focus-within:border-primary transition-all p-2">
+                                    <textarea
+                                        ref={textareaRef}
+                                        rows={2}
+                                        value={textoInput}
+                                        onChange={e => setTextoInput(e.target.value)}
+                                        onKeyDown={e => {
+                                            if (e.key === 'Enter' && !e.shiftKey) {
+                                                e.preventDefault()
+                                                handleEnviarMensaje()
+                                            }
+                                        }}
+                                        placeholder="Escribí un mensaje... (Presioná Enter para enviar, Shift+Enter para nueva línea)"
+                                        className="w-full text-xs md:text-sm bg-transparent border-0 focus:outline-none resize-none placeholder:text-muted-foreground/60 leading-relaxed"
+                                    />
+                                    <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground pt-1 border-t border-border/40">
+                                        <span className="flex items-center gap-1 font-mono min-w-0 truncate">
+                                            Firma: <strong>[{currentUsuario.nombre} {currentUsuario.apellido}]</strong>
+                                        </span>
+                                        <span className="hidden sm:inline text-[10px] shrink-0">Shift+Enter para salto de línea</span>
+                                    </div>
+                                </div>
 
-                        <button
-                            type="submit"
-                            disabled={!textoInput.trim() || isSending}
-                            className={cn(
-                                'h-11 w-11 rounded-xl flex items-center justify-center text-white transition-all shadow-md shrink-0 cursor-pointer',
-                                textoInput.trim() && !isSending 
-                                    ? 'bg-primary hover:scale-105 active:scale-95' 
-                                    : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
-                            )}
-                            title="Enviar mensaje (Enter)"
-                        >
-                            {isSending ? (
-                                <RefreshCw className="h-4 w-4 animate-spin" />
-                            ) : (
-                                <Send className="h-4 w-4" />
-                            )}
-                        </button>
+                                <button
+                                    type="submit"
+                                    disabled={!textoInput.trim() || isSending}
+                                    className={cn(
+                                        'h-11 w-11 rounded-xl flex items-center justify-center text-white transition-all shadow-md shrink-0 cursor-pointer',
+                                        textoInput.trim() && !isSending
+                                            ? 'bg-primary hover:scale-105 active:scale-95'
+                                            : 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                                    )}
+                                    title="Enviar mensaje (Enter)"
+                                >
+                                    {isSending ? (
+                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                        <Send className="h-4 w-4" />
+                                    )}
+                                </button>
+                            </>
+                        )}
                     </form>
                 </div>
             ) : (

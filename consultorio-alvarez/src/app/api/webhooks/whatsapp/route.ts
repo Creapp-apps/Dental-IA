@@ -300,10 +300,18 @@ export async function POST(request: NextRequest) {
                         mediaUrl = await descargarYGuardarMediaWhatsApp(message.image.id, waCredsForMedia.accessToken, tenantId, 'jpg')
                     } else if (type === 'audio' && message.audio?.id) {
                         mediaUrl = await descargarYGuardarMediaWhatsApp(message.audio.id, waCredsForMedia.accessToken, tenantId, 'ogg')
+                    } else if (type === 'document' && message.document?.id) {
+                        mediaUrl = await descargarYGuardarMediaWhatsApp(message.document.id, waCredsForMedia.accessToken, tenantId, 'pdf')
                     }
                 }
 
-                const tipoFinal = type === 'image' ? 'imagen' : (type === 'audio' ? 'audio' : (type === 'button' || type === 'interactive' ? 'interactivo' : 'texto'))
+                const tipoFinal = type === 'image'
+                    ? 'imagen'
+                    : type === 'audio'
+                        ? 'audio'
+                        : type === 'document'
+                            ? 'documento'
+                            : (type === 'button' || type === 'interactive' ? 'interactivo' : 'texto')
 
                 await admin.from('whatsapp_mensajes').insert({
                     tenant_id: tenantId,
@@ -312,7 +320,7 @@ export async function POST(request: NextRequest) {
                     remitente: 'paciente',
                     contenido: textBody || buttonTextFallback || buttonPayload || 'Mensaje recibido',
                     wa_message_id: messageId,
-                    metadata: { raw: message, media_url: mediaUrl }
+                    metadata: { raw: message, media_url: mediaUrl, doc_filename: type === 'document' ? (message.document?.filename || null) : null }
                 })
 
                 await admin.from('whatsapp_conversaciones').update({

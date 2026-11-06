@@ -3,7 +3,8 @@
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getAuthenticatedTenantId, getCurrentUsuario } from '@/lib/supabase/queries'
-import { getWhatsAppCredentialsForTenant } from '@/lib/whatsapp'
+import { getWhatsAppCredentialsForTenant, subirMediaWhatsApp } from '@/lib/whatsapp'
+import { rutaTenant } from '@/lib/storage/rutas'
 import { normalizarTelefonoArgentino } from '@/lib/utils'
 import { revalidatePath } from 'next/cache'
 
@@ -286,6 +287,171 @@ export async function enviarMensajeAgente(conversacionId: string, texto: string)
     } catch (err: any) {
         console.error('[WA CHAT] Excepción en enviarMensajeAgente:', err)
         return { success: false, error: err.message || 'Error inesperado al enviar mensaje' }
+    }
+}
+
+/**
+ * Enviar un adjunto (imagen o audio) como operador a través de WhatsApp Cloud API.
+ * El binario llega en un FormData bajo la clave 'file'. Se guarda en el bucket privado
+ * 'paciente_adjuntos' (para mostrarlo en el chat) y se sube a Meta para obtener un media_id.
+ */
+export async function enviarAdjuntoAgente(conversacionId: string, formData: FormData): Promise<{
+    success: boolean
+    mensaje?: WhatsAppMensajeRow
+    error?: string
+}> {
+    const tenantId = await getAuthenticatedTenantId()
+    const usuario = await getCurrentUsuario()
+    if (!tenantId || !usuario) return { success: false, error: 'Sesión no válida o no autorizado' }
+
+    const file = formData.get('file')
+    if (!file || typeof file === 'string') {
+        return { success: false, error: 'No se recibió ningún archivo' }
+    }
+
+    const archivo = file as File
+    const mimeType = archivo.type || ''
+    const esImagen = mimeType.startsWith('image/')
+    const esAudio = mimeType.startsWith('audio/')
+
+    if (!esImagen && !esAudio) {
+        return { success: false, error: 'Solo se pueden enviar imágenes o audios' }
+    }
+    if (archivo.size === 0) {
+        return { success: false, error: 'El archivo está vacío' }
+    }
+    // Meta permite hasta 5 MB imagen y 16 MB audio; aplicamos el tope más alto.
+    if (archivo.size > 16 * 1024 * 1024) {
+        return { success: false, error: 'El archivo supera el límite de 16 MB' }
+    }
+
+    const admin = createAdminClient()
+
+    try {
+        // 1. Obtener la conversación y el teléfono
+        const { data: conversacion, error: convError } = await admin
+            .from('whatsapp_conversaciones')
+            .select('*')
+            .eq('id', conversacionId)
+            .eq('tenant_id', tenantId)
+            .single()
+
+        if (convError || !conversacion) {
+            return { success: false, error: 'Conversación no encontrada' }
+        }
+
+        const cleanPhone = normalizarTelefonoArgentino(conversacion.telefono)
+
+        // 2. Credenciales de WhatsApp Cloud API
+        const waCreds = await getWhatsAppCredentialsForTenant(tenantId)
+        if (!waCreds) {
+            return { success: false, error: 'WhatsApp Cloud API no está configurado para esta clínica.' }
+        }
+
+        // 3. Materializar el binario
+        const buffer = Buffer.from(await archivo.arrayBuffer())
+        const ext = (archivo.name?.split('.').pop() || (esImagen ? 'jpg' : 'ogg')).toLowerCase()
+
+        // 4. Guardar en el bucket privado para que la burbuja lo pueda mostrar firmado
+        const filePath = rutaTenant(tenantId, 'wa-media-out', `${Date.now()}_${usuario.id}.${ext}`)
+        const { error: uploadError } = await admin.storage
+            .from('paciente_adjuntos')
+            .upload(filePath, buffer, { contentType: mimeType, upsert: true })
+
+        if (uploadError) {
+            console.error('[WA CHAT] Error al guardar adjunto saliente en storage:', uploadError)
+            return { success: false, error: 'No se pudo guardar el archivo' }
+        }
+
+        // 5. Subir a Meta para obtener el media_id
+        const mediaId = await subirMediaWhatsApp(
+            buffer,
+            mimeType,
+            archivo.name || `adjunto.${ext}`,
+            waCreds.phoneNumberId,
+            waCreds.accessToken
+        )
+        if (!mediaId) {
+            return { success: false, error: 'No se pudo subir el archivo a WhatsApp' }
+        }
+
+        // 6. Despachar el mensaje de media a Meta
+        const firma = `[${usuario.nombre} ${usuario.apellido}]`
+        const tipoMeta = esImagen ? 'image' : 'audio'
+        // El audio en WhatsApp no admite caption; la imagen sí lleva la firma del operador.
+        const mediaPayload = esImagen ? { id: mediaId, caption: firma } : { id: mediaId }
+
+        let waMessageId: string | null = null
+        try {
+            const metaResponse = await fetch(`https://graph.facebook.com/v20.0/${waCreds.phoneNumberId}/messages`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${waCreds.accessToken}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    messaging_product: 'whatsapp',
+                    recipient_type: 'individual',
+                    to: cleanPhone,
+                    type: tipoMeta,
+                    [tipoMeta]: mediaPayload
+                })
+            })
+
+            const metaData = await metaResponse.json()
+            if (!metaResponse.ok) {
+                console.error('[WA CHAT] Error de Meta API al enviar adjunto:', metaData)
+                return { success: false, error: metaData?.error?.message || 'Error al enviar por WhatsApp' }
+            }
+
+            waMessageId = metaData?.messages?.[0]?.id || null
+        } catch (apiErr: any) {
+            console.error('[WA CHAT] Excepción al enviar adjunto a Meta Graph API:', apiErr)
+            return { success: false, error: 'Fallo de conexión con WhatsApp Meta API' }
+        }
+
+        // 7. Persistir el mensaje saliente
+        const contenido = esImagen ? firma : `${firma}\n🎤 Nota de voz`
+        const { data: nuevoMensaje, error: insertError } = await admin
+            .from('whatsapp_mensajes')
+            .insert({
+                tenant_id: tenantId,
+                conversacion_id: conversacionId,
+                tipo: esImagen ? 'imagen' : 'audio',
+                remitente: 'agente',
+                agente_id: usuario.id,
+                agente_nombre: `${usuario.nombre} ${usuario.apellido}`,
+                contenido,
+                metadata: { media_url: filePath },
+                wa_message_id: waMessageId,
+                estado_envio: 'enviado'
+            })
+            .select()
+            .single()
+
+        if (insertError) {
+            console.error('[WA CHAT] Error al persistir adjunto saliente:', insertError)
+        }
+
+        // 8. Actualizar la conversación
+        const resumen = esImagen ? '📷 Foto' : '🎤 Nota de voz'
+        await admin
+            .from('whatsapp_conversaciones')
+            .update({
+                estado: 'HUMANO_ATENDIENDO',
+                asignado_a: usuario.id,
+                ultimo_mensaje_at: new Date().toISOString(),
+                ultimo_mensaje_texto: resumen,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', conversacionId)
+
+        revalidatePath('/mensajes')
+
+        return { success: true, mensaje: nuevoMensaje as any }
+    } catch (err: any) {
+        console.error('[WA CHAT] Excepción en enviarAdjuntoAgente:', err)
+        return { success: false, error: err.message || 'Error inesperado al enviar el adjunto' }
     }
 }
 
