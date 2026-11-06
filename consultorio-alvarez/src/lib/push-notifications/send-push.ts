@@ -27,7 +27,7 @@ export async function sendPushNotification(
         title,
         body,
         url,
-        icon: '/LOGO-NOTIF.png'
+        icon: '/LOGO-ALVAREZ-ICON.png'
     })
 
     try {

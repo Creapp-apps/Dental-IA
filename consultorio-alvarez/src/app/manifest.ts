@@ -8,12 +8,19 @@ export default function manifest(): MetadataRoute.Manifest {
     start_url: '/admin',
     scope: '/',
     display: 'standalone',
-    background_color: '#09090b',
-    theme_color: '#09090b',
+    // Splash de arranque: fondo blanco + logo azul (pedido de Eduardo), en lugar del negro con logo violeta.
+    background_color: '#ffffff',
+    theme_color: '#ffffff',
     icons: [
       {
-        src: '/LOGO-NOTIF.png',
+        src: '/LOGO-ALVAREZ-ICON.png',
         sizes: '512x512',
+        type: 'image/png',
+        purpose: 'any',
+      },
+      {
+        src: '/LOGO-ALVAREZ-ICON.png',
+        sizes: '1024x1024',
         type: 'image/png',
         purpose: 'maskable',
       },

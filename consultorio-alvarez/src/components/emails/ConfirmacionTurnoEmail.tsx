@@ -34,8 +34,8 @@ export const ConfirmacionTurnoEmail = ({
                 <Container style={container}>
                     <Section style={header}>
                         <img
-                            src="https://fnrahivsztbwjmvpveae.supabase.co/storage/v1/object/public/tenant_assets/alvarez/logo-dark.png"
-                            width="180"
+                            src="https://fnrahivsztbwjmvpveae.supabase.co/storage/v1/object/public/tenant_assets/alvarez/logo.png"
+                            width="200"
                             alt="Consultorio Alvarez"
                             style={logo}
                         />
@@ -83,8 +83,9 @@ const container = {
 }
 
 const header = {
-    padding: '32px 48px',
-    backgroundColor: '#09090b', // dark background for the logo
+    padding: '28px 48px',
+    backgroundColor: '#ffffff', // fondo blanco + logo azul (marca nueva)
+    borderBottom: '1px solid #e4e4e7',
     textAlign: 'center' as const,
 }
 

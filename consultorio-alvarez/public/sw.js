@@ -13,7 +13,7 @@ self.addEventListener('push', function (event) {
         const title = payload.title || 'Consultorio Alvarez';
         const options = {
             body: payload.body || '',
-            icon: payload.icon || '/LOGO-NOTIF.png',
+            icon: payload.icon || '/LOGO-ALVAREZ-ICON.png',
             badge: payload.badge || '/favicon.ico',
             data: {
                 url: payload.url || '/agenda'
@@ -32,7 +32,7 @@ self.addEventListener('push', function (event) {
         event.waitUntil(
             self.registration.showNotification('Consultorio Alvarez', {
                 body: text,
-                icon: '/LOGO-NOTIF.png',
+                icon: '/LOGO-ALVAREZ-ICON.png',
                 data: { url: '/agenda' }
             })
         );
