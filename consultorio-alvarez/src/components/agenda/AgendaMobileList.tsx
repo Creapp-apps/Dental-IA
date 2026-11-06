@@ -318,17 +318,23 @@ function TurnoCard({ turno, inicio, onSelect }: { turno: Turno; inicio: Date; on
         : 'Sin paciente'
     const cancelado = estado === 'CANCELADO'
 
+    // Ocupado = bloque teñido con el color de la PRESTACIÓN (decisión de Eduardo: el color
+    // manda por prestación). Tinte "fuerte" ~26% sobre la tarjeta; los huecos "Libre" van en blanco.
+    const tintBg = `color-mix(in srgb, ${colorTrat} 26%, var(--card))`
+    const tintBorder = `color-mix(in srgb, ${colorTrat} 50%, transparent)`
+
     return (
         <button
             type="button"
             onClick={() => onSelect(turno)}
+            style={{ backgroundColor: tintBg, borderColor: tintBorder }}
             className={cn(
-                'w-full flex text-left rounded-[15px] border border-border/60 bg-card/80 overflow-hidden mb-2.5 transition-colors active:bg-card',
-                cancelado && 'opacity-60'
+                'w-full flex text-left rounded-[15px] border overflow-hidden mb-2.5 transition-transform active:scale-[0.99]',
+                cancelado && 'opacity-55 grayscale-[.4]'
             )}
         >
-            <span className="w-[5px] shrink-0" style={{ backgroundColor: colorProf }} />
-            <span className="flex-none w-[60px] flex flex-col items-center justify-center py-2.5 px-1.5 bg-black/20 border-r border-border/40">
+            <span className="w-[6px] shrink-0" style={{ backgroundColor: colorTrat }} />
+            <span className="flex-none w-[60px] flex flex-col items-center justify-center py-2.5 px-1.5 bg-black/25 border-r border-black/20">
                 <span className="text-[18px] font-extrabold leading-none tabular-nums">{hhmm(inicio)}</span>
                 {dur !== null && <span className="text-[10px] font-bold text-muted-foreground mt-1">{dur} min</span>}
             </span>
@@ -343,19 +349,16 @@ function TurnoCard({ turno, inicio, onSelect }: { turno: Turno; inicio: Date; on
                     </span>
                 </span>
                 <span className="flex items-center gap-2 min-w-0">
+                    {turno.tipo_tratamiento?.nombre && (
+                        <span className="min-w-0 truncate text-xs font-extrabold text-foreground/95">
+                            {turno.tipo_tratamiento.nombre}
+                        </span>
+                    )}
+                    <i className="flex-none h-[3px] w-[3px] rounded-full bg-foreground/40" />
                     <span className="flex-none inline-flex items-center gap-1.5 text-xs font-bold text-muted-foreground">
-                        <i className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: colorProf }} />
+                        <i className="h-2 w-2 rounded-full" style={{ backgroundColor: colorProf }} />
                         Dr. {turno.profesional?.nombre ?? '—'}
                     </span>
-                    {turno.tipo_tratamiento?.nombre && (
-                        <>
-                            <i className="flex-none h-[3px] w-[3px] rounded-full bg-muted-foreground/60" />
-                            <span className="min-w-0 inline-flex items-center gap-1.5 text-xs font-bold text-foreground/90 truncate">
-                                <i className="flex-none h-2 w-2 rounded-sm" style={{ backgroundColor: colorTrat }} />
-                                <span className="truncate">{turno.tipo_tratamiento.nombre}</span>
-                            </span>
-                        </>
-                    )}
                 </span>
             </span>
         </button>

@@ -2307,6 +2307,9 @@ export function AgendaView({
                                 const isCurrentMonth = dia.getMonth() === baseDate.getMonth()
                                 const esHoy = isToday(dia)
                                 const isSelected = isSameDay(dia, diaSeleccionado)
+                                const count = turnosDiaFiltrados.length
+                                // Intensidad del mapa de calor: más turnos = celda más oscura (cap 64%).
+                                const pct = count > 0 ? Math.min(14 + count * 8, 64) : 0
 
                                 return (
                                     <div
@@ -2317,57 +2320,30 @@ export function AgendaView({
                                             setVistaActiva('hoy')
                                         }}
                                         className={cn(
-                                            "min-h-[85px] p-1 border-b border-r border-border/30 flex flex-col justify-start cursor-pointer transition-colors hover:bg-white/[0.03]",
-                                            !isCurrentMonth && "opacity-35 bg-black/20",
-                                            isSelected && "bg-primary/10 border-primary/40",
-                                            esHoy && "bg-primary/5"
+                                            "relative overflow-hidden min-h-[72px] p-1.5 border-b border-r border-border/30 flex flex-col cursor-pointer transition-colors",
+                                            !isCurrentMonth && "opacity-40",
+                                            isSelected && "ring-1 ring-inset ring-primary/60",
+                                            esHoy && "ring-1 ring-inset ring-primary"
                                         )}
                                     >
-                                        {/* Day number header */}
-                                        <div className="flex justify-between items-center px-0.5">
-                                            <span className={cn(
-                                                "text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center transition-all",
-                                                esHoy ? "bg-primary text-primary-foreground shadow-md scale-105" : isSelected ? "bg-white/20 text-white font-bold" : "text-foreground/90"
-                                            )}>
-                                                {format(dia, 'd')}
-                                            </span>
-                                            {turnosDiaFiltrados.length > 0 && (
-                                                <span className="text-[7.5px] font-extrabold text-muted-foreground/80 px-1 py-0.2 bg-white/5 rounded-full border border-white/5">
-                                                    {turnosDiaFiltrados.length}
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        {/* Turnos event chips list (Google Calendar style) */}
-                                        <div className="flex-1 flex flex-col gap-0.5 mt-1 overflow-hidden">
-                                            {turnosDiaFiltrados.slice(0, 3).map((t: any) => {
-                                                const tColor = t.tipo_tratamiento?.color || t.profesional?.color_agenda || '#3b82f6'
-                                                const labelText = t.paciente ? `${t.paciente.apellido}` : 'Turno'
-                                                return (
-                                                    <div
-                                                        key={t.id}
-                                                        onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setSelectedTurnoDetail(t)
-                                                        }}
-                                                        className="text-[8px] font-extrabold leading-none py-0.5 px-1 rounded truncate border flex items-center gap-1 shadow-sm transition-transform active:scale-95"
-                                                        style={{
-                                                            backgroundColor: `${tColor}35`,
-                                                            borderColor: `${tColor}60`,
-                                                            color: '#ffffff'
-                                                        }}
-                                                    >
-                                                        <span className="h-1.5 w-1.5 rounded-full shrink-0 shadow-sm" style={{ backgroundColor: tColor }} />
-                                                        <span className="truncate">{labelText}</span>
-                                                    </div>
-                                                )
-                                            })}
-                                            {turnosDiaFiltrados.length > 3 && (
-                                                <div className="text-[7.5px] text-primary-foreground/90 font-black text-center bg-primary/20 rounded py-0.2 mt-0.5 border border-primary/20">
-                                                    +{turnosDiaFiltrados.length - 3} más
-                                                </div>
-                                            )}
-                                        </div>
+                                        {/* Mapa de calor: el día se tiñe según cuán lleno está (ocupación). */}
+                                        {count > 0 && (
+                                            <div
+                                                className="absolute inset-0 pointer-events-none"
+                                                style={{ backgroundColor: `color-mix(in srgb, var(--primary) ${pct}%, transparent)` }}
+                                            />
+                                        )}
+                                        <span className={cn(
+                                            "relative z-10 text-[11px] font-black h-5 w-5 rounded-full flex items-center justify-center",
+                                            esHoy ? "bg-primary text-primary-foreground shadow" : "text-foreground/90"
+                                        )}>
+                                            {format(dia, 'd')}
+                                        </span>
+                                        <span className="relative z-10 mt-auto mx-auto pb-0.5 tabular-nums">
+                                            {count > 0
+                                                ? <span className="text-[19px] font-black text-foreground leading-none">{count}</span>
+                                                : <span className="text-[11px] font-bold text-muted-foreground/40">·</span>}
+                                        </span>
                                     </div>
                                 )
                             })}
@@ -2385,6 +2361,68 @@ export function AgendaView({
                         horarios={horarios}
                         onAgendarLibre={!isProfesional ? (profId, fecha, hora) => abrirModalConProf(profId, format(fecha, 'yyyy-MM-dd'), hora) : undefined}
                     />
+                ) : vistaActiva === 'semana' ? (
+                    /* Grilla panorámica de la semana (pedido de Pedro): 7 columnas con barras
+                       de color por turno (color = prestación), para leer la semana entera de lejos.
+                       Tocar una barra abre el turno; tocar el encabezado del día va a la vista Día. */
+                    <div className="pb-24 select-none">
+                        <div className="grid grid-cols-7 gap-1">
+                            {mobileColumns.map((col) => {
+                                const esHoyCol = isToday(col.date)
+                                const ordenados = [...col.turnos].sort(
+                                    (a: any, b: any) => parseISO(a.fecha_inicio).getTime() - parseISO(b.fecha_inicio).getTime()
+                                )
+                                return (
+                                    <div key={col.date.toISOString()} className="flex flex-col min-w-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setDiaSeleccionado(col.date)
+                                                setBaseDate(col.date)
+                                                setVistaActiva('hoy')
+                                            }}
+                                            className="flex flex-col items-center gap-0.5 pb-1.5 border-b border-border/40"
+                                        >
+                                            <span className="text-[9px] font-black uppercase tracking-wide text-muted-foreground">
+                                                {format(col.date, 'EEE', { locale: es })}
+                                            </span>
+                                            <span className={cn(
+                                                "text-[12px] font-extrabold h-5 w-5 rounded-full flex items-center justify-center",
+                                                esHoyCol ? "bg-primary text-primary-foreground shadow-sm" : "text-foreground"
+                                            )}>
+                                                {format(col.date, 'd')}
+                                            </span>
+                                        </button>
+                                        <div className="flex flex-col gap-1 pt-1.5">
+                                            {ordenados.length === 0 && (
+                                                <span className="text-[9px] text-muted-foreground/30 text-center py-1">·</span>
+                                            )}
+                                            {ordenados.map((t: any) => {
+                                                const c = t.tipo_tratamiento?.color || t.profesional?.color_agenda || '#3b82f6'
+                                                return (
+                                                    <button
+                                                        key={t.id}
+                                                        type="button"
+                                                        onClick={() => setSelectedTurnoDetail(t)}
+                                                        className="h-[15px] rounded-[4px] border-l-[3px] flex items-center px-1 overflow-hidden transition-transform active:scale-95"
+                                                        style={{
+                                                            backgroundColor: `color-mix(in srgb, ${c} 42%, transparent)`,
+                                                            borderColor: c,
+                                                        }}
+                                                        title={`${format(parseISO(t.fecha_inicio), 'HH:mm')} · ${t.paciente?.apellido ?? 'Turno'}`}
+                                                    >
+                                                        <span className="text-[7.5px] font-extrabold text-foreground/90 tabular-nums leading-none">
+                                                            {format(parseISO(t.fecha_inicio), 'HH:mm')}
+                                                        </span>
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    </div>
                 ) : (
                     <AgendaMobileList
                         grupos={mobileColumns.map((col) => ({
