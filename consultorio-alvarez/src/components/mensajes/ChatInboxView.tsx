@@ -10,9 +10,11 @@ import {
     asignarConversacion,
     marcarConversacionLeida,
     EstadoWaConversacion,
-    getMensajes
+    getMensajes,
+    getConversaciones
 } from '@/lib/actions/whatsapp-chat'
 import { createClient } from '@/lib/supabase/client'
+import { carrilDe, type Carril } from '@/lib/mensajes/triage'
 import { useUrlFirmada } from '@/lib/storage/url-firmada'
 import { 
     Search, 
@@ -28,6 +30,7 @@ import {
     Sparkles, 
     RefreshCw,
     ChevronRight,
+    ChevronDown,
     ChevronLeft,
     MessageSquare,
     Zap,
@@ -83,6 +86,50 @@ const RESPUESTAS_RAPIDAS = [
  * Marca de tiempo estilo WhatsApp para la lista de chats:
  * hoy -> hora (11:19), ayer -> 'Ayer', esta semana -> día corto ('lun'), más viejo -> dd/mm/aa.
  */
+const CARRILES: Carril[] = ['rojo', 'amarillo', 'azul', 'verde']
+
+const CARRIL_UI: Record<Carril, {
+    titulo: string
+    chip: string
+    chipActivo: string
+    header: string
+    badge: string
+    punto: string
+}> = {
+    rojo: {
+        titulo: 'Urgente — atención ya',
+        chip: '🔴 Urgente',
+        chipActivo: 'bg-red-500 text-white shadow-sm',
+        header: 'bg-red-500/10 text-red-700 dark:text-red-400 border-red-500/30',
+        badge: 'text-red-700 dark:text-red-400 bg-red-500/15',
+        punto: 'bg-red-500',
+    },
+    amarillo: {
+        titulo: 'Requiere atención',
+        chip: '🟡 Requiere atención',
+        chipActivo: 'bg-amber-500 text-white shadow-sm',
+        header: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
+        badge: 'text-amber-700 dark:text-amber-400 bg-amber-500/15',
+        punto: 'bg-amber-500',
+    },
+    azul: {
+        titulo: 'En curso',
+        chip: '🔵 En curso',
+        chipActivo: 'bg-blue-500 text-white shadow-sm',
+        header: 'bg-blue-500/10 text-blue-700 dark:text-blue-400 border-blue-500/30',
+        badge: 'text-blue-700 dark:text-blue-400 bg-blue-500/10',
+        punto: 'bg-blue-500',
+    },
+    verde: {
+        titulo: 'Bajo control (el bot se encarga)',
+        chip: '🟢 Bajo control',
+        chipActivo: 'bg-emerald-500 text-white shadow-sm',
+        header: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
+        badge: 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10',
+        punto: 'bg-emerald-500',
+    },
+}
+
 function formatFechaChat(iso: string): string {
     const d = new Date(iso)
     const inicioDia = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
@@ -169,7 +216,12 @@ export function ChatInboxView({
     )
     const [mensajes, setMensajes] = useState<WhatsAppMensajeRow[]>([])
     const [isLoadingMensajes, setIsLoadingMensajes] = useState<boolean>(false)
-    const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'mis_chats' | 'bot' | 'cerrados'>('todos')
+    const [filtro, setFiltro] = useState<'todos' | Carril | 'cerrados'>('todos')
+    const [cerradas, setCerradas] = useState<WhatsAppConversacionRow[] | null>(null)
+    const [cargandoCerradas, setCargandoCerradas] = useState(false)
+    const [colapsados, setColapsados] = useState<Record<Carril, boolean>>({
+        rojo: false, amarillo: false, azul: false, verde: true
+    })
     const [filtroFecha, setFiltroFecha] = useState<'todas' | 'hoy' | '7dias' | 'mes'>('todas')
     const [searchQuery, setSearchQuery] = useState('')
     const [textoInput, setTextoInput] = useState('')
@@ -185,7 +237,25 @@ export function ChatInboxView({
     const grabadorRef = useRef<GrabadorVoz | null>(null)
     const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-    const conversacionActiva = conversaciones.find(c => c.id === conversacionActivaId) || null
+    const conversacionActiva = conversaciones.find(c => c.id === conversacionActivaId)
+        || cerradas?.find(c => c.id === conversacionActivaId)
+        || null
+
+    // Cerrados: fetch perezoso al entrar al chip (se refresca cada vez que se entra)
+    useEffect(() => {
+        if (filtro !== 'cerrados') return
+        let isMounted = true
+        setCargandoCerradas(true)
+        getConversaciones('cerrados')
+            .then(res => {
+                if (!isMounted) return
+                if (res.error) toast.error('Error al cargar cerrados: ' + res.error)
+                else setCerradas(res.conversaciones)
+                setCargandoCerradas(false)
+            })
+            .catch(() => { if (isMounted) setCargandoCerradas(false) })
+        return () => { isMounted = false }
+    }, [filtro])
 
     // Scroll to bottom helper
     // Al desmontar: cortar micrófono y timer si quedó una grabación abierta.
@@ -500,23 +570,8 @@ export function ChatInboxView({
         })
     }
 
-    // Filtrado de conversaciones
-    const conversacionesFiltradas = conversaciones.filter(c => {
-        // Filtro por tab
-        if (filtro === 'pendientes' && !['HUMANO_PENDIENTE', 'HUMANO_ATENDIENDO'].includes(c.estado)) {
-            return false
-        }
-        if (filtro === 'mis_chats' && c.asignado_a !== currentUsuario.id) {
-            return false
-        }
-        if (filtro === 'bot' && c.estado !== 'BOT') {
-            return false
-        }
-        if (filtro === 'cerrados' && c.estado !== 'CERRADO') {
-            return false
-        }
-
-        // Filtro por fecha del último mensaje
+    // Filtros transversales (fecha del último mensaje + búsqueda)
+    const pasaFiltros = (c: WhatsAppConversacionRow) => {
         if (filtroFecha !== 'todas') {
             const t = new Date(c.ultimo_mensaje_at).getTime()
             const ahora = Date.now()
@@ -527,20 +582,107 @@ export function ChatInboxView({
             if (t < desde) return false
         }
 
-        // Filtro por búsqueda
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase().trim()
-            const nombre = c.paciente 
+            const nombre = c.paciente
                 ? `${c.paciente.nombre} ${c.paciente.apellido}`.toLowerCase()
                 : (c.nombre_contacto || '').toLowerCase()
             const tel = c.telefono.toLowerCase()
             const ultimo = (c.ultimo_mensaje_texto || '').toLowerCase()
-
             return nombre.includes(q) || tel.includes(q) || ultimo.includes(q)
         }
 
         return true
+    }
+
+    const triageDe = (c: WhatsAppConversacionRow) => carrilDe({
+        estado: c.estado,
+        prioridad: c.prioridad,
+        motivo: c.motivo,
+        asignadoNombre: c.asignado ? `${c.asignado.nombre} ${c.asignado.apellido ?? ''}`.trim() : null,
     })
+
+    // Set activo (todo menos cerrados) con filtros transversales, agrupado por carril
+    const activasFiltradas = conversaciones.filter(c => c.estado !== 'CERRADO' && pasaFiltros(c))
+    const porCarril: Record<Carril, { conv: WhatsAppConversacionRow; etiqueta: string }[]> = {
+        rojo: [], amarillo: [], azul: [], verde: []
+    }
+    for (const c of activasFiltradas) {
+        const { carril, etiqueta } = triageDe(c)
+        porCarril[carril].push({ conv: c, etiqueta })
+    }
+    const cerradasFiltradas = (cerradas ?? []).filter(pasaFiltros)
+    const carrilesVisibles = filtro === 'todos' ? CARRILES : CARRILES.filter(k => k === filtro)
+    const hayResultados = filtro === 'cerrados'
+        ? cerradasFiltradas.length > 0
+        : carrilesVisibles.some(k => porCarril[k].length > 0)
+
+    const renderFila = (conv: WhatsAppConversacionRow, carril: Carril | null, etiqueta: string) => {
+                            const isSelected = conv.id === conversacionActivaId
+                            const nombre = conv.paciente 
+                                ? `${conv.paciente.nombre} ${conv.paciente.apellido}`
+                                : conv.nombre_contacto || `+${conv.telefono}`
+                            const iniciales = nombre.slice(0, 2).toUpperCase()
+
+                            return (
+                                <button
+                                    key={conv.id}
+                                    onClick={() => setConversacionActivaId(conv.id)}
+                                    className={cn(
+                                        'w-full p-3.5 text-left flex items-start gap-3 transition-colors relative hover:bg-accent/40',
+                                        isSelected && 'bg-primary/10 hover:bg-primary/15 border-l-4 border-primary'
+                                    )}
+                                >
+                                    {/* Avatar con estado */}
+                                    <div className="relative shrink-0">
+                                        <div className="h-10 w-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs">
+                                            {iniciales}
+                                        </div>
+                                        <span 
+                                            className={cn(
+                                                'absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-background',
+                                                carril ? CARRIL_UI[carril].punto : 'bg-zinc-400',
+                                                carril === 'rojo' && 'animate-pulse'
+                                            )}
+                                            title={`Estado: ${conv.estado}`}
+                                        />
+                                    </div>
+
+                                    {/* Info principal */}
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center justify-between gap-1 mb-0.5">
+                                            <span className="font-semibold text-xs truncate text-foreground">
+                                                {nombre}
+                                            </span>
+                                            <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                                                {formatFechaChat(conv.ultimo_mensaje_at)}
+                                            </span>
+                                        </div>
+
+                                        <p className="text-xs text-muted-foreground truncate line-clamp-1">
+                                            {conv.ultimo_mensaje_texto || 'Sin mensajes recientes'}
+                                        </p>
+
+                                        {/* Badges de estado & no leídos */}
+                                        <div className="flex items-center justify-between mt-1.5 text-[10px]">
+                                            <span className={cn(
+                                                'inline-flex items-center gap-1 font-medium px-1.5 py-0.5 rounded truncate',
+                                                carril ? CARRIL_UI[carril].badge : 'text-zinc-500 bg-zinc-500/10',
+                                                carril === 'rojo' && 'font-bold'
+                                            )}>
+                                                {carril ? etiqueta : '✓ Cerrado'}
+                                            </span>
+
+                                            {conv.no_leidos_operador > 0 && (
+                                                <span className="h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-[10px]">
+                                                    {conv.no_leidos_operador}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                </button>
+                            )
+    }
 
     const pendientesCount = conversaciones.filter(c => c.estado === 'HUMANO_PENDIENTE').length
 
@@ -586,7 +728,7 @@ export function ChatInboxView({
                         />
                     </div>
 
-                    {/* Filtros tipo Pills */}
+                    {/* Chips de carril (triage) */}
                     <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none text-xs">
                         <button
                             onClick={() => setFiltro('todos')}
@@ -595,38 +737,20 @@ export function ChatInboxView({
                                 filtro === 'todos' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted/70 text-muted-foreground hover:bg-muted'
                             )}
                         >
-                            Todos
+                            Todo <span className="opacity-70">{activasFiltradas.length}</span>
                         </button>
-                        <button
-                            onClick={() => setFiltro('pendientes')}
-                            className={cn(
-                                'px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors flex items-center gap-1',
-                                filtro === 'pendientes' ? 'bg-amber-500 text-white shadow-sm' : 'bg-muted/70 text-muted-foreground hover:bg-muted'
-                            )}
-                        >
-                            Pendientes
-                            {pendientesCount > 0 && (
-                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                            )}
-                        </button>
-                        <button
-                            onClick={() => setFiltro('mis_chats')}
-                            className={cn(
-                                'px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors',
-                                filtro === 'mis_chats' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted/70 text-muted-foreground hover:bg-muted'
-                            )}
-                        >
-                            Mis Chats
-                        </button>
-                        <button
-                            onClick={() => setFiltro('bot')}
-                            className={cn(
-                                'px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors',
-                                filtro === 'bot' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted/70 text-muted-foreground hover:bg-muted'
-                            )}
-                        >
-                            Bot Activo
-                        </button>
+                        {CARRILES.map(k => (
+                            <button
+                                key={k}
+                                onClick={() => setFiltro(k)}
+                                className={cn(
+                                    'px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors',
+                                    filtro === k ? CARRIL_UI[k].chipActivo : 'bg-muted/70 text-muted-foreground hover:bg-muted'
+                                )}
+                            >
+                                {CARRIL_UI[k].chip} <span className="opacity-70">{porCarril[k].length}</span>
+                            </button>
+                        ))}
                         <button
                             onClick={() => setFiltro('cerrados')}
                             className={cn(
@@ -634,7 +758,7 @@ export function ChatInboxView({
                                 filtro === 'cerrados' ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted/70 text-muted-foreground hover:bg-muted'
                             )}
                         >
-                            Cerrados
+                            Cerrados{cerradas ? <> <span className="opacity-70">{cerradasFiltradas.length}</span></> : null}
                         </button>
                     </div>
 
@@ -663,9 +787,11 @@ export function ChatInboxView({
                     </div>
                 </div>
 
-                {/* Lista de Conversaciones */}
-                <div className="flex-1 overflow-y-auto divide-y divide-border/60">
-                    {conversacionesFiltradas.length === 0 ? (
+                {/* Lista de Conversaciones (grupos colapsables por carril) */}
+                <div className="flex-1 overflow-y-auto">
+                    {filtro === 'cerrados' && cargandoCerradas && cerradas === null ? (
+                        <div className="p-8 text-center text-xs text-muted-foreground">Cargando cerrados...</div>
+                    ) : !hayResultados ? (
                         <div className="p-8 text-center space-y-2">
                             <Bot className="h-8 w-8 mx-auto text-muted-foreground/40" />
                             <p className="text-sm font-semibold text-muted-foreground">No hay conversaciones</p>
@@ -673,78 +799,37 @@ export function ChatInboxView({
                                 Cuando los pacientes escriban a WhatsApp, sus mensajes aparecerán acá en tiempo real.
                             </p>
                         </div>
+                    ) : filtro === 'cerrados' ? (
+                        <div className="divide-y divide-border/60">
+                            {cerradasFiltradas.map(conv => renderFila(conv, null, ''))}
+                        </div>
                     ) : (
-                        conversacionesFiltradas.map((conv) => {
-                            const isSelected = conv.id === conversacionActivaId
-                            const nombre = conv.paciente 
-                                ? `${conv.paciente.nombre} ${conv.paciente.apellido}`
-                                : conv.nombre_contacto || `+${conv.telefono}`
-                            const iniciales = nombre.slice(0, 2).toUpperCase()
-
+                        carrilesVisibles.map(k => {
+                            const items = porCarril[k]
+                            if (items.length === 0) return null
+                            const abierto = !colapsados[k]
                             return (
-                                <button
-                                    key={conv.id}
-                                    onClick={() => setConversacionActivaId(conv.id)}
-                                    className={cn(
-                                        'w-full p-3.5 text-left flex items-start gap-3 transition-colors relative hover:bg-accent/40',
-                                        isSelected && 'bg-primary/10 hover:bg-primary/15 border-l-4 border-primary'
+                                <div key={k}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setColapsados(prev => ({ ...prev, [k]: !prev[k] }))}
+                                        aria-expanded={abierto}
+                                        className={cn(
+                                            'w-full px-3.5 py-2 flex items-center gap-2 text-xs font-bold border-y sticky top-0 z-10 backdrop-blur-sm',
+                                            CARRIL_UI[k].header
+                                        )}
+                                    >
+                                        <span className={cn('h-2 w-2 rounded-full shrink-0', CARRIL_UI[k].punto)} />
+                                        <span className="flex-1 text-left truncate">{CARRIL_UI[k].titulo}</span>
+                                        <span className="font-mono opacity-80">{items.length}</span>
+                                        {abierto ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
+                                    </button>
+                                    {abierto && (
+                                        <div className="divide-y divide-border/60">
+                                            {items.map(({ conv, etiqueta }) => renderFila(conv, k, etiqueta))}
+                                        </div>
                                     )}
-                                >
-                                    {/* Avatar con estado */}
-                                    <div className="relative shrink-0">
-                                        <div className="h-10 w-10 rounded-full bg-primary/20 text-primary flex items-center justify-center font-bold text-xs">
-                                            {iniciales}
-                                        </div>
-                                        <span 
-                                            className={cn(
-                                                'absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-background',
-                                                conv.estado === 'BOT' && 'bg-emerald-500',
-                                                conv.estado === 'HUMANO_PENDIENTE' && 'bg-amber-500 animate-pulse',
-                                                conv.estado === 'HUMANO_ATENDIENDO' && 'bg-blue-500',
-                                                conv.estado === 'CERRADO' && 'bg-zinc-400'
-                                            )}
-                                            title={`Estado: ${conv.estado}`}
-                                        />
-                                    </div>
-
-                                    {/* Info principal */}
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between gap-1 mb-0.5">
-                                            <span className="font-semibold text-xs truncate text-foreground">
-                                                {nombre}
-                                            </span>
-                                            <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
-                                                {formatFechaChat(conv.ultimo_mensaje_at)}
-                                            </span>
-                                        </div>
-
-                                        <p className="text-xs text-muted-foreground truncate line-clamp-1">
-                                            {conv.ultimo_mensaje_texto || 'Sin mensajes recientes'}
-                                        </p>
-
-                                        {/* Badges de estado & no leídos */}
-                                        <div className="flex items-center justify-between mt-1.5 text-[10px]">
-                                            <span className={cn(
-                                                'inline-flex items-center gap-1 font-medium px-1.5 py-0.5 rounded',
-                                                conv.estado === 'BOT' && 'text-emerald-700 dark:text-emerald-400 bg-emerald-500/10',
-                                                conv.estado === 'HUMANO_PENDIENTE' && 'text-amber-700 dark:text-amber-400 bg-amber-500/15 font-bold',
-                                                conv.estado === 'HUMANO_ATENDIENDO' && 'text-blue-700 dark:text-blue-400 bg-blue-500/10',
-                                                conv.estado === 'CERRADO' && 'text-zinc-500 bg-zinc-500/10'
-                                            )}>
-                                                {conv.estado === 'BOT' && '🤖 Bot'}
-                                                {conv.estado === 'HUMANO_PENDIENTE' && '⚠️ Requiere Atención'}
-                                                {conv.estado === 'HUMANO_ATENDIENDO' && (conv.asignado ? `🙋 ${conv.asignado.nombre}` : '🙋 En atención')}
-                                                {conv.estado === 'CERRADO' && '✓ Cerrado'}
-                                            </span>
-
-                                            {conv.no_leidos_operador > 0 && (
-                                                <span className="h-4 min-w-4 px-1 rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center text-[10px]">
-                                                    {conv.no_leidos_operador}
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
-                                </button>
+                                </div>
                             )
                         })
                     )}
