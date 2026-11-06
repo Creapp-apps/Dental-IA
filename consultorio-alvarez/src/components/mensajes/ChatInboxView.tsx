@@ -80,6 +80,21 @@ const RESPUESTAS_RAPIDAS = [
 ]
 
 /**
+ * Marca de tiempo estilo WhatsApp para la lista de chats:
+ * hoy -> hora (11:19), ayer -> 'Ayer', esta semana -> día corto ('lun'), más viejo -> dd/mm/aa.
+ */
+function formatFechaChat(iso: string): string {
+    const d = new Date(iso)
+    const inicioDia = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
+    const diffDias = Math.round((inicioDia(new Date()) - inicioDia(d)) / 86400000)
+
+    if (diffDias <= 0) return d.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+    if (diffDias === 1) return 'Ayer'
+    if (diffDias < 7) return d.toLocaleDateString('es-AR', { weekday: 'short' }).replace('.', '')
+    return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
+}
+
+/**
  * Burbuja de media entrante (foto, nota de voz o documento). Vive aparte porque firmar la URL es un
  * hook y no se puede llamar dentro del .map de mensajes. Mientras firma no muestra nada; si falla, lo avisa.
  */
@@ -155,6 +170,7 @@ export function ChatInboxView({
     const [mensajes, setMensajes] = useState<WhatsAppMensajeRow[]>([])
     const [isLoadingMensajes, setIsLoadingMensajes] = useState<boolean>(false)
     const [filtro, setFiltro] = useState<'todos' | 'pendientes' | 'mis_chats' | 'bot' | 'cerrados'>('todos')
+    const [filtroFecha, setFiltroFecha] = useState<'todas' | 'hoy' | '7dias' | 'mes'>('todas')
     const [searchQuery, setSearchQuery] = useState('')
     const [textoInput, setTextoInput] = useState('')
     const [isSending, setIsSending] = useState(false)
@@ -500,6 +516,17 @@ export function ChatInboxView({
             return false
         }
 
+        // Filtro por fecha del último mensaje
+        if (filtroFecha !== 'todas') {
+            const t = new Date(c.ultimo_mensaje_at).getTime()
+            const ahora = Date.now()
+            let desde = 0
+            if (filtroFecha === 'hoy') desde = new Date(new Date().setHours(0, 0, 0, 0)).getTime()
+            else if (filtroFecha === '7dias') desde = ahora - 7 * 86400000
+            else if (filtroFecha === 'mes') desde = ahora - 30 * 86400000
+            if (t < desde) return false
+        }
+
         // Filtro por búsqueda
         if (searchQuery.trim()) {
             const q = searchQuery.toLowerCase().trim()
@@ -610,6 +637,30 @@ export function ChatInboxView({
                             Cerrados
                         </button>
                     </div>
+
+                    {/* Filtro por fecha */}
+                    <div className="flex gap-1 overflow-x-auto pb-1 scrollbar-none text-xs">
+                        <span className="flex items-center text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70 pr-1 shrink-0">
+                            Fecha:
+                        </span>
+                        {([
+                            { id: 'todas', label: 'Todas' },
+                            { id: 'hoy', label: 'Hoy' },
+                            { id: '7dias', label: '7 días' },
+                            { id: 'mes', label: 'Mes' }
+                        ] as const).map(opt => (
+                            <button
+                                key={opt.id}
+                                onClick={() => setFiltroFecha(opt.id)}
+                                className={cn(
+                                    'px-2.5 py-1 rounded-lg font-medium whitespace-nowrap transition-colors',
+                                    filtroFecha === opt.id ? 'bg-primary text-primary-foreground shadow-sm' : 'bg-muted/70 text-muted-foreground hover:bg-muted'
+                                )}
+                            >
+                                {opt.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Lista de Conversaciones */}
@@ -663,7 +714,7 @@ export function ChatInboxView({
                                                 {nombre}
                                             </span>
                                             <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
-                                                {new Date(conv.ultimo_mensaje_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                                                {formatFechaChat(conv.ultimo_mensaje_at)}
                                             </span>
                                         </div>
 
