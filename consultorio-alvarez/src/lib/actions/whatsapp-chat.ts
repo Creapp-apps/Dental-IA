@@ -7,6 +7,7 @@ import { getWhatsAppCredentialsForTenant, subirMediaWhatsApp } from '@/lib/whats
 import { rutaTenant } from '@/lib/storage/rutas'
 import { normalizarTelefonoArgentino } from '@/lib/utils'
 import { revalidatePath } from 'next/cache'
+import type { Prioridad } from '@/lib/mensajes/triage'
 
 export type EstadoWaConversacion = 'BOT' | 'HUMANO_PENDIENTE' | 'HUMANO_ATENDIENDO' | 'CERRADO'
 
@@ -21,6 +22,8 @@ export interface WhatsAppConversacionRow {
     ultimo_mensaje_at: string
     ultimo_mensaje_texto: string | null
     no_leidos_operador: number
+    prioridad: Prioridad | null
+    motivo: string | null
     created_at: string
     updated_at: string
     paciente?: {
@@ -72,19 +75,25 @@ export async function getConversaciones(filtro: 'todos' | 'pendientes' | 'mis_ch
             .from('whatsapp_conversaciones')
             .select(`
                 *,
+                prioridad,
+                motivo,
                 paciente:pacientes(id, nombre, apellido, dni, telefono, foto_url),
                 asignado:usuarios(id, nombre, apellido, avatar_url)
             `)
             .eq('tenant_id', tenantId)
 
-        if (filtro === 'pendientes') {
-            query = query.in('estado', ['HUMANO_PENDIENTE', 'HUMANO_ATENDIENDO'])
-        } else if (filtro === 'mis_chats' && usuarioActual?.id) {
-            query = query.eq('asignado_a', usuarioActual.id)
-        } else if (filtro === 'bot') {
-            query = query.eq('estado', 'BOT')
-        } else if (filtro === 'cerrados') {
+        // Alcance: por defecto solo conversaciones activas; CERRADO solo a pedido.
+        if (filtro === 'cerrados') {
             query = query.eq('estado', 'CERRADO')
+        } else {
+            query = query.in('estado', ['BOT', 'HUMANO_PENDIENTE', 'HUMANO_ATENDIENDO'])
+            if (filtro === 'pendientes') {
+                query = query.in('estado', ['HUMANO_PENDIENTE', 'HUMANO_ATENDIENDO'])
+            } else if (filtro === 'mis_chats' && usuarioActual?.id) {
+                query = query.eq('asignado_a', usuarioActual.id)
+            } else if (filtro === 'bot') {
+                query = query.eq('estado', 'BOT')
+            }
         }
 
         query = query.order('ultimo_mensaje_at', { ascending: false })
