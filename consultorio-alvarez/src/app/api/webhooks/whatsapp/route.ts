@@ -16,6 +16,7 @@ import {
     agendarTurnoGuardiaWhatsApp
 } from '@/lib/whatsapp-guardia'
 import { procesarMensajeAutonomo, enviarMenuPrincipalAutonomo, enviarTextoWhatsApp } from '@/lib/whatsapp-auto-flow'
+import { debeEstampar, type Prioridad } from '@/lib/mensajes/triage'
 
 
 // GET: Webhook Verification (Meta Verification Challenge)
@@ -249,11 +250,12 @@ export async function POST(request: NextRequest) {
         // ── PERSISTENCIA DEFENSIVA DE CONVERSACIÓN Y MENSAJE (Fase 1 Handoff Humano) ──
         let conversacionId: string | null = null
         let estadoConversacion = 'BOT'
+        let prioridadActual: Prioridad | null = null
 
         try {
             const { data: conv } = await admin
                 .from('whatsapp_conversaciones')
-                .select('id, estado, no_leidos_operador')
+                .select('id, estado, no_leidos_operador, prioridad')
                 .eq('tenant_id', tenantId)
                 .eq('telefono', cleanPhone)
                 .maybeSingle()
@@ -261,6 +263,7 @@ export async function POST(request: NextRequest) {
             if (conv) {
                 conversacionId = conv.id
                 estadoConversacion = conv.estado
+                prioridadActual = (conv as any).prioridad ?? null
             } else {
                 const { data: paciente } = await admin
                     .from('pacientes')
@@ -630,12 +633,20 @@ export async function POST(request: NextRequest) {
 
             const waCreds = await getWhatsAppCredentialsForTenant(tenantId)
 
+            // Triage no-degradante: estos handlers de botón corren ANTES del early-return
+            // de HUMANO_PENDIENTE, así que pueden ejecutarse sobre un pendiente ya activo.
+            // Sólo estampamos prioridad/motivo si la nueva prioridad NO es menor que la
+            // actual (p. ej. "pide recepción" amarillo no pisa una urgencia roja activa).
+            // El cambio de estado y el resto de campos del UPDATE se mantienen siempre.
+            const camposTriageNoDegradante = (nueva: Prioridad, motivoNuevo: string): { prioridad?: Prioridad; motivo?: string } =>
+                debeEstampar(prioridadActual, nueva) ? { prioridad: nueva, motivo: motivoNuevo } : {}
+
             // RC4: deriva una urgencia/dolor a un humano cuando NO hay triage
             // configurado. Nunca dejamos un dolor en el menú genérico ni en silencio.
             const derivarUrgenciaAHumano = async (motivoTexto: string) => {
                 if (conversacionId) {
                     await admin.from('whatsapp_conversaciones')
-                        .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'rojo', motivo: 'urgencia', updated_at: new Date().toISOString() })
+                        .update({ estado: 'HUMANO_PENDIENTE', ...camposTriageNoDegradante('rojo', 'urgencia'), updated_at: new Date().toISOString() })
                         .eq('id', conversacionId)
                 }
                 await admin.from('notificaciones').insert({
@@ -706,7 +717,7 @@ export async function POST(request: NextRequest) {
             if (buttonPayload === 'HABLAR_RECEPCIONISTA') {
                 if (conversacionId) {
                     await admin.from('whatsapp_conversaciones')
-                        .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'pide_recepcion', updated_at: new Date().toISOString() })
+                        .update({ estado: 'HUMANO_PENDIENTE', ...camposTriageNoDegradante('amarillo', 'pide_recepcion'), updated_at: new Date().toISOString() })
                         .eq('id', conversacionId)
                 }
 
@@ -819,7 +830,7 @@ export async function POST(request: NextRequest) {
 
                 if (conversacionId) {
                     await admin.from('whatsapp_conversaciones')
-                        .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'rojo', motivo: 'guardia', updated_at: new Date().toISOString() })
+                        .update({ estado: 'HUMANO_PENDIENTE', ...camposTriageNoDegradante('rojo', 'guardia'), updated_at: new Date().toISOString() })
                         .eq('id', conversacionId)
                 }
 

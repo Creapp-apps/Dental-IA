@@ -82,10 +82,6 @@ const RESPUESTAS_RAPIDAS = [
     }
 ]
 
-/**
- * Marca de tiempo estilo WhatsApp para la lista de chats:
- * hoy -> hora (11:19), ayer -> 'Ayer', esta semana -> día corto ('lun'), más viejo -> dd/mm/aa.
- */
 const CARRILES: Carril[] = ['rojo', 'amarillo', 'azul', 'verde']
 
 const CARRIL_UI: Record<Carril, {
@@ -130,6 +126,10 @@ const CARRIL_UI: Record<Carril, {
     },
 }
 
+/**
+ * Marca de tiempo estilo WhatsApp para la lista de chats:
+ * hoy -> hora (11:19), ayer -> 'Ayer', esta semana -> día corto ('lun'), más viejo -> dd/mm/aa.
+ */
 function formatFechaChat(iso: string): string {
     const d = new Date(iso)
     const inicioDia = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime()
@@ -366,7 +366,9 @@ export function ChatInboxView({
                 (payload) => {
                     if (payload.eventType === 'UPDATE') {
                         const updated = payload.new as WhatsAppConversacionRow
-                        setConversaciones(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated } : c))
+                        // payload.new es la fila cruda: no trae el join `asignado`, así que
+                        // preservamos el que ya teníamos para no perder el nombre del operador.
+                        setConversaciones(prev => prev.map(c => c.id === updated.id ? { ...c, ...updated, asignado: c.asignado } : c))
                     } else if (payload.eventType === 'INSERT') {
                         const inserted = payload.new as WhatsAppConversacionRow
                         setConversaciones(prev => [inserted, ...prev])
@@ -421,7 +423,8 @@ export function ChatInboxView({
             setConversaciones(prev => prev.map(c => c.id === conversacionActivaId ? {
                 ...c,
                 estado: 'HUMANO_ATENDIENDO',
-                asignado_a: currentUsuario.id
+                asignado_a: currentUsuario.id,
+                asignado: { id: currentUsuario.id, nombre: currentUsuario.nombre, apellido: currentUsuario.apellido }
             } : c))
         }
     }
@@ -475,7 +478,8 @@ export function ChatInboxView({
             setConversaciones(prev => prev.map(c => c.id === conversacionActivaId ? {
                 ...c,
                 estado: 'HUMANO_ATENDIENDO',
-                asignado_a: currentUsuario.id
+                asignado_a: currentUsuario.id,
+                asignado: { id: currentUsuario.id, nombre: currentUsuario.nombre, apellido: currentUsuario.apellido }
             } : c))
             setTimeout(() => scrollToBottom('smooth'), 50)
         }
@@ -543,7 +547,8 @@ export function ChatInboxView({
                 setConversaciones(prev => prev.map(c => c.id === conversacionActivaId ? {
                     ...c,
                     estado: nuevoEstado,
-                    asignado_a: nuevoEstado === 'BOT' ? null : c.asignado_a
+                    asignado_a: nuevoEstado === 'BOT' ? null : c.asignado_a,
+                    asignado: nuevoEstado === 'BOT' ? null : c.asignado
                 } : c))
             } else {
                 toast.error('Error al actualizar estado: ' + res.error)
@@ -562,7 +567,8 @@ export function ChatInboxView({
                 setConversaciones(prev => prev.map(c => c.id === conversacionActivaId ? {
                     ...c,
                     estado: 'HUMANO_ATENDIENDO',
-                    asignado_a: currentUsuario.id
+                    asignado_a: currentUsuario.id,
+                    asignado: { id: currentUsuario.id, nombre: currentUsuario.nombre, apellido: currentUsuario.apellido }
                 } : c))
             } else {
                 toast.error('Error al tomar chat: ' + res.error)
@@ -807,7 +813,9 @@ export function ChatInboxView({
                         carrilesVisibles.map(k => {
                             const items = porCarril[k]
                             if (items.length === 0) return null
-                            const abierto = !colapsados[k]
+                            // Si el filtro activo ES este carril, lo mostramos siempre expandido
+                            // (no tiene sentido ver un único grupo colapsado al filtrar por él).
+                            const abierto = filtro === k ? true : !colapsados[k]
                             return (
                                 <div key={k}>
                                     <button

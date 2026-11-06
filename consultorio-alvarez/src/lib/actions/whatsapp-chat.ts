@@ -75,8 +75,6 @@ export async function getConversaciones(filtro: 'todos' | 'pendientes' | 'mis_ch
             .from('whatsapp_conversaciones')
             .select(`
                 *,
-                prioridad,
-                motivo,
                 paciente:pacientes(id, nombre, apellido, dni, telefono, foto_url),
                 asignado:usuarios(id, nombre, apellido, avatar_url)
             `)
