@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
+import { motion, useReducedMotion } from 'framer-motion'
 import { Search, Plus, Phone, Mail, User, Pencil, Trash, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { GlassButton } from '@/components/ui/glass-button'
@@ -309,7 +309,8 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
                 </motion.div>
             ) : (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="grid gap-1.5 sm:gap-2">
-                    <AnimatePresence initial={false}>
+                    {/* Solo animación de entrada (stagger). Sin exit: en una lista que se filtra
+                        en vivo, el exit deja filas fantasma clickeables y saltos de alto. */}
                     {displayedPacientes.map((p: any, index: number) => {
                         const iniciales = `${p.nombre.charAt(0)}${p.apellido.charAt(0)}`
 
@@ -318,7 +319,6 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
                                 key={p.id}
                                 initial={reduce ? false : { opacity: 0, y: 6 }}
                                 animate={{ opacity: 1, y: 0 }}
-                                exit={reduce ? undefined : { opacity: 0 }}
                                 transition={{ duration: 0.2, delay: Math.min(index, 8) * 0.025, ease: [0.22, 1, 0.36, 1] }}
                             >
                             <div
@@ -401,7 +401,6 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
                             </motion.div>
                         )
                     })}
-                    </AnimatePresence>
                 </motion.div>
             )}
 
