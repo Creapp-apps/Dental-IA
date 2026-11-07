@@ -52,37 +52,40 @@ const GRUPOS: {
     edge: string
     head: string
     badge: string
-    verLabel: string
 }[] = [
     {
         id: 'urgente', titulo: '🔴 Urgente — responder ya', defaultColapsado: false,
         edge: 'bg-rose-500',
         head: 'bg-rose-500/10 text-rose-600 dark:text-rose-300',
         badge: 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30',
-        verLabel: 'Ver en mensajes',
     },
     {
         id: 'requiere_respuesta', titulo: '🟡 Requiere respuesta', defaultColapsado: false,
         edge: 'bg-amber-500',
         head: 'bg-amber-500/10 text-amber-600 dark:text-amber-300',
         badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30',
-        verLabel: 'Ver en mensajes',
     },
     {
         id: 'agenda', titulo: '🟢 Agenda (operativo)', defaultColapsado: true,
         edge: 'bg-emerald-500',
         head: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
         badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30',
-        verLabel: 'Ver en agenda',
     },
     {
         id: 'sistema', titulo: '⚪ Sistema', defaultColapsado: true,
         edge: 'bg-slate-400',
         head: 'bg-slate-500/10 text-slate-600 dark:text-slate-300',
         badge: 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30',
-        verLabel: 'Ver',
     },
 ]
+
+// Rótulo del link derivado del DESTINO real (no del grupo): una alerta urgente que
+// referencia un turno va a la Agenda, así que debe decir "Ver en agenda".
+function verLabelDeRuta(ruta: string): string {
+    if (ruta.startsWith('/mensajes')) return 'Ver en mensajes'
+    if (ruta.startsWith('/agenda')) return 'Ver en agenda'
+    return 'Ver'
+}
 
 // Clasifica una notificación en grupo + etiqueta. Para filas viejas sin prioridad/motivo
 // (pre-backfill) cae a un sniff por título, para no perder las urgencias.
@@ -220,7 +223,7 @@ export function DashboardLiveAlerts() {
                             </button>
                         </div>
 
-                        <div className="px-2.5 sm:px-3 pb-2.5 sm:pb-3 flex flex-col gap-3 sm:max-h-[460px] sm:overflow-y-auto">
+                        <div className="px-2.5 sm:px-3 pb-2.5 sm:pb-3 flex flex-col gap-3 max-h-[70vh] overflow-y-auto sm:max-h-[460px]">
                             {gruposVisibles.map(g => {
                                 const items = porGrupo[g.id]
                                 const abierto = filtro === g.id ? true : !colapsados[g.id]
@@ -246,7 +249,8 @@ export function DashboardLiveAlerts() {
                                         {abierto && (
                                             <div className="flex flex-col gap-2 p-2">
                                                 {items.map(({ notif, etiqueta }, i) => {
-                                                    const grupo = g.id
+                                                    const ruta = rutaNotificacion(g.id, notif.referencia_id, notif.tipo)
+                                                    const verLabel = verLabelDeRuta(ruta)
                                                     return (
                                                         <motion.div
                                                             key={notif.id}
@@ -259,7 +263,7 @@ export function DashboardLiveAlerts() {
                                                                 type="button"
                                                                 onClick={() => {
                                                                     markAsRead(notif.id)
-                                                                    router.push(rutaNotificacion(grupo, notif.referencia_id))
+                                                                    router.push(ruta)
                                                                 }}
                                                                 className="w-full flex text-left rounded-lg border border-border/60 bg-foreground/[0.03] overflow-hidden transition-colors hover:bg-foreground/[0.07]"
                                                             >
@@ -281,7 +285,7 @@ export function DashboardLiveAlerts() {
                                                                             {formatTimeAgo(notif.created_at)}
                                                                         </span>
                                                                         <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-extrabold text-primary">
-                                                                            {g.verLabel} <ArrowRight className="h-3 w-3" />
+                                                                            {verLabel} <ArrowRight className="h-3 w-3" />
                                                                         </span>
                                                                     </span>
                                                                 </span>

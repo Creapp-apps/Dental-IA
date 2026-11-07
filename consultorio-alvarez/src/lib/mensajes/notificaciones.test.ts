@@ -35,6 +35,12 @@ describe('rutaNotificacion', () => {
     test('agenda sin referencia va a agenda', () => {
         expect(rutaNotificacion('agenda', null)).toBe('/agenda')
     })
+    test('urgente que referencia un turno (turno_nuevo) va a agenda, no a mensajes', () => {
+        expect(rutaNotificacion('urgente', 't1', 'turno_nuevo')).toBe('/agenda?turno=t1')
+    })
+    test('urgente de conversación (turno_reprogramado) abre el chat', () => {
+        expect(rutaNotificacion('urgente', 'c1', 'turno_reprogramado')).toBe('/mensajes?c=c1')
+    })
 })
 
 describe('etiquetaNotificacion', () => {

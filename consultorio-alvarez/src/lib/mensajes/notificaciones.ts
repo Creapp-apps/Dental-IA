@@ -52,11 +52,19 @@ export function etiquetaNotificacion(prioridad: Prioridad | null, motivo: string
 /**
  * A dónde navega la notificación: las de conversación abren el chat en Mensajes
  * (`referencia_id` = id de conversación), las de turno abren la Agenda.
+ *
+ * El grupo (color/prioridad) y el destino son ejes distintos: una alerta puede ser
+ * urgente (roja) pero referenciar un turno (ej. "turno de guardia agendado"), y debe ir
+ * a la Agenda, no a un chat inexistente. Por eso el `tipo` (que referencia un turno)
+ * manda sobre el grupo al elegir destino.
  */
-export function rutaNotificacion(grupo: GrupoAlerta, referenciaId: string | null): string {
+export function rutaNotificacion(grupo: GrupoAlerta, referenciaId: string | null, tipo?: string | null): string {
+    const aAgenda = referenciaId ? `/agenda?turno=${referenciaId}` : '/agenda'
+    // Tipos que siempre referencian un turno → Agenda, sea cual sea el grupo.
+    if (tipo === 'turno_nuevo' || tipo === 'turno_confirmado' || tipo === 'turno_cancelado') return aAgenda
+    if (grupo === 'agenda') return aAgenda
     if (grupo === 'urgente' || grupo === 'requiere_respuesta') {
         return referenciaId ? `/mensajes?c=${referenciaId}` : '/mensajes'
     }
-    if (grupo === 'agenda') return referenciaId ? `/agenda?turno=${referenciaId}` : '/agenda'
     return '/dashboard'
 }
