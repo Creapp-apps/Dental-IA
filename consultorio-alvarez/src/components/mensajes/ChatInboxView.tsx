@@ -29,7 +29,6 @@ import {
     Calendar, 
     Sparkles, 
     RefreshCw,
-    ChevronRight,
     ChevronDown,
     ChevronLeft,
     MessageSquare,
@@ -43,6 +42,7 @@ import {
 } from 'lucide-react'
 import type { GrabadorVoz } from '@/lib/audio/grabador-voz'
 import { cn } from '@/lib/utils'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { toast } from 'sonner'
 import Link from 'next/link'
 
@@ -216,6 +216,7 @@ export function ChatInboxView({
     )
     const [mensajes, setMensajes] = useState<WhatsAppMensajeRow[]>([])
     const [isLoadingMensajes, setIsLoadingMensajes] = useState<boolean>(false)
+    const reduce = useReducedMotion()
     const [filtro, setFiltro] = useState<'todos' | Carril | 'cerrados'>('todos')
     const [cerradas, setCerradas] = useState<WhatsAppConversacionRow[] | null>(null)
     const [cargandoCerradas, setCargandoCerradas] = useState(false)
@@ -623,16 +624,19 @@ export function ChatInboxView({
         ? cerradasFiltradas.length > 0
         : carrilesVisibles.some(k => porCarril[k].length > 0)
 
-    const renderFila = (conv: WhatsAppConversacionRow, carril: Carril | null, etiqueta: string) => {
+    const renderFila = (conv: WhatsAppConversacionRow, carril: Carril | null, etiqueta: string, index = 0) => {
                             const isSelected = conv.id === conversacionActivaId
-                            const nombre = conv.paciente 
+                            const nombre = conv.paciente
                                 ? `${conv.paciente.nombre} ${conv.paciente.apellido}`
                                 : conv.nombre_contacto || `+${conv.telefono}`
                             const iniciales = nombre.slice(0, 2).toUpperCase()
 
                             return (
-                                <button
+                                <motion.button
                                     key={conv.id}
+                                    initial={reduce ? false : { opacity: 0, y: 6 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.22, delay: Math.min(index, 6) * 0.03, ease: [0.22, 1, 0.36, 1] }}
                                     onClick={() => setConversacionActivaId(conv.id)}
                                     className={cn(
                                         'w-full p-3.5 text-left flex items-start gap-3 transition-colors relative hover:bg-accent/40',
@@ -686,7 +690,7 @@ export function ChatInboxView({
                                             )}
                                         </div>
                                     </div>
-                                </button>
+                                </motion.button>
                             )
     }
 
@@ -795,52 +799,81 @@ export function ChatInboxView({
 
                 {/* Lista de Conversaciones (grupos colapsables por carril) */}
                 <div className="flex-1 overflow-y-auto">
-                    {filtro === 'cerrados' && cargandoCerradas && cerradas === null ? (
-                        <div className="p-8 text-center text-xs text-muted-foreground">Cargando cerrados...</div>
-                    ) : !hayResultados ? (
-                        <div className="p-8 text-center space-y-2">
-                            <Bot className="h-8 w-8 mx-auto text-muted-foreground/40" />
-                            <p className="text-sm font-semibold text-muted-foreground">No hay conversaciones</p>
-                            <p className="text-xs text-muted-foreground/70">
-                                Cuando los pacientes escriban a WhatsApp, sus mensajes aparecerán acá en tiempo real.
-                            </p>
-                        </div>
-                    ) : filtro === 'cerrados' ? (
-                        <div className="divide-y divide-border/60">
-                            {cerradasFiltradas.map(conv => renderFila(conv, null, ''))}
-                        </div>
-                    ) : (
-                        carrilesVisibles.map(k => {
-                            const items = porCarril[k]
-                            if (items.length === 0) return null
-                            // Si el filtro activo ES este carril, lo mostramos siempre expandido
-                            // (no tiene sentido ver un único grupo colapsado al filtrar por él).
-                            const abierto = filtro === k ? true : !colapsados[k]
-                            return (
-                                <div key={k}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setColapsados(prev => ({ ...prev, [k]: !prev[k] }))}
-                                        aria-expanded={abierto}
-                                        className={cn(
-                                            'w-full px-3.5 py-2 flex items-center gap-2 text-xs font-bold border-y sticky top-0 z-10 backdrop-blur-sm',
-                                            CARRIL_UI[k].header
-                                        )}
-                                    >
-                                        <span className={cn('h-2 w-2 rounded-full shrink-0', CARRIL_UI[k].punto)} />
-                                        <span className="flex-1 text-left truncate">{CARRIL_UI[k].titulo}</span>
-                                        <span className="font-mono opacity-80">{items.length}</span>
-                                        {abierto ? <ChevronDown className="h-4 w-4 shrink-0" /> : <ChevronRight className="h-4 w-4 shrink-0" />}
-                                    </button>
-                                    {abierto && (
-                                        <div className="divide-y divide-border/60">
-                                            {items.map(({ conv, etiqueta }) => renderFila(conv, k, etiqueta))}
-                                        </div>
-                                    )}
+                    {/* Crossfade al cambiar de filtro: la lista entra en cascada, no de golpe. */}
+                    <AnimatePresence mode="wait" initial={false}>
+                        <motion.div
+                            key={`${filtro}|${filtroFecha}`}
+                            initial={reduce ? false : { opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={reduce ? undefined : { opacity: 0 }}
+                            transition={{ duration: 0.16, ease: 'easeOut' }}
+                        >
+                            {filtro === 'cerrados' && cargandoCerradas && cerradas === null ? (
+                                <div className="p-8 text-center text-xs text-muted-foreground">Cargando cerrados...</div>
+                            ) : !hayResultados ? (
+                                <div className="p-8 text-center space-y-2">
+                                    <Bot className="h-8 w-8 mx-auto text-muted-foreground/40" />
+                                    <p className="text-sm font-semibold text-muted-foreground">No hay conversaciones</p>
+                                    <p className="text-xs text-muted-foreground/70">
+                                        Cuando los pacientes escriban a WhatsApp, sus mensajes aparecerán acá en tiempo real.
+                                    </p>
                                 </div>
-                            )
-                        })
-                    )}
+                            ) : filtro === 'cerrados' ? (
+                                <div className="divide-y divide-border/60">
+                                    {cerradasFiltradas.map((conv, i) => renderFila(conv, null, '', i))}
+                                </div>
+                            ) : (
+                                carrilesVisibles.map(k => {
+                                    const items = porCarril[k]
+                                    if (items.length === 0) return null
+                                    // Si el filtro activo ES este carril, lo mostramos siempre expandido
+                                    // (no tiene sentido ver un único grupo colapsado al filtrar por él).
+                                    const abierto = filtro === k ? true : !colapsados[k]
+                                    return (
+                                        <div key={k}>
+                                            <button
+                                                type="button"
+                                                onClick={() => setColapsados(prev => ({ ...prev, [k]: !prev[k] }))}
+                                                aria-expanded={abierto}
+                                                className={cn(
+                                                    'w-full px-3.5 py-2 flex items-center gap-2 text-xs font-bold border-y sticky top-0 z-10 backdrop-blur-sm',
+                                                    CARRIL_UI[k].header
+                                                )}
+                                            >
+                                                <span className={cn('h-2 w-2 rounded-full shrink-0', CARRIL_UI[k].punto)} />
+                                                <span className="flex-1 text-left truncate">{CARRIL_UI[k].titulo}</span>
+                                                <span className="font-mono opacity-80">{items.length}</span>
+                                                <motion.span
+                                                    animate={{ rotate: abierto ? 0 : -90 }}
+                                                    transition={{ duration: reduce ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+                                                    className="shrink-0"
+                                                >
+                                                    <ChevronDown className="h-4 w-4" />
+                                                </motion.span>
+                                            </button>
+                                            {/* Colapso fluido: height + opacity en vez de corte seco. */}
+                                            <AnimatePresence initial={false}>
+                                                {abierto && (
+                                                    <motion.div
+                                                        key="body"
+                                                        initial={{ height: 0, opacity: 0 }}
+                                                        animate={{ height: 'auto', opacity: 1 }}
+                                                        exit={{ height: 0, opacity: 0 }}
+                                                        transition={{ duration: reduce ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+                                                        className="overflow-hidden"
+                                                    >
+                                                        <div className="divide-y divide-border/60">
+                                                            {items.map(({ conv, etiqueta }, i) => renderFila(conv, k, etiqueta, i))}
+                                                        </div>
+                                                    </motion.div>
+                                                )}
+                                            </AnimatePresence>
+                                        </div>
+                                    )
+                                })
+                            )}
+                        </motion.div>
+                    </AnimatePresence>
                 </div>
             </div>
 

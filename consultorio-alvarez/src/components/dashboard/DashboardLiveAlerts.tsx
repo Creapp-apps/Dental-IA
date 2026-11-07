@@ -223,7 +223,16 @@ export function DashboardLiveAlerts() {
                             </button>
                         </div>
 
-                        <div className="px-2.5 sm:px-3 pb-2.5 sm:pb-3 flex flex-col gap-3 max-h-[70vh] overflow-y-auto sm:max-h-[460px]">
+                        <div className="px-2.5 sm:px-3 pb-2.5 sm:pb-3 max-h-[70vh] overflow-y-auto sm:max-h-[460px]">
+                          <AnimatePresence mode="wait" initial={false}>
+                           <motion.div
+                                key={filtro}
+                                initial={reduce ? false : { opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={reduce ? undefined : { opacity: 0 }}
+                                transition={{ duration: 0.16, ease: 'easeOut' }}
+                                className="flex flex-col gap-3"
+                           >
                             {gruposVisibles.map(g => {
                                 const items = porGrupo[g.id]
                                 const abierto = filtro === g.id ? true : !colapsados[g.id]
@@ -241,12 +250,26 @@ export function DashboardLiveAlerts() {
                                             <span className="shrink-0 text-xs font-extrabold px-2 py-0.5 rounded-full bg-background/70 border border-border/50">
                                                 {items.length}
                                             </span>
-                                            <motion.span animate={{ rotate: abierto ? 0 : -90 }} className="shrink-0 opacity-70">
+                                            <motion.span
+                                                animate={{ rotate: abierto ? 0 : -90 }}
+                                                transition={{ duration: reduce ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+                                                className="shrink-0 opacity-70"
+                                            >
                                                 <ChevronDown className="h-3.5 w-3.5" />
                                             </motion.span>
                                         </button>
 
+                                        {/* Colapso fluido del grupo: height + opacity. */}
+                                        <AnimatePresence initial={false}>
                                         {abierto && (
+                                            <motion.div
+                                                key="body"
+                                                initial={{ height: 0, opacity: 0 }}
+                                                animate={{ height: 'auto', opacity: 1 }}
+                                                exit={{ height: 0, opacity: 0 }}
+                                                transition={{ duration: reduce ? 0 : 0.28, ease: [0.22, 1, 0.36, 1] }}
+                                                className="overflow-hidden"
+                                            >
                                             <div className="flex flex-col gap-2 p-2">
                                                 {items.map(({ notif, etiqueta }, i) => {
                                                     const ruta = rutaNotificacion(g.id, notif.referencia_id, notif.tipo)
@@ -302,10 +325,14 @@ export function DashboardLiveAlerts() {
                                                     )
                                                 })}
                                             </div>
+                                            </motion.div>
                                         )}
+                                        </AnimatePresence>
                                     </div>
                                 )
                             })}
+                           </motion.div>
+                          </AnimatePresence>
                         </div>
                     </motion.div>
                 )}
