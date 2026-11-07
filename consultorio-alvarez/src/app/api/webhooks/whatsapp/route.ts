@@ -568,6 +568,8 @@ export async function POST(request: NextRequest) {
                         mensaje: notifMensaje,
                         tipo: notifTipo,
                         referencia_id: turnoIdToUpdate,
+                        prioridad: 'verde',
+                        motivo: notifTipo === 'turno_confirmado' ? 'turno_confirmado' : notifTipo === 'turno_cancelado' ? 'turno_cancelado' : 'turno_reprogramado_real',
                         leida: false
                     })
                     console.log(`🔔 Notificación realtime registrada: "${notifTitulo}"`)
@@ -655,6 +657,8 @@ export async function POST(request: NextRequest) {
                     mensaje: `Paciente (+${cleanPhone}): "${(motivoTexto || '').slice(0, 120)}"`,
                     tipo: 'turno_reprogramado',
                     referencia_id: conversacionId || '',
+                    prioridad: 'rojo',
+                    motivo: 'urgencia',
                     leida: false
                 })
                 try {
@@ -680,6 +684,8 @@ export async function POST(request: NextRequest) {
                     mensaje: `El paciente (+${cleanPhone}) activó la Guardia Odontológica por WhatsApp.`,
                     tipo: 'turno_reprogramado',
                     referencia_id: conversacionId || '',
+                    prioridad: 'rojo',
+                    motivo: 'guardia',
                     leida: false
                 })
 
@@ -727,6 +733,8 @@ export async function POST(request: NextRequest) {
                     mensaje: `El paciente (+${cleanPhone}) solicitó atención personalizada por WhatsApp.`,
                     tipo: 'turno_reprogramado',
                     referencia_id: conversacionId || '',
+                    prioridad: 'amarillo',
+                    motivo: 'pide_recepcion',
                     leida: false
                 })
 
@@ -841,6 +849,8 @@ export async function POST(request: NextRequest) {
                         mensaje: `Guardia: se reservó un sobreturno prioritario para +${cleanPhone} el ${fechaLegible} a las ${hora} hs. Revisar y confirmar con el paciente.`,
                         tipo: 'turno_nuevo',
                         referencia_id: agend.turnoId,
+                        prioridad: 'rojo',
+                        motivo: 'guardia',
                         leida: false
                     })
                     try {
@@ -857,6 +867,8 @@ export async function POST(request: NextRequest) {
                         mensaje: `El paciente (+${cleanPhone}) eligió el horario de guardia ${fechaLegible} a las ${hora} hs, pero no se pudo agendar automático (${agend.motivo}). Cargar el turno a mano.`,
                         tipo: 'turno_reprogramado',
                         referencia_id: conversacionId || '',
+                        prioridad: 'rojo',
+                        motivo: 'guardia',
                         leida: false
                     })
                     try {
@@ -930,6 +942,8 @@ export async function POST(request: NextRequest) {
                                 mensaje: `El paciente (+${cleanPhone}) escribió de nuevo y espera atención: "${(textBody || buttonTextFallback || '').slice(0, 120)}"`,
                                 tipo: 'turno_reprogramado',
                                 referencia_id: conversacionId,
+                                prioridad: 'amarillo',
+                                motivo: 'revisar',
                                 leida: false
                             })
                             const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
@@ -1006,6 +1020,8 @@ export async function POST(request: NextRequest) {
                             mensaje: `Paciente (+${cleanPhone}) escribió varias veces sin que el bot lo entienda. Último: "${(textBody || buttonTextFallback || '').slice(0, 120)}"`,
                             tipo: 'turno_reprogramado',
                             referencia_id: conversacionId || '',
+                            prioridad: 'amarillo',
+                            motivo: 'bot_no_entendio',
                             leida: false
                         })
                         // Aviso proactivo: el paciente insistió y el bot no entendió → que recepción se entere.

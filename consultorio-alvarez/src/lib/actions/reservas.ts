@@ -698,6 +698,8 @@ export async function crearReservaPublica(data: {
         mensaje: `${nombrePacienteReserva} reservó un turno desde la página pública el día ${diaSemana} ${fechaFormateada} a las ${data.hora}.`,
         tipo: 'turno_nuevo',
         referencia_id: turnoData?.id,
+        prioridad: 'verde',
+        motivo: 'reserva_web',
     })
 
     // --- DISPARAR NOTIFICACION PUSH A ADMINISTRACIÓN / SECRETARIAS ---
@@ -910,6 +912,7 @@ export async function notificarDemoraTurno(turnoId: string, demora: number, mens
         mensaje: `Se notificó a ${nombrePacienteDemora} de una demora de ${demora} min (${metodo}).`,
         tipo: 'recordatorio',
         referencia_id: turno.id,
+        motivo: 'sistema',
     })
 
     if (metodo === 'OFICIAL') {

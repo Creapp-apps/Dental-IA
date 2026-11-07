@@ -737,6 +737,8 @@ export async function procesarMensajeAutonomo({
                 mensaje: `El paciente (+${cleanPhone}) no quiere los próximos horarios y pidió: "${textBody.slice(0, 120)}". Coordinar fecha por chat.`,
                 tipo: 'turno_reprogramado',
                 referencia_id: conversacionId || '',
+                prioridad: 'amarillo',
+                motivo: 'reprogramar',
                 leida: false
             })
             try {
@@ -936,6 +938,8 @@ export async function procesarMensajeAutonomo({
                 : `El paciente (+${cleanPhone}) envió una foto/estudio por WhatsApp. Revisar en mensajes.`,
             tipo: 'turno_reprogramado',
             referencia_id: conversacionId || '',
+            prioridad: 'amarillo',
+            motivo: esNotaVoz ? 'adjunto_audio' : (textBody.includes('[Documento adjunto]') || textBody.includes('📄')) ? 'adjunto_documento' : 'adjunto_foto',
             leida: false
         })
 
@@ -991,6 +995,8 @@ export async function procesarMensajeAutonomo({
             mensaje: `El contacto (+${cleanPhone}) indica que el número no corresponde: "${textBody.slice(0, 120)}". Revisar/corregir el teléfono del paciente para no seguir contactándolo.`,
             tipo: 'turno_reprogramado',
             referencia_id: conversacionId || '',
+            prioridad: 'amarillo',
+            motivo: 'numero_equivocado',
             leida: false
         })
         await enviarTextoWhatsApp(creds, cleanPhone,
@@ -1131,6 +1137,8 @@ export async function procesarMensajeAutonomo({
             mensaje: `Paciente (+${cleanPhone}) escribió: "${textBody.slice(0, 120)}"`,
             tipo: 'turno_reprogramado',
             referencia_id: conversacionId || '',
+            prioridad: 'amarillo',
+            motivo: 'cambio_cancelacion',
             leida: false
         })
         await enviarTextoWhatsApp(creds, cleanPhone,
@@ -1180,6 +1188,8 @@ export async function procesarMensajeAutonomo({
             mensaje: `El paciente (+${cleanPhone}) informó un dato de salud/medicación: "${textBody.slice(0, 160)}". Que lo vea el profesional antes del turno.`,
             tipo: 'turno_reprogramado',
             referencia_id: conversacionId || '',
+            prioridad: 'amarillo',
+            motivo: 'dato_clinico',
             leida: false
         })
         try {
@@ -1228,6 +1238,8 @@ export async function procesarMensajeAutonomo({
             mensaje: `Paciente (+${cleanPhone}) solicita turno especial: "${textBody.slice(0, 100)}"`,
             tipo: 'turno_reprogramado',
             referencia_id: conversacionId || '',
+            prioridad: 'amarillo',
+            motivo: 'turno_especial',
             leida: false
         })
 
@@ -1597,6 +1609,8 @@ export async function procesarMensajeAutonomo({
             mensaje: `El paciente (+${cleanPhone}) expresó un reclamo o disconformidad: "${textBody.slice(0, 100)}"`,
             tipo: 'turno_reprogramado',
             referencia_id: conversacionId || '',
+            prioridad: 'rojo',
+            motivo: 'queja',
             leida: false
         })
 
@@ -1629,6 +1643,8 @@ export async function procesarMensajeAutonomo({
             mensaje: `El paciente (+${cleanPhone}) solicitó atención personalizada por WhatsApp.`,
             tipo: 'turno_reprogramado',
             referencia_id: conversacionId || '',
+            prioridad: 'amarillo',
+            motivo: 'pide_recepcion',
             leida: false
         })
 
@@ -1691,6 +1707,8 @@ export async function procesarMensajeAutonomo({
                 mensaje: `El paciente (+${cleanPhone}) escribió: "${textBody.slice(0, 160)}". Coordinar la fecha del turno por chat.`,
                 tipo: 'turno_reprogramado',
                 referencia_id: conversacionId || '',
+                prioridad: 'amarillo',
+                motivo: 'reprogramar',
                 leida: false
             })
             try {

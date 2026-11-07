@@ -99,6 +99,7 @@ export async function confirmarSeniaPorPago(
             mensaje: `${pacienteNombre} abonó la seña de $${montoAbonado.toLocaleString('es-AR')} para su turno. Turno confirmado automáticamente.`,
             tipo: 'turno_confirmado',
             referencia_id: turnoId,
+            motivo: 'pago_senia',
             leida: false,
         })
     } catch (notifErr) {
