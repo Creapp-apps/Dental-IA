@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import { Search, Plus, Phone, Mail, User, Pencil, Trash, Loader2 } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { GlassButton } from '@/components/ui/glass-button'
@@ -140,6 +140,7 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
     // Si hay búsqueda activa:
     // 1. Prioridad: resultados locales en memoria a 0ms
     // 2. Si no hay locales aún, unir con serverResults
+    const reduce = useReducedMotion()
     const displayedPacientes = useMemo(() => {
         const term = activeQuery.trim()
         if (!term) return allLoadedPacientes
@@ -308,12 +309,19 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
                 </motion.div>
             ) : (
                 <motion.div custom={1} variants={sectionVariants} initial="hidden" animate="visible" className="grid gap-1.5 sm:gap-2">
-                    {displayedPacientes.map((p: any) => {
+                    <AnimatePresence initial={false}>
+                    {displayedPacientes.map((p: any, index: number) => {
                         const iniciales = `${p.nombre.charAt(0)}${p.apellido.charAt(0)}`
 
                         return (
-                            <div
+                            <motion.div
                                 key={p.id}
+                                initial={reduce ? false : { opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={reduce ? undefined : { opacity: 0 }}
+                                transition={{ duration: 0.2, delay: Math.min(index, 8) * 0.025, ease: [0.22, 1, 0.36, 1] }}
+                            >
+                            <div
                                 className="flex items-center gap-2.5 sm:gap-4 glass rounded-xl px-3 py-2.5 sm:px-4 sm:py-3.5 shadow-glass transition-all duration-200 group relative overflow-hidden hover:shadow-glass-lg hover:-translate-y-0.5 hover:border-primary/40 active:scale-[0.99]"
                             >
                                 {/* Link directo de apertura instantánea 0ms */}
@@ -390,8 +398,10 @@ export function PacientesListView({ pacientes, initialQuery, totalCount, esProfe
                                     </div>
                                 )}
                             </div>
+                            </motion.div>
                         )
                     })}
+                    </AnimatePresence>
                 </motion.div>
             )}
 

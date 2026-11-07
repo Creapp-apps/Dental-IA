@@ -879,7 +879,13 @@ export function ChatInboxView({
 
             {/* ── COLUMNA DERECHA: CHAT ACTIVO & MULTIATENCIÓN ── */}
             {conversacionActiva ? (
-                <div className="flex-1 min-w-0 flex flex-col bg-background/50 overflow-x-hidden">
+                <motion.div
+                    key={conversacionActiva.id}
+                    initial={reduce ? false : { opacity: 0, x: 12 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+                    className="flex-1 min-w-0 flex flex-col bg-background/50 overflow-x-hidden"
+                >
                     {/* Header del Chat */}
                     <div className="px-3 sm:px-5 py-3 sm:py-3.5 border-b border-border bg-card/40 flex items-center justify-between gap-2 sm:gap-4">
                         <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -962,30 +968,50 @@ export function ChatInboxView({
                         </div>
                     </div>
 
-                    {/* Aviso si el Bot está respondiendo */}
-                    {conversacionActiva.estado === 'BOT' && (
-                        <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
-                            <span className="flex items-center gap-2">
-                                <Bot className="h-4 w-4 text-emerald-600 animate-spin-slow shrink-0" />
-                                <span>El bot de guardia y notificaciones está activo para este número. Al escribir, tomarás el control manual.</span>
-                            </span>
-                        </div>
-                    )}
-
-                    {conversacionActiva.estado === 'HUMANO_PENDIENTE' && (
-                        <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between text-xs text-amber-900 dark:text-amber-200">
-                            <span className="flex items-center gap-2 font-medium">
-                                <AlertCircle className="h-4 w-4 text-amber-600 animate-bounce shrink-0" />
-                                <span>El paciente solicitó atención urgente / recepcionista. Por favor respondé para asistirle.</span>
-                            </span>
-                            <button
-                                onClick={handleTomarChat}
-                                className="underline font-bold hover:text-amber-950 dark:hover:text-white cursor-pointer"
+                    {/* Avisos de estado — bajan/suben con el colapso en vez de aparecer de golpe. */}
+                    <AnimatePresence initial={false}>
+                        {conversacionActiva.estado === 'BOT' && (
+                            <motion.div
+                                key="banner-bot"
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: reduce ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
+                                className="overflow-hidden"
                             >
-                                Atender ahora
-                            </button>
-                        </div>
-                    )}
+                                <div className="bg-emerald-500/10 border-b border-emerald-500/20 px-4 py-2 flex items-center justify-between text-xs text-emerald-800 dark:text-emerald-300">
+                                    <span className="flex items-center gap-2">
+                                        <Bot className="h-4 w-4 text-emerald-600 animate-spin-slow shrink-0" />
+                                        <span>El bot de guardia y notificaciones está activo para este número. Al escribir, tomarás el control manual.</span>
+                                    </span>
+                                </div>
+                            </motion.div>
+                        )}
+
+                        {conversacionActiva.estado === 'HUMANO_PENDIENTE' && (
+                            <motion.div
+                                key="banner-pendiente"
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: 'auto', opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: reduce ? 0 : 0.26, ease: [0.22, 1, 0.36, 1] }}
+                                className="overflow-hidden"
+                            >
+                                <div className="bg-amber-500/15 border-b border-amber-500/30 px-4 py-2 flex items-center justify-between text-xs text-amber-900 dark:text-amber-200">
+                                    <span className="flex items-center gap-2 font-medium">
+                                        <AlertCircle className="h-4 w-4 text-amber-600 animate-bounce shrink-0" />
+                                        <span>El paciente solicitó atención urgente / recepcionista. Por favor respondé para asistirle.</span>
+                                    </span>
+                                    <button
+                                        onClick={handleTomarChat}
+                                        className="underline font-bold hover:text-amber-950 dark:hover:text-white cursor-pointer"
+                                    >
+                                        Atender ahora
+                                    </button>
+                                </div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
 
                     {/* Feed de Mensajes */}
                     <div className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 space-y-3.5">
@@ -1005,8 +1031,11 @@ export function ChatInboxView({
                                 const isAgente = msg.remitente === 'agente'
 
                                 return (
-                                    <div
+                                    <motion.div
                                         key={msg.id}
+                                        initial={reduce ? false : { opacity: 0, y: 8 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                                         className={cn(
                                             'flex flex-col max-w-[80%] md:max-w-[70%]',
                                             isPaciente ? 'self-start items-start' : 'self-end items-end'
@@ -1049,7 +1078,7 @@ export function ChatInboxView({
 
                                             <div>{msg.contenido}</div>
                                         </div>
-                                    </div>
+                                    </motion.div>
                                 )
                             })
                         )}
@@ -1083,8 +1112,16 @@ export function ChatInboxView({
                             className="hidden"
                             onChange={handleSeleccionarArchivo}
                         />
+                        <AnimatePresence mode="wait" initial={false}>
                         {isRecording ? (
-                            <div className="flex-1 flex items-center gap-3 h-11 px-3 rounded-xl border border-red-500/40 bg-red-500/5">
+                            <motion.div
+                                key="rec"
+                                initial={reduce ? false : { opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={reduce ? undefined : { opacity: 0 }}
+                                transition={{ duration: 0.15, ease: 'easeOut' }}
+                                className="flex-1 flex items-center gap-3 h-11 px-3 rounded-xl border border-red-500/40 bg-red-500/5"
+                            >
                                 <button
                                     type="button"
                                     onClick={handleCancelarGrabacion}
@@ -1110,9 +1147,16 @@ export function ChatInboxView({
                                 >
                                     {isUploading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
                                 </button>
-                            </div>
+                            </motion.div>
                         ) : (
-                            <>
+                            <motion.div
+                                key="input"
+                                initial={reduce ? false : { opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={reduce ? undefined : { opacity: 0 }}
+                                transition={{ duration: 0.15, ease: 'easeOut' }}
+                                className="flex-1 flex items-end gap-2"
+                            >
                                 <button
                                     type="button"
                                     onClick={() => fileInputRef.current?.click()}
@@ -1185,10 +1229,11 @@ export function ChatInboxView({
                                         <Send className="h-4 w-4" />
                                     )}
                                 </button>
-                            </>
+                            </motion.div>
                         )}
+                        </AnimatePresence>
                     </form>
-                </div>
+                </motion.div>
             ) : (
                 <div className="flex-1 hidden md:flex flex-col items-center justify-center text-center p-8 bg-muted/10 space-y-3">
                     <div className="h-16 w-16 rounded-2xl bg-primary/10 text-primary flex items-center justify-center">
