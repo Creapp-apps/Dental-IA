@@ -5,18 +5,18 @@ import { useRouter } from 'next/navigation'
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion'
 import {
     BellRing,
-    RefreshCw,
-    XCircle,
-    CheckCircle2,
-    AlertTriangle,
-    Sparkles,
     CheckCheck,
     ChevronDown,
-    ChevronUp,
     ArrowRight
 } from 'lucide-react'
 import { useNotifications } from '@/components/providers/NotificationProvider'
 import { Notificacion } from '@/types'
+import {
+    grupoNotificacion,
+    etiquetaNotificacion,
+    rutaNotificacion,
+    type GrupoAlerta
+} from '@/lib/mensajes/notificaciones'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -43,77 +43,88 @@ function formatNotificationMessage(text: string) {
     )
 }
 
+// Config visual de cada grupo (orden de arriba hacia abajo). Rojo+amarillo abren;
+// agenda+sistema arrancan colapsados (informativo, no estorban).
+const GRUPOS: {
+    id: GrupoAlerta
+    titulo: string
+    defaultColapsado: boolean
+    edge: string
+    head: string
+    badge: string
+    verLabel: string
+}[] = [
+    {
+        id: 'urgente', titulo: '🔴 Urgente — responder ya', defaultColapsado: false,
+        edge: 'bg-rose-500',
+        head: 'bg-rose-500/10 text-rose-600 dark:text-rose-300',
+        badge: 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30',
+        verLabel: 'Ver en mensajes',
+    },
+    {
+        id: 'requiere_respuesta', titulo: '🟡 Requiere respuesta', defaultColapsado: false,
+        edge: 'bg-amber-500',
+        head: 'bg-amber-500/10 text-amber-600 dark:text-amber-300',
+        badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30',
+        verLabel: 'Ver en mensajes',
+    },
+    {
+        id: 'agenda', titulo: '🟢 Agenda (operativo)', defaultColapsado: true,
+        edge: 'bg-emerald-500',
+        head: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-300',
+        badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30',
+        verLabel: 'Ver en agenda',
+    },
+    {
+        id: 'sistema', titulo: '⚪ Sistema', defaultColapsado: true,
+        edge: 'bg-slate-400',
+        head: 'bg-slate-500/10 text-slate-600 dark:text-slate-300',
+        badge: 'bg-slate-500/15 text-slate-600 dark:text-slate-300 border-slate-500/30',
+        verLabel: 'Ver',
+    },
+]
+
+// Clasifica una notificación en grupo + etiqueta. Para filas viejas sin prioridad/motivo
+// (pre-backfill) cae a un sniff por título, para no perder las urgencias.
+function clasificar(n: Notificacion): { grupo: GrupoAlerta; etiqueta: string } {
+    if (n.prioridad || n.motivo) {
+        return {
+            grupo: grupoNotificacion(n.prioridad, n.motivo),
+            etiqueta: etiquetaNotificacion(n.prioridad, n.motivo),
+        }
+    }
+    const t = (n.titulo || '').toLowerCase()
+    if (t.includes('guardia') || t.includes('urgencia')) return { grupo: 'urgente', etiqueta: '🚨 Urgente' }
+    return { grupo: 'sistema', etiqueta: '🔔 Sistema' }
+}
+
 export function DashboardLiveAlerts() {
     const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications()
-    // En mobile arranca colapsado (no se come el fold); en desktop expandido.
-    // El componente se puebla con datos de cliente, así que el initializer con
-    // window es seguro (en SSR no hay alertas y el componente devuelve null).
     const [isExpanded, setIsExpanded] = useState<boolean>(
         () => typeof window === 'undefined' || window.matchMedia('(min-width: 640px)').matches
     )
-    const [showAllAlerts, setShowAllAlerts] = useState(false)
+    const [filtro, setFiltro] = useState<'todo' | GrupoAlerta>('todo')
+    const [colapsados, setColapsados] = useState<Record<GrupoAlerta, boolean>>({
+        urgente: false, requiere_respuesta: false, agenda: true, sistema: true,
+    })
     const router = useRouter()
     const reduce = useReducedMotion()
 
     const unreadNotifications = notifications.filter(n => !n.leida)
-
     if (unreadNotifications.length === 0) {
         return null
     }
 
-    const displayedAlerts = showAllAlerts ? unreadNotifications : unreadNotifications.slice(0, 3)
-
-    const getNotificationStyle = (tipo: Notificacion['tipo'], titulo?: string) => {
-        // Guardia / urgencia se graban con tipo 'turno_reprogramado' (no hay un
-        // tipo propio en la DB), así que se detectan por el título para no
-        // mostrarlas mal como "Reprogramación solicitada".
-        const t = (titulo || '').toLowerCase()
-        if (t.includes('guardia') || t.includes('urgencia')) {
-            return {
-                icon: <AlertTriangle className="h-4 w-4 text-rose-500" />,
-                edge: 'bg-rose-500',
-                badge: 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30',
-                label: 'Guardia / Urgencia',
-            }
-        }
-        switch (tipo) {
-            case 'turno_reprogramado':
-                return {
-                    icon: <RefreshCw className="h-4 w-4 text-amber-500" />,
-                    edge: 'bg-amber-500',
-                    badge: 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-500/30',
-                    label: 'Reprogramación',
-                }
-            case 'turno_cancelado':
-                return {
-                    icon: <XCircle className="h-4 w-4 text-rose-500" />,
-                    edge: 'bg-rose-500',
-                    badge: 'bg-rose-500/15 text-rose-600 dark:text-rose-300 border-rose-500/30',
-                    label: 'Turno cancelado',
-                }
-            case 'turno_confirmado':
-                return {
-                    icon: <CheckCircle2 className="h-4 w-4 text-emerald-500" />,
-                    edge: 'bg-emerald-500',
-                    badge: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-500/30',
-                    label: 'Confirmación WhatsApp',
-                }
-            case 'turno_nuevo':
-                return {
-                    icon: <Sparkles className="h-4 w-4 text-indigo-500" />,
-                    edge: 'bg-indigo-500',
-                    badge: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-300 border-indigo-500/30',
-                    label: 'Nueva Reserva Web',
-                }
-            default:
-                return {
-                    icon: <AlertTriangle className="h-4 w-4 text-sky-500" />,
-                    edge: 'bg-sky-500',
-                    badge: 'bg-sky-500/15 text-sky-600 dark:text-sky-300 border-sky-500/30',
-                    label: 'Aviso',
-                }
-        }
+    // Agrupar una sola vez.
+    const porGrupo: Record<GrupoAlerta, { notif: Notificacion; etiqueta: string }[]> = {
+        urgente: [], requiere_respuesta: [], agenda: [], sistema: [],
     }
+    for (const n of unreadNotifications) {
+        const { grupo, etiqueta } = clasificar(n)
+        porGrupo[grupo].push({ notif: n, etiqueta })
+    }
+
+    const gruposVisibles = GRUPOS.filter(g => (filtro === 'todo' || filtro === g.id) && porGrupo[g.id].length > 0)
 
     const formatTimeAgo = (dateStr: string) => {
         try {
@@ -123,6 +134,9 @@ export function DashboardLiveAlerts() {
         }
     }
 
+    const toggleColapsado = (id: GrupoAlerta) =>
+        setColapsados(prev => ({ ...prev, [id]: !prev[id] }))
+
     return (
         <motion.div
             initial={{ opacity: 0, y: -10 }}
@@ -130,7 +144,7 @@ export function DashboardLiveAlerts() {
             exit={{ opacity: 0, y: -10 }}
             className="w-full rounded-2xl bg-gradient-to-br from-card/95 to-card/75 border border-primary/20 shadow-xl overflow-hidden backdrop-blur-md"
         >
-            {/* Header: toda la barra abre/cierra. Sobrio, sin animaciones cansadoras. */}
+            {/* Header: abre/cierra todo el panel. */}
             <button
                 type="button"
                 onClick={() => setIsExpanded((v) => !v)}
@@ -153,7 +167,7 @@ export function DashboardLiveAlerts() {
                         </span>
                     </div>
                     <p className="text-[11px] sm:text-xs text-muted-foreground mt-0.5 truncate">
-                        WhatsApp, cancelaciones y reservas en tiempo real.
+                        WhatsApp, agenda y sistema — en tiempo real.
                     </p>
                 </div>
                 <motion.span
@@ -165,7 +179,6 @@ export function DashboardLiveAlerts() {
                 </motion.span>
             </button>
 
-            {/* Lista — se despliega suave. Sin scroll interno en mobile (sólo desktop). */}
             <AnimatePresence initial={false}>
                 {isExpanded && (
                     <motion.div
@@ -175,6 +188,27 @@ export function DashboardLiveAlerts() {
                         transition={{ duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
                         className="overflow-hidden border-t border-border/40"
                     >
+                        {/* Chips de grupo */}
+                        <div className="px-2.5 sm:px-3 pt-2.5 flex gap-1.5 overflow-x-auto scrollbar-none">
+                            {[
+                                { id: 'todo' as const, label: 'Todo', count: unreadNotifications.length },
+                                ...GRUPOS.map(g => ({ id: g.id, label: g.titulo.replace(/^[^\s]+\s/, ''), count: porGrupo[g.id].length })),
+                            ].map((chip) => (
+                                <button
+                                    key={chip.id}
+                                    onClick={() => setFiltro(chip.id)}
+                                    className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11.5px] font-bold border transition-colors ${
+                                        filtro === chip.id
+                                            ? 'bg-foreground text-background border-transparent'
+                                            : 'bg-foreground/5 text-foreground/70 border-border/60 hover:bg-foreground/10'
+                                    }`}
+                                >
+                                    {chip.label}
+                                    <span className="text-[10px] font-extrabold opacity-70">{chip.count}</span>
+                                </button>
+                            ))}
+                        </div>
+
                         <div className="p-2.5 sm:p-3">
                             <button
                                 onClick={() => markAllAsRead()}
@@ -186,81 +220,88 @@ export function DashboardLiveAlerts() {
                             </button>
                         </div>
 
-                        <div className="px-2.5 sm:px-3 pb-2.5 sm:pb-3 flex flex-col gap-2 sm:max-h-[420px] sm:overflow-y-auto">
-                            {displayedAlerts.map((notif, i) => {
-                                const style = getNotificationStyle(notif.tipo, notif.titulo)
+                        <div className="px-2.5 sm:px-3 pb-2.5 sm:pb-3 flex flex-col gap-3 sm:max-h-[460px] sm:overflow-y-auto">
+                            {gruposVisibles.map(g => {
+                                const items = porGrupo[g.id]
+                                const abierto = filtro === g.id ? true : !colapsados[g.id]
                                 return (
-                                    <motion.div
-                                        key={notif.id}
-                                        initial={reduce ? false : { opacity: 0, y: 8 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ duration: 0.28, delay: Math.min(i, 8) * 0.04, ease: [0.22, 1, 0.36, 1] }}
-                                        className="relative"
-                                    >
-                                        {/* Toda la tarjeta: marca leída y abre en agenda. */}
+                                    <div key={g.id} className="rounded-xl border border-border/60 overflow-hidden">
+                                        {/* Encabezado del grupo */}
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                markAsRead(notif.id)
-                                                router.push(notif.referencia_id ? `/agenda?turno=${notif.referencia_id}` : '/agenda')
-                                            }}
-                                            className="w-full flex text-left rounded-xl border border-border/60 bg-foreground/[0.04] overflow-hidden transition-colors hover:bg-foreground/[0.07] active:bg-foreground/[0.09]"
+                                            onClick={() => toggleColapsado(g.id)}
+                                            aria-expanded={abierto}
+                                            className={`w-full flex items-center gap-2 px-3 py-2 text-left font-extrabold text-xs uppercase tracking-wide ${g.head}`}
                                         >
-                                            <span className={`w-1 shrink-0 ${style.edge}`} />
-                                            <span className="flex-1 min-w-0 p-2.5 sm:p-3 pr-9">
-                                                <span className="flex items-center gap-2 min-w-0">
-                                                    <span className="shrink-0">{style.icon}</span>
-                                                    <span className="flex-1 min-w-0 truncate text-[13px] font-extrabold text-foreground">
-                                                        {notif.titulo}
-                                                    </span>
-                                                    <span className={`shrink-0 text-[9.5px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${style.badge}`}>
-                                                        {style.label}
-                                                    </span>
-                                                </span>
-                                                <span className="block text-[11.5px] text-foreground/90 font-medium leading-snug mt-1.5">
-                                                    {formatNotificationMessage(notif.mensaje)}
-                                                </span>
-                                                <span className="flex items-center gap-2 mt-2">
-                                                    <span className="text-[10px] text-muted-foreground font-bold">
-                                                        {formatTimeAgo(notif.created_at)}
-                                                    </span>
-                                                    <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-extrabold text-primary">
-                                                        Ver en agenda <ArrowRight className="h-3 w-3" />
-                                                    </span>
-                                                </span>
+                                            <span className={`w-1.5 h-4 rounded-full ${g.edge}`} />
+                                            <span className="flex-1 min-w-0 truncate">{g.titulo}</span>
+                                            <span className="shrink-0 text-xs font-extrabold px-2 py-0.5 rounded-full bg-background/70 border border-border/50">
+                                                {items.length}
                                             </span>
+                                            <motion.span animate={{ rotate: abierto ? 0 : -90 }} className="shrink-0 opacity-70">
+                                                <ChevronDown className="h-3.5 w-3.5" />
+                                            </motion.span>
                                         </button>
-                                        {/* Descartar (marca leída sin navegar). */}
-                                        <button
-                                            type="button"
-                                            onClick={(e) => { e.stopPropagation(); markAsRead(notif.id) }}
-                                            className="absolute top-2 right-2 h-6 w-6 rounded-md bg-foreground/5 hover:bg-foreground/10 border border-border/50 text-muted-foreground hover:text-foreground flex items-center justify-center text-xs font-bold transition-colors"
-                                            title="Descartar / Marcar como leída"
-                                        >
-                                            ✓
-                                        </button>
-                                    </motion.div>
+
+                                        {abierto && (
+                                            <div className="flex flex-col gap-2 p-2">
+                                                {items.map(({ notif, etiqueta }, i) => {
+                                                    const grupo = g.id
+                                                    return (
+                                                        <motion.div
+                                                            key={notif.id}
+                                                            initial={reduce ? false : { opacity: 0, y: 6 }}
+                                                            animate={{ opacity: 1, y: 0 }}
+                                                            transition={{ duration: 0.24, delay: Math.min(i, 6) * 0.03, ease: [0.22, 1, 0.36, 1] }}
+                                                            className="relative"
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    markAsRead(notif.id)
+                                                                    router.push(rutaNotificacion(grupo, notif.referencia_id))
+                                                                }}
+                                                                className="w-full flex text-left rounded-lg border border-border/60 bg-foreground/[0.03] overflow-hidden transition-colors hover:bg-foreground/[0.07]"
+                                                            >
+                                                                <span className={`w-1 shrink-0 ${g.edge}`} />
+                                                                <span className="flex-1 min-w-0 p-2.5 pr-9">
+                                                                    <span className="flex items-center gap-2 min-w-0">
+                                                                        <span className="flex-1 min-w-0 truncate text-[13px] font-extrabold text-foreground">
+                                                                            {notif.titulo}
+                                                                        </span>
+                                                                        <span className={`shrink-0 text-[9.5px] font-bold px-2 py-0.5 rounded-full border whitespace-nowrap ${g.badge}`}>
+                                                                            {etiqueta}
+                                                                        </span>
+                                                                    </span>
+                                                                    <span className="block text-[11.5px] text-foreground/90 font-medium leading-snug mt-1.5">
+                                                                        {formatNotificationMessage(notif.mensaje)}
+                                                                    </span>
+                                                                    <span className="flex items-center gap-2 mt-2">
+                                                                        <span className="text-[10px] text-muted-foreground font-bold">
+                                                                            {formatTimeAgo(notif.created_at)}
+                                                                        </span>
+                                                                        <span className="ml-auto inline-flex items-center gap-1 text-[11px] font-extrabold text-primary">
+                                                                            {g.verLabel} <ArrowRight className="h-3 w-3" />
+                                                                        </span>
+                                                                    </span>
+                                                                </span>
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => { e.stopPropagation(); markAsRead(notif.id) }}
+                                                                className="absolute top-2 right-2 h-6 w-6 rounded-md bg-foreground/5 hover:bg-foreground/10 border border-border/50 text-muted-foreground hover:text-foreground flex items-center justify-center text-xs font-bold transition-colors"
+                                                                title="Descartar / Marcar como leída"
+                                                            >
+                                                                ✓
+                                                            </button>
+                                                        </motion.div>
+                                                    )
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
                                 )
                             })}
-
-                            {unreadNotifications.length > 3 && (
-                                <button
-                                    onClick={() => setShowAllAlerts((v) => !v)}
-                                    className="w-full py-2 px-3 rounded-xl bg-foreground/5 hover:bg-foreground/10 border border-border/50 text-foreground font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
-                                >
-                                    {showAllAlerts ? (
-                                        <>
-                                            <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                                            <span>Mostrar menos (primeras 3)</span>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                                            <span>Ver {unreadNotifications.length - 3} alertas restantes</span>
-                                        </>
-                                    )}
-                                </button>
-                            )}
                         </div>
                     </motion.div>
                 )}

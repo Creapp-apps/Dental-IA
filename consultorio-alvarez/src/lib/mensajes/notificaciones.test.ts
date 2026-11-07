@@ -23,11 +23,11 @@ describe('grupoNotificacion', () => {
 })
 
 describe('rutaNotificacion', () => {
-    test('urgente va a mensajes', () => {
-        expect(rutaNotificacion('urgente', 'abc')).toBe('/mensajes')
+    test('urgente abre el chat en mensajes', () => {
+        expect(rutaNotificacion('urgente', 'abc')).toBe('/mensajes?c=abc')
     })
-    test('requiere_respuesta va a mensajes', () => {
-        expect(rutaNotificacion('requiere_respuesta', 'abc')).toBe('/mensajes')
+    test('requiere_respuesta sin referencia va a mensajes', () => {
+        expect(rutaNotificacion('requiere_respuesta', null)).toBe('/mensajes')
     })
     test('agenda va a agenda con turno', () => {
         expect(rutaNotificacion('agenda', 't1')).toBe('/agenda?turno=t1')

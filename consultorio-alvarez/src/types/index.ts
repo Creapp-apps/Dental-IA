@@ -245,4 +245,6 @@ export interface Notificacion {
   referencia_id: string | null
   leida: boolean
   created_at: string
+  prioridad: 'rojo' | 'amarillo' | 'verde' | null
+  motivo: string | null
 }

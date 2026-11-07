@@ -49,9 +49,14 @@ export function etiquetaNotificacion(prioridad: Prioridad | null, motivo: string
                 : '🔔 Sistema'
 }
 
-/** A dónde navega la notificación: las de conversación a Mensajes, las de turno a Agenda. */
+/**
+ * A dónde navega la notificación: las de conversación abren el chat en Mensajes
+ * (`referencia_id` = id de conversación), las de turno abren la Agenda.
+ */
 export function rutaNotificacion(grupo: GrupoAlerta, referenciaId: string | null): string {
-    if (grupo === 'urgente' || grupo === 'requiere_respuesta') return '/mensajes'
+    if (grupo === 'urgente' || grupo === 'requiere_respuesta') {
+        return referenciaId ? `/mensajes?c=${referenciaId}` : '/mensajes'
+    }
     if (grupo === 'agenda') return referenciaId ? `/agenda?turno=${referenciaId}` : '/agenda'
     return '/dashboard'
 }
