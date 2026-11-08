@@ -83,6 +83,21 @@ const RESPUESTAS_RAPIDAS = [
 ]
 
 const CARRILES: Carril[] = ['rojo', 'amarillo', 'azul', 'verde']
+/** Tamaño de página de la lista de conversaciones (filas por "Ver más"). */
+const PAGINA_LISTA = 30
+
+/** Botón "Ver más" para paginar una lista de conversaciones. */
+function VerMas({ restantes, onClick }: { restantes: number; onClick: () => void }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className="w-full py-2.5 text-xs font-semibold text-primary hover:bg-primary/5 transition-colors cursor-pointer"
+        >
+            Ver más ({restantes} {restantes === 1 ? 'chat' : 'chats'})
+        </button>
+    )
+}
 
 const CARRIL_UI: Record<Carril, {
     titulo: string
@@ -216,6 +231,8 @@ export function ChatInboxView({
     )
     const [mensajes, setMensajes] = useState<WhatsAppMensajeRow[]>([])
     const [isLoadingMensajes, setIsLoadingMensajes] = useState<boolean>(false)
+    const [hayMasMensajes, setHayMasMensajes] = useState<boolean>(false)
+    const [cargandoAnteriores, setCargandoAnteriores] = useState<boolean>(false)
     const reduce = useReducedMotion()
     const [filtro, setFiltro] = useState<'todos' | Carril | 'cerrados'>('todos')
     const [cerradas, setCerradas] = useState<WhatsAppConversacionRow[] | null>(null)
@@ -223,6 +240,12 @@ export function ChatInboxView({
     const [colapsados, setColapsados] = useState<Record<Carril, boolean>>({
         rojo: false, amarillo: false, azul: false, verde: true
     })
+    // Paginación de la lista: cuántas filas se muestran por carril (y en cerrados).
+    // "Ver más" suma de a PAGINA_LISTA, para no montar/animar cientos de golpe.
+    const [visiblesCarril, setVisiblesCarril] = useState<Record<Carril, number>>({
+        rojo: PAGINA_LISTA, amarillo: PAGINA_LISTA, azul: PAGINA_LISTA, verde: PAGINA_LISTA
+    })
+    const [visiblesCerradas, setVisiblesCerradas] = useState<number>(PAGINA_LISTA)
     const [filtroFecha, setFiltroFecha] = useState<'todas' | 'hoy' | '7dias' | 'mes'>('todas')
     const [searchQuery, setSearchQuery] = useState('')
     const [textoInput, setTextoInput] = useState('')
@@ -233,6 +256,7 @@ export function ChatInboxView({
     const [isPendingAction, startTransition] = useTransition()
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
+    const feedRef = useRef<HTMLDivElement>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const grabadorRef = useRef<GrabadorVoz | null>(null)
@@ -271,6 +295,33 @@ export function ChatInboxView({
         messagesEndRef.current?.scrollIntoView({ behavior })
     }
 
+    // Cargar la página anterior de mensajes (scroll infinito hacia arriba),
+    // preservando la posición de scroll para que no "salte".
+    async function handleVerAnteriores() {
+        if (!conversacionActivaId || cargandoAnteriores || mensajes.length === 0) return
+        setCargandoAnteriores(true)
+        const antesDe = mensajes[0].created_at
+        const cont = feedRef.current
+        const alturaPrevia = cont?.scrollHeight ?? 0
+        const res = await getMensajes(conversacionActivaId, { limit: 30, antesDe })
+        setCargandoAnteriores(false)
+        if (res.error) {
+            toast.error('Error al cargar mensajes anteriores: ' + res.error)
+            return
+        }
+        if (res.mensajes.length === 0) {
+            setHayMasMensajes(false)
+            return
+        }
+        setMensajes(prev => [...res.mensajes, ...prev])
+        setHayMasMensajes(res.hayMas)
+        // Tras anteponer, mantener la vista en el mismo mensaje (ajustar por el alto nuevo).
+        requestAnimationFrame(() => {
+            const c = feedRef.current
+            if (c) c.scrollTop = c.scrollHeight - alturaPrevia
+        })
+    }
+
     // Cargar mensajes cuando cambia la conversación activa
     useEffect(() => {
         if (!conversacionActivaId) {
@@ -281,13 +332,14 @@ export function ChatInboxView({
         let isMounted = true
         setIsLoadingMensajes(true)
 
-        getMensajes(conversacionActivaId)
+        getMensajes(conversacionActivaId, { limit: 30 })
             .then(res => {
                 if (isMounted) {
                     if (res.error) {
                         toast.error('Error al cargar mensajes: ' + res.error)
                     } else {
                         setMensajes(res.mensajes)
+                        setHayMasMensajes(res.hayMas)
                         setTimeout(() => scrollToBottom('auto'), 80)
                     }
                     setIsLoadingMensajes(false)
@@ -820,7 +872,13 @@ export function ChatInboxView({
                                 </div>
                             ) : filtro === 'cerrados' ? (
                                 <div className="divide-y divide-border/60">
-                                    {cerradasFiltradas.map((conv, i) => renderFila(conv, null, '', i))}
+                                    {cerradasFiltradas.slice(0, visiblesCerradas).map((conv, i) => renderFila(conv, null, '', i))}
+                                    {cerradasFiltradas.length > visiblesCerradas && (
+                                        <VerMas
+                                            restantes={cerradasFiltradas.length - visiblesCerradas}
+                                            onClick={() => setVisiblesCerradas(v => v + PAGINA_LISTA)}
+                                        />
+                                    )}
                                 </div>
                             ) : (
                                 carrilesVisibles.map(k => {
@@ -863,7 +921,13 @@ export function ChatInboxView({
                                                         className="overflow-hidden"
                                                     >
                                                         <div className="divide-y divide-border/60">
-                                                            {items.map(({ conv, etiqueta }, i) => renderFila(conv, k, etiqueta, i))}
+                                                            {items.slice(0, visiblesCarril[k]).map(({ conv, etiqueta }, i) => renderFila(conv, k, etiqueta, i))}
+                                                            {items.length > visiblesCarril[k] && (
+                                                                <VerMas
+                                                                    restantes={items.length - visiblesCarril[k]}
+                                                                    onClick={() => setVisiblesCarril(prev => ({ ...prev, [k]: prev[k] + PAGINA_LISTA }))}
+                                                                />
+                                                            )}
                                                         </div>
                                                     </motion.div>
                                                 )}
@@ -1014,7 +1078,24 @@ export function ChatInboxView({
                     </AnimatePresence>
 
                     {/* Feed de Mensajes */}
-                    <div className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 space-y-3.5">
+                    <div ref={feedRef} className="flex-1 min-w-0 overflow-y-auto p-3 sm:p-5 space-y-3.5">
+                        {/* Paginación hacia atrás: carga los mensajes anteriores de a 30. */}
+                        {hayMasMensajes && !isLoadingMensajes && (
+                            <div className="flex justify-center">
+                                <button
+                                    type="button"
+                                    onClick={handleVerAnteriores}
+                                    disabled={cargandoAnteriores}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-muted/70 hover:bg-muted text-muted-foreground hover:text-foreground border border-border/60 transition-colors disabled:opacity-50 cursor-pointer"
+                                >
+                                    {cargandoAnteriores ? (
+                                        <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Cargando…</>
+                                    ) : (
+                                        <>Ver mensajes anteriores</>
+                                    )}
+                                </button>
+                            </div>
+                        )}
                         {isLoadingMensajes ? (
                             <div className="flex items-center justify-center h-full">
                                 <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />

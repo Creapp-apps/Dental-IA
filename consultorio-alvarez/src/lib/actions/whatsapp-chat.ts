@@ -150,32 +150,51 @@ export async function getConversaciones(filtro: 'todos' | 'pendientes' | 'mis_ch
 /**
  * Obtiene los mensajes de una conversación específica en orden cronológico.
  */
-export async function getMensajes(conversacionId: string): Promise<{
+export async function getMensajes(
+    conversacionId: string,
+    opts?: { limit?: number; antesDe?: string }
+): Promise<{
     mensajes: WhatsAppMensajeRow[]
+    hayMas: boolean
     error?: string
 }> {
     const tenantId = await getAuthenticatedTenantId()
-    if (!tenantId) return { mensajes: [], error: 'No autorizado' }
+    if (!tenantId) return { mensajes: [], hayMas: false, error: 'No autorizado' }
 
     const admin = createAdminClient()
+    const limit = opts?.limit ?? 30
 
     try {
-        const { data, error } = await admin
+        // Traemos los últimos `limit` mensajes (desc), +1 para saber si hay más atrás.
+        // Con `antesDe` paginamos hacia atrás (mensajes anteriores a ese cursor).
+        let query = admin
             .from('whatsapp_mensajes')
             .select('*')
             .eq('conversacion_id', conversacionId)
             .eq('tenant_id', tenantId)
-            .order('created_at', { ascending: true })
+            .order('created_at', { ascending: false })
+            .limit(limit + 1)
+
+        if (opts?.antesDe) {
+            query = query.lt('created_at', opts.antesDe)
+        }
+
+        const { data, error } = await query
 
         if (error) {
             console.error('[WA CHAT] Error al obtener mensajes:', error)
-            return { mensajes: [], error: error.message }
+            return { mensajes: [], hayMas: false, error: error.message }
         }
 
-        return { mensajes: (data as any[]) || [] }
+        const rows = (data as any[]) || []
+        const hayMas = rows.length > limit
+        const pagina = hayMas ? rows.slice(0, limit) : rows
+        pagina.reverse() // a orden ascendente para mostrar
+
+        return { mensajes: pagina, hayMas }
     } catch (err: any) {
         console.error('[WA CHAT] Excepción al obtener mensajes:', err)
-        return { mensajes: [], error: err.message || 'Error inesperado' }
+        return { mensajes: [], hayMas: false, error: err.message || 'Error inesperado' }
     }
 }
 
