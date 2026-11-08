@@ -172,11 +172,15 @@ export async function getMensajes(
             .select('*')
             .eq('conversacion_id', conversacionId)
             .eq('tenant_id', tenantId)
+            // Orden estable incluso con created_at empatados (desempata por id).
             .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
             .limit(limit + 1)
 
         if (opts?.antesDe) {
-            query = query.lt('created_at', opts.antesDe)
+            // `lte` + dedupe por id en el cliente: no se pierde ningún mensaje con
+            // created_at igual al del cursor (el cursor mismo se re-trae y se filtra).
+            query = query.lte('created_at', opts.antesDe)
         }
 
         const { data, error } = await query

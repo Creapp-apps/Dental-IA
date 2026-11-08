@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useTransition } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useTransition } from 'react'
 import { 
     WhatsAppConversacionRow, 
     WhatsAppMensajeRow,
@@ -257,6 +257,11 @@ export function ChatInboxView({
 
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const feedRef = useRef<HTMLDivElement>(null)
+    // Id de la conversación activa, para descartar respuestas de un fetch que llegó tarde
+    // después de cambiar de chat (evita mezclar mensajes de otra conversación).
+    const activaRef = useRef<string | null>(null)
+    // Pedido de restaurar scroll tras anteponer mensajes (lo aplica un useLayoutEffect).
+    const restaurarScrollRef = useRef<{ prevHeight: number; prevTop: number } | null>(null)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const fileInputRef = useRef<HTMLInputElement>(null)
     const grabadorRef = useRef<GrabadorVoz | null>(null)
@@ -295,35 +300,49 @@ export function ChatInboxView({
         messagesEndRef.current?.scrollIntoView({ behavior })
     }
 
-    // Cargar la página anterior de mensajes (scroll infinito hacia arriba),
-    // preservando la posición de scroll para que no "salte".
+    // Restaurar la posición de scroll tras anteponer mensajes, de forma determinística
+    // (useLayoutEffect corre después del commit del DOM y antes de pintar: sin "salto").
+    useLayoutEffect(() => {
+        const pedido = restaurarScrollRef.current
+        if (!pedido) return
+        restaurarScrollRef.current = null
+        const c = feedRef.current
+        if (c) c.scrollTop = pedido.prevTop + (c.scrollHeight - pedido.prevHeight)
+    }, [mensajes])
+
+    // Cargar la página anterior de mensajes (scroll infinito hacia arriba).
     async function handleVerAnteriores() {
-        if (!conversacionActivaId || cargandoAnteriores || mensajes.length === 0) return
+        const convId = conversacionActivaId
+        if (!convId || cargandoAnteriores || mensajes.length === 0) return
         setCargandoAnteriores(true)
         const antesDe = mensajes[0].created_at
-        const cont = feedRef.current
-        const alturaPrevia = cont?.scrollHeight ?? 0
-        const res = await getMensajes(conversacionActivaId, { limit: 30, antesDe })
+        const res = await getMensajes(convId, { limit: 30, antesDe })
+        // Si el usuario cambió de chat mientras cargaba, descartar: no mezclar conversaciones.
+        if (activaRef.current !== convId) return
         setCargandoAnteriores(false)
         if (res.error) {
             toast.error('Error al cargar mensajes anteriores: ' + res.error)
             return
         }
-        if (res.mensajes.length === 0) {
-            setHayMasMensajes(false)
-            return
-        }
-        setMensajes(prev => [...res.mensajes, ...prev])
-        setHayMasMensajes(res.hayMas)
-        // Tras anteponer, mantener la vista en el mismo mensaje (ajustar por el alto nuevo).
-        requestAnimationFrame(() => {
+        setMensajes(prev => {
+            const yaEstan = new Set(prev.map(m => m.id))
+            const nuevos = res.mensajes.filter(m => !yaEstan.has(m.id))
+            if (nuevos.length === 0) return prev
+            // Guardar medidas ANTES del re-render para que el layout effect ancle la vista.
             const c = feedRef.current
-            if (c) c.scrollTop = c.scrollHeight - alturaPrevia
+            if (c) restaurarScrollRef.current = { prevHeight: c.scrollHeight, prevTop: c.scrollTop }
+            return [...nuevos, ...prev]
         })
+        setHayMasMensajes(res.hayMas)
     }
 
     // Cargar mensajes cuando cambia la conversación activa
     useEffect(() => {
+        activaRef.current = conversacionActivaId
+        // Reset de paginación al cambiar de conversación.
+        setCargandoAnteriores(false)
+        setHayMasMensajes(false)
+        restaurarScrollRef.current = null
         if (!conversacionActivaId) {
             setMensajes([])
             return
