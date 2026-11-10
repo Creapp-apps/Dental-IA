@@ -617,3 +617,110 @@ export async function getOperadoresClinica(): Promise<{
 
     return data || []
 }
+
+/**
+ * Adjunta a la ficha de un paciente un archivo (foto/documento) recibido por
+ * WhatsApp. El binario YA está en el bucket `paciente_adjuntos` (lo baja el
+ * webhook); acá sólo insertamos la fila en la tabla `paciente_adjuntos` que lee
+ * la pestaña "Adjuntos" de la ficha. No se vuelve a copiar el archivo.
+ */
+export async function adjuntarMediaChatAFicha(
+    mensajeId: string,
+    pacienteId: string
+): Promise<{ success: boolean; error?: string }> {
+    const tenantId = await getAuthenticatedTenantId()
+    const usuario = await getCurrentUsuario()
+    if (!tenantId || !usuario?.id) {
+        return { success: false, error: 'No autorizado' }
+    }
+    if (!mensajeId || !pacienteId) {
+        return { success: false, error: 'Faltan datos (mensaje o paciente)' }
+    }
+
+    const admin = createAdminClient()
+
+    // 1. Mensaje con el archivo
+    const { data: msg } = await admin
+        .from('whatsapp_mensajes')
+        .select('id, tipo, contenido, metadata')
+        .eq('id', mensajeId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle()
+
+    const mediaPath: string | null = (msg?.metadata as any)?.media_url ?? null
+    if (!msg || !mediaPath) {
+        return { success: false, error: 'El mensaje no tiene un archivo adjunto' }
+    }
+
+    // 2. El paciente debe pertenecer al consultorio
+    const { data: paciente } = await admin
+        .from('pacientes')
+        .select('id')
+        .eq('id', pacienteId)
+        .eq('tenant_id', tenantId)
+        .maybeSingle()
+    if (!paciente) {
+        return { success: false, error: 'El paciente no pertenece a este consultorio' }
+    }
+
+    // 3. Evitar duplicar: si ya se adjuntó este mismo archivo a este paciente, no repetir.
+    const { data: yaExiste } = await admin
+        .from('paciente_adjuntos')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('paciente_id', pacienteId)
+        .eq('url_archivo', mediaPath)
+        .maybeSingle()
+    if (yaExiste) {
+        return { success: false, error: 'Ese archivo ya está adjuntado en la ficha' }
+    }
+
+    // 4. Nombre y tipo a partir del mensaje
+    const docFilename: string | null = (msg.metadata as any)?.doc_filename ?? null
+    const nombreArchivo = docFilename
+        || (msg.tipo === 'imagen' ? `Foto WhatsApp ${new Date().toLocaleDateString('es-AR')}` : null)
+        || (msg.tipo === 'documento' ? `Documento WhatsApp ${new Date().toLocaleDateString('es-AR')}` : null)
+        || `Adjunto WhatsApp ${new Date().toLocaleDateString('es-AR')}`
+    const tipoArchivo = msg.tipo === 'imagen' ? 'image/jpeg'
+        : msg.tipo === 'documento' ? 'application/pdf'
+        : msg.tipo === 'audio' ? 'audio/ogg'
+        : 'application/octet-stream'
+
+    // Tamaño real del objeto ya subido (para que la ficha no muestre "0 Bytes").
+    let sizeBytes = 0
+    try {
+        const idx = mediaPath.lastIndexOf('/')
+        const dir = idx >= 0 ? mediaPath.slice(0, idx) : ''
+        const file = idx >= 0 ? mediaPath.slice(idx + 1) : mediaPath
+        const { data: objs } = await admin.storage.from('paciente_adjuntos').list(dir, { search: file })
+        sizeBytes = (objs?.find(o => o.name === file)?.metadata as any)?.size ?? 0
+    } catch { /* tamaño es cosmético: si falla, queda en 0 */ }
+
+    // 5. Insertar la fila que ve la ficha (reutiliza la ruta ya subida en el bucket)
+    const { error: insertError } = await admin
+        .from('paciente_adjuntos')
+        .insert({
+            tenant_id: tenantId,
+            paciente_id: pacienteId,
+            nombre_archivo: nombreArchivo,
+            url_archivo: mediaPath,
+            tipo_archivo: tipoArchivo,
+            size_bytes: sizeBytes,
+            observaciones: 'Adjuntado desde WhatsApp',
+            created_by: usuario.id
+        })
+    if (insertError) {
+        console.error('[WA CHAT] Error al adjuntar a ficha:', insertError)
+        return { success: false, error: 'No se pudo adjuntar a la ficha' }
+    }
+
+    // 6. Marcar el mensaje como adjuntado (para mostrar el estado en el chat)
+    await admin
+        .from('whatsapp_mensajes')
+        .update({ metadata: { ...(msg.metadata as any), adjuntado_ficha: true } })
+        .eq('id', mensajeId)
+        .eq('tenant_id', tenantId)
+
+    revalidatePath(`/pacientes/${pacienteId}`)
+    return { success: true }
+}

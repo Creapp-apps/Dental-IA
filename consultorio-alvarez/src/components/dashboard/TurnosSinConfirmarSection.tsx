@@ -90,15 +90,41 @@ interface TurnosSinConfirmarSectionProps {
     initialTurnos: TurnoSinConfirmar[]
 }
 
+/** Clave de día local para agrupar turnos. Ej: "2026-11-10". */
+function claveDiaTurno(iso: string): string {
+    return format(new Date(iso), 'yyyy-MM-dd')
+}
+
+/** Rótulo del divisor de día en negrita. Ej: "MARTES 10/11/2026". */
+function labelDiaTurno(iso: string): string {
+    return format(new Date(iso), "EEEE dd/MM/yyyy", { locale: es }).toUpperCase()
+}
+
 export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarSectionProps) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
     const [loadingMap, setLoadingMap] = useState<Record<string, boolean>>({})
     const [localSentMap, setLocalSentMap] = useState<Record<string, { timestamp: string; status: string; errorDetalle?: string }>>({})
     const [showAllMobile, setShowAllMobile] = useState(false)
+    // Días colapsados (clave de día -> true = oculto). Por defecto TODOS colapsados:
+    // el usuario abre el día que quiere ver, sin tener que cerrar el resto.
+    const [diasColapsados, setDiasColapsados] = useState<Record<string, boolean>>(() =>
+        initialTurnos.reduce<Record<string, boolean>>((acc, t) => {
+            acc[claveDiaTurno(t.fecha_inicio)] = true
+            return acc
+        }, {})
+    )
+    const toggleDia = (diaKey: string) => setDiasColapsados(prev => ({ ...prev, [diaKey]: !prev[diaKey] }))
 
     const MOBILE_LIMIT = 3
     const displayedTurnosMobile = showAllMobile ? initialTurnos : initialTurnos.slice(0, MOBILE_LIMIT)
+
+    // Conteo de turnos por día (para el contador del encabezado colapsable).
+    const conteoPorDia = initialTurnos.reduce<Record<string, number>>((acc, t) => {
+        const k = claveDiaTurno(t.fecha_inicio)
+        acc[k] = (acc[k] || 0) + 1
+        return acc
+    }, {})
 
     useEffect(() => {
         const supabase = createClient()
@@ -271,7 +297,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                             {/* Body: Animated Rows */}
                             <div className="space-y-2.5">
                                 <AnimatePresence initial={false}>
-                                    {initialTurnos.map((turno) => {
+                                    {initialTurnos.flatMap((turno, index) => {
                                         const dateObj = new Date(turno.fecha_inicio)
                                         const dayDateStr = format(dateObj, "EEEE d 'de' MMMM", { locale: es }).replace(/^\w/, (c) => c.toUpperCase())
                                         const timeStr = format(dateObj, "HH:mm 'hs'")
@@ -284,7 +310,32 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
 
                                         const errInfo = getFriendlyErrorMessage(status.errorDetalle)
 
-                                        return (
+                                        // Divisor de día colapsable: antes de la primera fila de cada fecha.
+                                        const diaKey = claveDiaTurno(turno.fecha_inicio)
+                                        const prevKey = index > 0 ? claveDiaTurno(initialTurnos[index - 1].fecha_inicio) : null
+                                        const colapsado = !!diasColapsados[diaKey]
+                                        const divisor = diaKey !== prevKey ? (
+                                            <button
+                                                type="button"
+                                                key={`dia-${diaKey}`}
+                                                onClick={() => toggleDia(diaKey)}
+                                                aria-expanded={!colapsado}
+                                                className="w-full flex items-center gap-2 px-4 py-2.5 bg-muted/60 dark:bg-muted/25 hover:bg-muted/80 rounded-lg text-sm font-extrabold text-foreground uppercase tracking-wide border border-border/50 mt-1 transition-colors cursor-pointer"
+                                            >
+                                                <span className="flex-1 text-left">{labelDiaTurno(turno.fecha_inicio)}</span>
+                                                <span className="font-mono opacity-70 normal-case">{conteoPorDia[diaKey]} turno{conteoPorDia[diaKey] !== 1 ? 's' : ''}</span>
+                                                <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', colapsado && '-rotate-90')} />
+                                            </button>
+                                        ) : null
+
+                                        if (colapsado) return [divisor]
+
+                                        // Posición dentro del día (turnos del mismo día son consecutivos
+                                        // porque la lista viene ordenada) para escalonar la cascada.
+                                        let posEnDia = 0
+                                        for (let j = index - 1; j >= 0 && claveDiaTurno(initialTurnos[j].fecha_inicio) === diaKey; j--) posEnDia++
+
+                                        return [divisor, (
                                             <motion.div
                                                 key={turno.id}
                                                 className={cn(
@@ -297,8 +348,10 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                                 ? "bg-emerald-500/10 dark:bg-emerald-950/35 hover:bg-emerald-500/15 border-emerald-500/30 border-l-[5px] border-l-emerald-500" 
                                                                 : "bg-card border-border/60 hover:bg-muted/30"
                                                 )}
-                                                initial={{ opacity: 1 }}
-                                                exit={{ opacity: 0 }}
+                                                initial={{ opacity: 0, y: 10 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -4 }}
+                                                transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: Math.min(posEnDia, 10) * 0.045 }}
                                             >
                                                 {/* Fecha y Hora */}
                                                 <div className="flex flex-col gap-1 pr-2">
@@ -318,7 +371,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                         <p className="font-bold text-foreground text-sm whitespace-nowrap">
                                                             {dayDateStr}
                                                         </p>
-                                                        <p className="text-xs text-muted-foreground mt-0.5 whitespace-nowrap">
+                                                        <p className="text-base font-bold text-foreground/90 mt-0.5 whitespace-nowrap">
                                                             {timeStr}
                                                         </p>
                                                     </div>
@@ -488,7 +541,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                     </div>
                                                 </div>
                                             </motion.div>
-                                        )
+                                        )]
                                     })}
                                 </AnimatePresence>
                             </div>
@@ -497,7 +550,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                         {/* Mobile View Cards */}
                         <div className="block md:hidden space-y-2.5">
                             <AnimatePresence initial={false}>
-                                {displayedTurnosMobile.map((turno) => {
+                                {displayedTurnosMobile.flatMap((turno, index) => {
                                     const dateObj = new Date(turno.fecha_inicio)
                                     const formattedDate = format(dateObj, "EEEE d 'de' MMMM, HH:mm 'hs'", { locale: es })
                                         .replace(/^\w/, (c) => c.toUpperCase())
@@ -509,7 +562,30 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                     const isConfirmed = turno.estado === 'CONFIRMADO'
                                     const errInfo = getFriendlyErrorMessage(status.errorDetalle)
 
-                                    return (
+                                    // Divisor de día colapsable: antes de la primera tarjeta de cada fecha.
+                                    const diaKey = claveDiaTurno(turno.fecha_inicio)
+                                    const prevKey = index > 0 ? claveDiaTurno(displayedTurnosMobile[index - 1].fecha_inicio) : null
+                                    const colapsado = !!diasColapsados[diaKey]
+                                    const divisor = diaKey !== prevKey ? (
+                                        <button
+                                            type="button"
+                                            key={`dia-m-${diaKey}`}
+                                            onClick={() => toggleDia(diaKey)}
+                                            aria-expanded={!colapsado}
+                                            className="w-full flex items-center gap-2 px-3 py-2 bg-muted/60 dark:bg-muted/25 hover:bg-muted/80 rounded-lg text-[13px] font-extrabold text-foreground uppercase tracking-wide border border-border/50 transition-colors cursor-pointer"
+                                        >
+                                            <span className="flex-1 text-left">{labelDiaTurno(turno.fecha_inicio)}</span>
+                                            <span className="font-mono opacity-70 normal-case">{conteoPorDia[diaKey]}</span>
+                                            <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 transition-transform', colapsado && '-rotate-90')} />
+                                        </button>
+                                    ) : null
+
+                                    if (colapsado) return [divisor]
+
+                                    let posEnDia = 0
+                                    for (let j = index - 1; j >= 0 && claveDiaTurno(displayedTurnosMobile[j].fecha_inicio) === diaKey; j--) posEnDia++
+
+                                    return [divisor, (
                                         <motion.div
                                             key={turno.id}
                                             className={cn(
@@ -522,8 +598,10 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                             ? "bg-emerald-500/12 dark:bg-emerald-950/35 border-emerald-500/30 border-l-[4px] border-l-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.06)]" 
                                                             : "border-border/40"
                                             )}
-                                            initial={{ opacity: 1 }}
-                                            exit={{ opacity: 0 }}
+                                            initial={{ opacity: 0, y: 10 }}
+                                            animate={{ opacity: 1, y: 0 }}
+                                            exit={{ opacity: 0, y: -4 }}
+                                            transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1], delay: Math.min(posEnDia, 10) * 0.045 }}
                                         >
                                             {/* Header: Date, Cancelled/Urgent tag, and status badges */}
                                             <div className="flex items-start justify-between gap-2">
@@ -674,7 +752,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 </GlassButton>
                                             </div>
                                         </motion.div>
-                                    )
+                                    )]
                                 })}
                             </AnimatePresence>
 

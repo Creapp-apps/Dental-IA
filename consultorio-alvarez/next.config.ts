@@ -4,11 +4,19 @@ import type { NextConfig } from "next";
 // CSP permisiva a propósito (mantiene 'unsafe-inline'/'unsafe-eval' para no romper
 // Next/PWA); agrega frame-ancestors/object-src/base-uri. Una CSP estricta con nonce
 // queda como follow-up. Permissions-Policy deja camera/microphone en self (fotos/escaneos).
+// Origen de Supabase Storage: necesario en frame-src para que el visor de PDF
+// (<iframe>) de la ficha pueda mostrar los adjuntos privados firmados. Sin esto,
+// frame-src cae a child-src ('self' blob:) y el navegador bloquea el PDF.
+const supabaseOrigin = (() => {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL || '').origin } catch { return '' }
+})()
+
 const csp = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
+  `frame-src 'self' blob:${supabaseOrigin ? ' ' + supabaseOrigin : ''}`,
   "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",

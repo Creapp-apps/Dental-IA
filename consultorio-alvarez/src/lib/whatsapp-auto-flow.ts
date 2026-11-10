@@ -954,8 +954,8 @@ export async function procesarMensajeAutonomo({
             ? `¡Recibimos tu nota de voz! 🎙️✨\n\n` +
               `Una persona de nuestro equipo la va a escuchar y te responde a la brevedad por este medio.`
             : `¡Recibido correctamente! 📎✨\n\n` +
-              `Ya lo adjuntamos a tu ficha para que el equipo odontológico pueda verlo y evaluarlo.\n` +
-              `Un profesional o asesor de nuestro equipo te responderá a la brevedad por este medio.`
+              `Ya lo tiene a la vista nuestro equipo odontológico para revisarlo.\n` +
+              `Un profesional o asesor te responderá a la brevedad por este medio.`
 
         await enviarTextoWhatsApp(creds, cleanPhone, msgFoto, {
             ...trackingBase,

@@ -389,6 +389,21 @@ function sanitizeEvolucionPayload(payload: any) {
     }
 }
 
+// Columnas de `pacientes` que son UUID o fecha: un string vacío "" (p. ej. al
+// limpiar el campo en el formulario offline) rompe el push con el error 22P02
+// ("formato inválido") y deja el cambio atascado sin reintentar. La server
+// action online ya convierte "" -> null; el camino offline no lo hacía, así que
+// lo saneamos acá, al subir. Arregla los atascados (al Reintentar) y los futuros.
+const PACIENTE_COLS_NULEABLES = ['obra_social_id', 'profesional_id', 'fecha_nacimiento'] as const
+function sanitizePacientePayload<T extends Record<string, any>>(payload: T): T {
+    if (!payload || typeof payload !== 'object') return payload
+    const out: Record<string, any> = { ...payload }
+    for (const col of PACIENTE_COLS_NULEABLES) {
+        if (out[col] === '') out[col] = null
+    }
+    return out as T
+}
+
 /**
  * Arma el resultado de una operación a partir del error de Supabase, dejando
  * decidido del lado del servidor si vale la pena reintentarla.
@@ -511,7 +526,7 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                 }
                 if (item.operation === 'INSERT') {
                     const payload = {
-                        ...item.payload,
+                        ...sanitizePacientePayload(item.payload),
                         tenant_id: tenantId,
                         updated_at: new Date().toISOString()
                     }
@@ -545,7 +560,7 @@ export async function pushOutboxChangesAction(items: SyncOutboxItem[]): Promise<
                     const { error } = await admin
                         .from('pacientes')
                         .update({
-                            ...payload,
+                            ...sanitizePacientePayload(payload),
                             updated_at: new Date().toISOString()
                         })
                         .eq('id', item.entity_id)

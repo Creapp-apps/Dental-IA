@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useLayoutEffect, useRef, useTransition } from 'react'
+import { useState, useEffect, useLayoutEffect, useRef, useTransition, type ReactNode } from 'react'
 import { 
     WhatsAppConversacionRow, 
     WhatsAppMensajeRow,
@@ -11,7 +11,8 @@ import {
     marcarConversacionLeida,
     EstadoWaConversacion,
     getMensajes,
-    getConversaciones
+    getConversaciones,
+    adjuntarMediaChatAFicha
 } from '@/lib/actions/whatsapp-chat'
 import { createClient } from '@/lib/supabase/client'
 import { carrilDe, type Carril } from '@/lib/mensajes/triage'
@@ -156,6 +157,27 @@ function formatFechaChat(iso: string): string {
     return d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
+/** Clave de día local (para agrupar). Ej: "2026-10-7". */
+function claveDia(iso: string): string {
+    const d = new Date(iso)
+    return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+/** Encabezado de día en negrita. Ej: "Viernes 07/11/2026". */
+function formatDiaLargo(iso: string): string {
+    const d = new Date(iso)
+    const dia = d.toLocaleDateString('es-AR', { weekday: 'long' })
+    const fecha = d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    return `${dia.charAt(0).toUpperCase()}${dia.slice(1)} ${fecha}`
+}
+
+/** Fecha + hora completa para el timestamp de cada mensaje del chat.
+ *  Ej: "Viernes 07/11/2026 - 05:41 p. m.". */
+function formatFechaHoraMensaje(iso: string): string {
+    const hora = new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })
+    return `${formatDiaLargo(iso)} - ${hora}`
+}
+
 /**
  * Burbuja de media entrante (foto, nota de voz o documento). Vive aparte porque firmar la URL es un
  * hook y no se puede llamar dentro del .map de mensajes. Mientras firma no muestra nada; si falla, lo avisa.
@@ -229,7 +251,17 @@ export function ChatInboxView({
     const [conversacionActivaId, setConversacionActivaId] = useState<string | null>(
         initialConversaciones.length > 0 ? initialConversaciones[0].id : null
     )
+
+    // Abrir una conversación puntual si vienen con ?conv=<id> (p. ej. desde el
+    // dashboard "Chats que requieren tu atención"). Se lee del location para no
+    // depender de useSearchParams (evita el Suspense boundary en build).
+    useEffect(() => {
+        const convParam = new URLSearchParams(window.location.search).get('conv')
+        if (convParam) setConversacionActivaId(convParam)
+    }, [])
     const [mensajes, setMensajes] = useState<WhatsAppMensajeRow[]>([])
+    const [adjuntandoId, setAdjuntandoId] = useState<string | null>(null)
+    const [adjuntadosIds, setAdjuntadosIds] = useState<Set<string>>(new Set())
     const [isLoadingMensajes, setIsLoadingMensajes] = useState<boolean>(false)
     const [hayMasMensajes, setHayMasMensajes] = useState<boolean>(false)
     const [cargandoAnteriores, setCargandoAnteriores] = useState<boolean>(false)
@@ -608,6 +640,27 @@ export function ChatInboxView({
         detenerTimerGrabacion()
     }
 
+    // Adjuntar a la ficha del paciente un archivo recibido por WhatsApp.
+    async function handleAdjuntarFicha(mensajeId: string) {
+        const pacienteId = conversacionActiva?.paciente?.id
+        if (!pacienteId) {
+            toast.error('Esta conversación no está vinculada a un paciente registrado. Registrá o vinculá al paciente primero.')
+            return
+        }
+        setAdjuntandoId(mensajeId)
+        try {
+            const res = await adjuntarMediaChatAFicha(mensajeId, pacienteId)
+            if (res.success) {
+                setAdjuntadosIds(prev => new Set(prev).add(mensajeId))
+                toast.success('Archivo adjuntado a la ficha del paciente')
+            } else {
+                toast.error(res.error || 'No se pudo adjuntar a la ficha')
+            }
+        } finally {
+            setAdjuntandoId(null)
+        }
+    }
+
     // Cambiar estado manual (Tomar chat, Reanudar Bot, Cerrar)
     function handleCambiarEstado(nuevoEstado: EstadoWaConversacion) {
         if (!conversacionActivaId) return
@@ -735,7 +788,7 @@ export function ChatInboxView({
                                             <span className="font-semibold text-xs truncate text-foreground">
                                                 {nombre}
                                             </span>
-                                            <span className="text-[10px] text-muted-foreground shrink-0 font-mono">
+                                            <span className="text-[11px] font-bold text-foreground/80 shrink-0 font-mono">
                                                 {formatFechaChat(conv.ultimo_mensaje_at)}
                                             </span>
                                         </div>
@@ -763,6 +816,33 @@ export function ChatInboxView({
                                     </div>
                                 </motion.button>
                             )
+    }
+
+    // Render de las filas de un carril. Con FECHA=Todas, subdivide por día
+    // intercalando un encabezado en negrita antes de la primera fila de cada día.
+    // (La lista ya viene ordenada por ultimo_mensaje_at desc.)
+    const renderFilas = (items: { conv: WhatsAppConversacionRow; etiqueta: string }[], k: Carril) => {
+        if (filtroFecha !== 'todas') {
+            return items.map(({ conv, etiqueta }, i) => renderFila(conv, k, etiqueta, i))
+        }
+        const out: ReactNode[] = []
+        let diaActual: string | null = null
+        items.forEach(({ conv, etiqueta }, i) => {
+            const clave = claveDia(conv.ultimo_mensaje_at)
+            if (clave !== diaActual) {
+                diaActual = clave
+                out.push(
+                    <div
+                        key={`dia-${k}-${clave}`}
+                        className="px-3.5 py-1.5 bg-muted/50 text-xs font-extrabold text-foreground uppercase tracking-wide"
+                    >
+                        {formatDiaLargo(conv.ultimo_mensaje_at)}
+                    </div>
+                )
+            }
+            out.push(renderFila(conv, k, etiqueta, i))
+        })
+        return out
     }
 
     const pendientesCount = conversaciones.filter(c => c.estado === 'HUMANO_PENDIENTE').length
@@ -940,7 +1020,7 @@ export function ChatInboxView({
                                                         className="overflow-hidden"
                                                     >
                                                         <div className="divide-y divide-border/60">
-                                                            {items.slice(0, visiblesCarril[k]).map(({ conv, etiqueta }, i) => renderFila(conv, k, etiqueta, i))}
+                                                            {renderFilas(items.slice(0, visiblesCarril[k]), k)}
                                                             {items.length > visiblesCarril[k] && (
                                                                 <VerMas
                                                                     restantes={items.length - visiblesCarril[k]}
@@ -1157,8 +1237,8 @@ export function ChatInboxView({
                                                 </span>
                                             )}
                                             <span>•</span>
-                                            <span className="font-mono text-[10px]">
-                                                {new Date(msg.created_at).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}
+                                            <span className="font-mono text-[11px] font-bold text-foreground/90">
+                                                {formatFechaHoraMensaje(msg.created_at)}
                                             </span>
                                         </div>
 
@@ -1178,6 +1258,28 @@ export function ChatInboxView({
 
                                             <div>{msg.contenido}</div>
                                         </div>
+
+                                        {/* Adjuntar a la ficha: solo para archivos entrantes del paciente */}
+                                        {isPaciente && (msg.tipo === 'imagen' || msg.tipo === 'documento') && msg.metadata?.media_url && (
+                                            <div className="mt-2">
+                                                {adjuntadosIds.has(msg.id) || (msg.metadata as any)?.adjuntado_ficha ? (
+                                                    <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 rounded-lg px-3 py-1.5">
+                                                        <CheckCircle2 className="h-4 w-4 shrink-0" />
+                                                        Guardado en la ficha
+                                                    </span>
+                                                ) : (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleAdjuntarFicha(msg.id)}
+                                                        disabled={adjuntandoId === msg.id}
+                                                        className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary bg-primary/10 hover:bg-primary/15 border border-primary/30 hover:border-primary/50 rounded-lg px-3 py-1.5 shadow-sm transition-colors disabled:opacity-50 cursor-pointer"
+                                                    >
+                                                        <Paperclip className="h-4 w-4 shrink-0" />
+                                                        {adjuntandoId === msg.id ? 'Adjuntando…' : 'Adjuntar a la ficha'}
+                                                    </button>
+                                                )}
+                                            </div>
+                                        )}
                                     </motion.div>
                                 )
                             })

@@ -15,8 +15,8 @@ import {
     enviarTipsYPropuestaTurno,
     agendarTurnoGuardiaWhatsApp
 } from '@/lib/whatsapp-guardia'
-import { procesarMensajeAutonomo, enviarMenuPrincipalAutonomo, enviarTextoWhatsApp } from '@/lib/whatsapp-auto-flow'
-import { debeEstampar, type Prioridad } from '@/lib/mensajes/triage'
+import { procesarMensajeAutonomo, enviarTextoWhatsApp, enviarBotonesWhatsApp } from '@/lib/whatsapp-auto-flow'
+import { debeEstampar, MOTIVOS, type Prioridad } from '@/lib/mensajes/triage'
 
 
 // GET: Webhook Verification (Meta Verification Challenge)
@@ -149,6 +149,20 @@ function normalizeTextForMatch(text: string): string {
         .trim()
 }
 
+// Afirmaciones que, como respuesta a un recordatorio de turno, significan
+// "confirmo asistencia". Normalizadas (min\u00fasculas, sin acentos ni signos).
+// Antes muchas de estas s\u00f3lo recib\u00edan un cort\u00e9s "\u00a1Perfecto!" sin confirmar el turno.
+const AFIRMACIONES_CONFIRMA = new Set([
+    'si', 'sii', 'siii', 'sip', 'simon', 'si si', 'sisi', 'sep', 'dale', 'dale si',
+    'ok', 'oka', 'okey', 'okis', 'okay', 'ok dale', 'dale ok', 'ok gracias', 'dale gracias',
+    'listo', 'listo gracias', 'perfecto', 'perfe', 'perfecto dale', 'de una', 'genial',
+    'barbaro', 'buenisimo', 'joya', 'excelente', 'obvio', 'obvio si', 'claro', 'claro que si',
+    'por supuesto', 'de acuerdo', 'confirmo', 'confirmado', 'confirmar', 'si confirmo',
+    'confirmo turno', 'confirmo mi turno', 'confirmo asistencia', 'asisto', 'si asisto',
+    'asistire', 'si asistire', 'ahi estare', 'alli estare', 'ahi estoy', 'ahi voy', 'ahi vamos',
+    'voy', 'si voy', 'cuenten conmigo', 'ahi estaremos', 'ahi nos vemos', 'nos vemos', 'buenisimo gracias',
+])
+
 // POST: Recepción de Eventos de Mensajes de Meta
 export async function POST(request: NextRequest) {
     try {
@@ -251,11 +265,12 @@ export async function POST(request: NextRequest) {
         let conversacionId: string | null = null
         let estadoConversacion = 'BOT'
         let prioridadActual: Prioridad | null = null
+        let motivoActual: string | null = null
 
         try {
             const { data: conv } = await admin
                 .from('whatsapp_conversaciones')
-                .select('id, estado, no_leidos_operador, prioridad')
+                .select('id, estado, no_leidos_operador, prioridad, motivo')
                 .eq('tenant_id', tenantId)
                 .eq('telefono', cleanPhone)
                 .maybeSingle()
@@ -264,6 +279,7 @@ export async function POST(request: NextRequest) {
                 conversacionId = conv.id
                 estadoConversacion = conv.estado
                 prioridadActual = (conv as any).prioridad ?? null
+                motivoActual = (conv as any).motivo ?? null
             } else {
                 const { data: paciente } = await admin
                     .from('pacientes')
@@ -347,6 +363,40 @@ export async function POST(request: NextRequest) {
         let turnoIdToUpdate = ''
         let respuestaPaciente: 'CONFIRMAR' | 'CANCELAR' | 'REPROGRAMAR' | null = null
 
+        // Recordatorio "objetivo": el turno al que el paciente probablemente le está
+        // respondiendo por texto. Antes se tomaba el ÚLTIMO recordatorio ENVIADO del
+        // teléfono (podía ser de un turno viejo → confirmar el equivocado). Ahora lo
+        // atamos al turno PENDIENTE más próximo (futuro) que tenga recordatorio enviado.
+        // Memoizado: a lo sumo una consulta por webhook.
+        let _objetivoCache: { turnoId: string; fechaInicio: string } | null | undefined
+        const getRecordatorioObjetivo = async (): Promise<{ turnoId: string; fechaInicio: string } | null> => {
+            if (_objetivoCache !== undefined) return _objetivoCache
+            const { data: rems } = await admin
+                .from('recordatorios')
+                .select('turno_id')
+                .eq('tenant_id', tenantId)
+                .eq('telefono', cleanPhone)
+                .eq('estado_envio', 'ENVIADO')
+                .order('created_at', { ascending: false })
+                .limit(20)
+            const turnoIds = [...new Set((rems ?? []).map(r => r.turno_id).filter(Boolean))]
+            if (turnoIds.length === 0) { _objetivoCache = null; return null }
+            // Gracia de 2hs: un turno que acaba de empezar todavía es "confirmable".
+            const graciaDesde = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+            const { data: turnos } = await admin
+                .from('turnos')
+                .select('id, fecha_inicio')
+                .in('id', turnoIds)
+                .eq('tenant_id', tenantId)
+                .eq('estado', 'PENDIENTE')
+                .gte('fecha_inicio', graciaDesde)
+                .order('fecha_inicio', { ascending: true })
+                .limit(1)
+            const t = turnos?.[0]
+            _objetivoCache = t ? { turnoId: t.id, fechaInicio: t.fecha_inicio } : null
+            return _objetivoCache
+        }
+
         // 1. Analizar respuesta de botón rápido
         if (buttonPayload) {
             const confirmMatch = buttonPayload.match(/^CONFIRMAR_TURNO_(.+)$/)
@@ -372,25 +422,13 @@ export async function POST(request: NextRequest) {
                 const normalized = normalizeTextForMatch(textToAnalyze)
                 console.log(`🔍 Intentando deducir acción de texto normalizado: "${normalized}"`)
 
-                // Encontrar el último recordatorio enviado a este teléfono que esté pendiente de respuesta dentro de este consultorio
-                const { data: lastRem } = await admin
-                    .from('recordatorios')
-                    .select('id, turno_id, tenant_id')
-                    .eq('tenant_id', tenantId)
-                    .eq('telefono', cleanPhone)
-                    .eq('estado_envio', 'ENVIADO')
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle()
+                // Atar la respuesta al turno PENDIENTE más próximo con recordatorio enviado
+                // (no al último recordatorio del teléfono, que podía ser de un turno viejo).
+                const objetivo = await getRecordatorioObjetivo()
 
-                if (lastRem?.turno_id) {
-                    const matchesConfirm = 
-                        normalized === 'si' || 
-                        normalized === 'ok' || 
-                        normalized === 'si confirmo' ||
-                        normalized === 'confirmo' ||
-                        normalized === 'confirmar' ||
-                        normalized === 'confirmado' ||
+                if (objetivo?.turnoId) {
+                    const matchesConfirm =
+                        AFIRMACIONES_CONFIRMA.has(normalized) ||
                         normalized.includes('confirm') ||
                         (normalized.startsWith('si ') && normalized.length <= 15);
 
@@ -422,13 +460,13 @@ export async function POST(request: NextRequest) {
                         );
 
                     if (matchesConfirm) {
-                        turnoIdToUpdate = lastRem.turno_id
+                        turnoIdToUpdate = objetivo.turnoId
                         respuestaPaciente = 'CONFIRMAR'
                     } else if (matchesReprogram) {
-                        turnoIdToUpdate = lastRem.turno_id
+                        turnoIdToUpdate = objetivo.turnoId
                         respuestaPaciente = 'REPROGRAMAR'
                     } else if (matchesCancel) {
-                        turnoIdToUpdate = lastRem.turno_id
+                        turnoIdToUpdate = objetivo.turnoId
                         respuestaPaciente = 'CANCELAR'
                     }
                 }
@@ -502,14 +540,25 @@ export async function POST(request: NextRequest) {
                 .eq('turno_id', turnoIdToUpdate)
                 .eq('tenant_id', tenantId)
 
-            // Triage de bandeja: turno confirmado = "bajo control" (verde), pero solo si
-            // la conversación sigue en BOT. Si hay un humano involucrado (PENDIENTE/ATENDIENDO)
-            // no se toca prioridad/motivo para no tapar un pendiente real.
-            if (respuestaPaciente === 'CONFIRMAR' && conversacionId && estadoConversacion === 'BOT') {
-                await admin.from('whatsapp_conversaciones')
-                    .update({ prioridad: 'verde', motivo: 'turno_confirmado' })
-                    .eq('id', conversacionId)
-                    .eq('estado', 'BOT')
+            // Triage de bandeja: turno confirmado = "bajo control" (verde).
+            // Resolvemos la conversación cuando el paciente confirma, en dos casos:
+            //  - estado BOT: el bot sigue gestionando, lo marcamos verde/confirmado.
+            //  - estado HUMANO_PENDIENTE pero SIN motivo real (el cajón genérico que la
+            //    bandeja muestra como "📋 Revisar"): la confirmación lo resuelve, así que
+            //    lo sacamos de pendiente (estado BOT) y lo marcamos verde/confirmado.
+            // NO tocamos: una conversación que un humano atiende (HUMANO_ATENDIENDO), un
+            // pendiente ROJO (urgencia/queja/guardia), ni un pendiente con motivo real
+            // (adjunto, dato clínico, etc.), para no tapar algo que de verdad requiere acción.
+            if (respuestaPaciente === 'CONFIRMAR' && conversacionId && estadoConversacion !== 'HUMANO_ATENDIENDO') {
+                const motivoEsGenerico = !motivoActual || !MOTIVOS[motivoActual] || motivoActual === 'revisar'
+                const resolver =
+                    estadoConversacion === 'BOT' ||
+                    (estadoConversacion === 'HUMANO_PENDIENTE' && motivoEsGenerico && prioridadActual !== 'rojo')
+                if (resolver) {
+                    await admin.from('whatsapp_conversaciones')
+                        .update({ estado: 'BOT', prioridad: 'verde', motivo: 'turno_confirmado' })
+                        .eq('id', conversacionId)
+                }
             }
 
             // --- Enviar mensaje de respuesta automática (Plantilla de WhatsApp) al paciente ---
@@ -525,6 +574,34 @@ export async function POST(request: NextRequest) {
 
                 console.log(`[WA WEBHOOK] Despachando plantilla automática "${templateName}" para turno ${turnoIdToUpdate}`)
                 await notificarTurnoPorWhatsApp(turnoIdToUpdate, templateName)
+
+                // ACK anti-silencio: si la plantilla falló (p. ej. #132001 plantilla en
+                // revisión, o #131047 fuera de ventana), el paciente se queda sin acuse y
+                // parece que "el bot no respondió". Como su propio mensaje abre la ventana
+                // de 24hs, reintentamos con TEXTO LIBRE para que SIEMPRE reciba confirmación.
+                const { data: ultimoRecEnvio } = await admin
+                    .from('recordatorios')
+                    .select('estado_envio')
+                    .eq('turno_id', turnoIdToUpdate)
+                    .eq('tenant_id', tenantId)
+                    .order('created_at', { ascending: false })
+                    .limit(1)
+                    .maybeSingle()
+
+                if (ultimoRecEnvio?.estado_envio === 'FALLIDO') {
+                    const creds = await getWhatsAppCredentialsForTenant(tenantId)
+                    if (creds) {
+                        const ackTexto =
+                            respuestaPaciente === 'CONFIRMAR'
+                                ? '✅ ¡Listo! Tu turno quedó *confirmado*. ¡Te esperamos! 🦷'
+                                : respuestaPaciente === 'CANCELAR'
+                                    ? 'Tu turno fue *cancelado*. Si querés reprogramar, escribinos por acá cuando quieras. 🦷'
+                                    : 'Recibimos tu pedido de *reprogramación* 🙏 Un asesor de recepción te va a contactar a la brevedad por este chat.'
+                        console.log(`[WA WEBHOOK] Plantilla "${templateName}" falló. Enviando ACK por texto libre.`)
+                        await enviarTextoWhatsApp(creds, cleanPhone, ackTexto,
+                            conversacionId ? { tenantId, conversacionId, accion: 'ack_texto_fallback' } : undefined)
+                    }
+                }
             } catch (waErr) {
                 console.error('❌ Error al enviar respuesta de confirmación a WhatsApp:', waErr)
             }
@@ -996,59 +1073,89 @@ export async function POST(request: NextRequest) {
                     return NextResponse.json({ success: true })
                 }
 
-                // RC13: evitar el loop de menú. Si en los últimos 15 minutos el bot
-                // ya respondió con el menú de fallback 2+ veces a esta conversación,
-                // no insistimos: derivamos a un humano (el bot no entendió).
-                if (conversacionId) {
-                    const desde = new Date(Date.now() - 15 * 60 * 1000).toISOString()
-                    const { count: fallbacksRecientes } = await admin
+                // Red de seguridad: el bot NO supo resolver el texto, pero el paciente tiene
+                // un turno PENDIENTE con recordatorio. En vez del menú genérico, le
+                // re-mostramos los botones del turno (Confirmar/Reprogramar/Cancelar) para
+                // recuperar la intención de quien escribió a mano en vez de tocar el botón.
+                // Debounce: a lo sumo 1 re-prompt cada 10 min por conversación.
+                const objetivoNet = await getRecordatorioObjetivo()
+                if (objetivoNet && conversacionId) {
+                    const desdeReprompt = new Date(Date.now() - 10 * 60 * 1000).toISOString()
+                    const { count: repromptsRecientes } = await admin
                         .from('whatsapp_mensajes')
                         .select('id', { count: 'exact', head: true })
                         .eq('conversacion_id', conversacionId)
                         .eq('remitente', 'bot')
-                        .contains('metadata', { accion: 'menu_principal_fallback' })
-                        .gte('created_at', desde)
+                        .contains('metadata', { accion: 'reprompt_botones_turno' })
+                        .gte('created_at', desdeReprompt)
 
-                    if ((fallbacksRecientes ?? 0) >= 2) {
-                        console.log(`[WA WEBHOOK] ${fallbacksRecientes} fallbacks recientes en ${conversacionId}. Derivando a humano en vez de repetir menú.`)
-                        await admin.from('whatsapp_conversaciones')
-                            .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'bot_no_entendio', updated_at: new Date().toISOString() })
-                            .eq('id', conversacionId)
-                        await admin.from('notificaciones').insert({
-                            tenant_id: tenantId,
-                            titulo: '💬 El bot no pudo ayudar — derivar',
-                            mensaje: `Paciente (+${cleanPhone}) escribió varias veces sin que el bot lo entienda. Último: "${(textBody || buttonTextFallback || '').slice(0, 120)}"`,
-                            tipo: 'turno_reprogramado',
-                            referencia_id: conversacionId || '',
-                            prioridad: 'amarillo',
-                            motivo: 'bot_no_entendio',
-                            leida: false
+                    if ((repromptsRecientes ?? 0) === 0) {
+                        const fechaTurno = new Date(objetivoNet.fechaInicio).toLocaleString('es-AR', {
+                            weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+                            timeZone: 'America/Argentina/Buenos_Aires'
                         })
-                        // Aviso proactivo: el paciente insistió y el bot no entendió → que recepción se entere.
-                        try {
-                            const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
-                            await sendPushToRole('admin', tenantId, '💬 El bot no pudo ayudar', `Paciente (+${cleanPhone}) necesita atención: "${(textBody || buttonTextFallback || '').slice(0, 80)}"`, '/mensajes')
-                        } catch {}
-                        if (waCreds) {
-                            await enviarTextoWhatsApp(waCreds, cleanPhone,
-                                `Disculpá, no estoy logrando ayudarte por acá 🙏 Ya avisé a una persona de nuestro equipo para que te responda a la brevedad por este chat.`,
-                                conversacionId ? { tenantId, conversacionId, accion: 'derivado_por_loop' } : undefined
-                            )
-                        }
+                        console.log(`[WA WEBHOOK] Texto no resuelto con turno pendiente. Re-mostrando botones del turno ${objetivoNet.turnoId}.`)
+                        await enviarBotonesWhatsApp(waCreds, cleanPhone,
+                            `Sobre tu turno del *${fechaTurno} hs* 👇\n¿Qué querés hacer?`,
+                            [
+                                { id: `CONFIRMAR_TURNO_${objetivoNet.turnoId}`, title: '✅ Confirmar' },
+                                { id: `REPROGRAMAR_TURNO_${objetivoNet.turnoId}`, title: '🔄 Reprogramar' },
+                                { id: `CANCELAR_TURNO_${objetivoNet.turnoId}`, title: '❌ Cancelar' },
+                            ],
+                            { tenantId, conversacionId, accion: 'reprompt_botones_turno' }
+                        )
                         return NextResponse.json({ success: true })
                     }
                 }
 
-                console.log(`[WA WEBHOOK] Enviando Menú Principal interactivo autónomo a ${from}...`)
-                const enviadoMenu = await enviarMenuPrincipalAutonomo(
-                    waCreds,
-                    cleanPhone,
-                    nombreConsultorio,
-                    conversacionId ? { tenantId, conversacionId, accion: 'menu_principal_fallback' } : undefined
-                )
-                if (enviadoMenu) {
-                    return NextResponse.json({ success: true })
+                // El bot no entendió el mensaje (auto-flow no lo resolvió y no había
+                // turno pendiente para re-ofrecer botones). Al PRIMER intento sin
+                // entender derivamos directo a administración con el link — sin menú ni
+                // reintentos, para no generar fricción ni loops.
+                console.log(`[WA WEBHOOK] Bot no entendió el mensaje de ${from}. Derivando a administración (1er intento).`)
+                if (conversacionId) {
+                    await admin.from('whatsapp_conversaciones')
+                        .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'bot_no_entendio', updated_at: new Date().toISOString() })
+                        .eq('id', conversacionId)
+                    await admin.from('notificaciones').insert({
+                        tenant_id: tenantId,
+                        titulo: '💬 El bot no pudo ayudar — derivar',
+                        mensaje: `Paciente (+${cleanPhone}) escribió algo que el bot no entendió. Mensaje: "${(textBody || buttonTextFallback || '').slice(0, 120)}"`,
+                        tipo: 'turno_reprogramado',
+                        referencia_id: conversacionId || '',
+                        prioridad: 'amarillo',
+                        motivo: 'bot_no_entendio',
+                        leida: false
+                    })
+                    try {
+                        const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                        await sendPushToRole('admin', tenantId, '💬 El bot no pudo ayudar', `Paciente (+${cleanPhone}) necesita atención: "${(textBody || buttonTextFallback || '').slice(0, 80)}"`, '/mensajes')
+                    } catch {}
                 }
+                if (waCreds) {
+                    // Link wa.me directo a la administración/secretaria (teléfono del
+                    // consultorio). Le damos al paciente una salida clara en lugar de
+                    // dejarlo esperando o repetir un menú que no lo ayudó.
+                    let linkSecretaria = ''
+                    try {
+                        const { data: tnt } = await admin
+                            .from('tenants').select('telefono').eq('id', tenantId).maybeSingle()
+                        if (tnt?.telefono) {
+                            const norm = normalizarTelefonoArgentino(tnt.telefono)
+                            const waPhone = norm.startsWith('54') ? `549${norm.substring(2)}` : norm
+                            if (waPhone) linkSecretaria = `https://wa.me/${waPhone}`
+                        }
+                    } catch {}
+
+                    const msgDerivacion = linkSecretaria
+                        ? `No pude ayudarte esta vez 🙏\n\nPor favor comunicate directo con administración por este link y te atiende una persona de nuestro equipo:\n${linkSecretaria}`
+                        : `No pude ayudarte esta vez 🙏 Ya avisé a una persona de nuestro equipo para que te responda a la brevedad por este chat.`
+
+                    await enviarTextoWhatsApp(waCreds, cleanPhone, msgDerivacion,
+                        conversacionId ? { tenantId, conversacionId, accion: 'derivado_por_loop' } : undefined
+                    )
+                }
+                return NextResponse.json({ success: true })
             }
 
             console.log(`[WA WEBHOOK] Mensaje procesado para ${from}.`)

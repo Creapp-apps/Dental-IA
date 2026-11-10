@@ -6,6 +6,8 @@ import { getDashboardStats, getTurnosDelDia, getProfesionales, getCurrentUsuario
 import { DashboardKPI } from '@/components/dashboard/DashboardKPI'
 import { TurnosProfesionalList } from '@/components/dashboard/TurnosProfesionalList'
 import { TurnosSinConfirmarSection } from '@/components/dashboard/TurnosSinConfirmarSection'
+import { ChatsRequierenAtencionSection } from '@/components/dashboard/ChatsRequierenAtencionSection'
+import { getConversaciones } from '@/lib/actions/whatsapp-chat'
 import { DashboardLiveAlerts } from '@/components/dashboard/DashboardLiveAlerts'
 import { getBillingConfig } from '@/lib/actions/billing'
 import { esEmailSuperadmin } from '@/lib/auth/superadmins'
@@ -40,6 +42,11 @@ export default async function DashboardPage(props: {
     const profesionalesVisibles = agenda.esProfesional && agenda.profesionalId
         ? profesionales.filter((p: any) => p.id === agenda.profesionalId)
         : profesionales
+
+    // Chats de WhatsApp que requieren atención (solo para administración).
+    const chatsRequierenAtencion = usuario?.rol !== 'profesional'
+        ? (await getConversaciones('pendientes')).conversaciones.filter(c => c.estado === 'HUMANO_PENDIENTE')
+        : []
 
     const turnosPendientes = turnos.filter((t: any) => t.estado === 'PENDIENTE')
     const turnosUrgentes = turnos.filter(
@@ -212,6 +219,9 @@ export default async function DashboardPage(props: {
 
             {/* Centro de Alertas y Novedades en Tiempo Real */}
             <DashboardLiveAlerts />
+
+            {/* Chats de WhatsApp que requieren atención */}
+            <ChatsRequierenAtencionSection initial={chatsRequierenAtencion} />
 
             {/* Turnos sin confirmar */}
             <TurnosSinConfirmarSection initialTurnos={turnosSinConfirmar} />
