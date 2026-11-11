@@ -1180,7 +1180,28 @@ export async function procesarMensajeAutonomo({
         soloTexto.includes('llegando tarde') ||
         soloTexto.includes('unos minutos tarde')
 
-    if ((esAgradecimiento || esCierreConforme) && !soloTexto.includes('turno') && !soloTexto.includes('dolor')) {
+    // Un "gracias" de cortesía al final de un pedido real (ej. "pasame la
+    // dirección, muchas gracias") NO es un cierre: si disparamos la cortesía
+    // acá, hacemos return y nos tragamos la consulta real que venía más abajo
+    // (ubicación, precios, obra social, horarios…). Detectamos esos pedidos
+    // concretos y dejamos que sigan de largo hasta su intención específica.
+    const contienePedidoConcreto =
+        normText.includes('direccion') ||
+        normText.includes('ubicacion') ||
+        normText.includes('donde queda') ||
+        normText.includes('donde estan') ||
+        normText.includes('como llego') ||
+        normText.includes('como llegar') ||
+        normText.includes('en que lugar') ||
+        normText.includes('horario') ||
+        normText.includes('precio') ||
+        normText.includes('cuanto sale') ||
+        normText.includes('cuanto cuesta') ||
+        normText.includes('obra social') ||
+        normText.includes('turno') ||
+        normText.includes('dolor')
+
+    if ((esAgradecimiento || esCierreConforme) && !contienePedidoConcreto) {
         const msgAgradecimiento = esAgradecimiento
             ? `¡De nada! Que tengas un excelente día. Quedamos a tu entera disposición ante cualquier duda o consulta 😊🦷✨`
             : `¡Perfecto! 😊🦷 Cualquier cosa, quedamos a tu disposición por acá.`
