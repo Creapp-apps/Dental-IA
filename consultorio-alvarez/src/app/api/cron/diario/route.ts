@@ -27,7 +27,8 @@ async function handleDailyCron(request: NextRequest) {
         const admin = createAdminClient()
         const results = {
             cumpleanos: [] as any[],
-            seguimiento: [] as any[]
+            seguimiento: [] as any[],
+            chatsCerrados: { atendiendo: 0, pendiente: 0 }
         }
 
         // ==========================================
@@ -268,6 +269,42 @@ async function handleDailyCron(request: NextRequest) {
                     results.seguimiento.push({ turno_id: t.id, status: 'FAILED', error: waErr.message })
                 }
             }
+        }
+
+        // ==========================================
+        // PROCESO 3: AUTO-CIERRE DE CHATS DE WHATSAPP INACTIVOS
+        // Los chats tomados por un humano no se cerraban nunca y se acumulaban.
+        // Se cierran por inactividad (sin cambiar nada del lado del paciente). Si el
+        // paciente vuelve a escribir, el webhook reabre la conversación (estado BOT).
+        //   - HUMANO_ATENDIENDO sin actividad > 48hs  (operador que no cerró)
+        //   - HUMANO_PENDIENTE   sin actividad > 7 días (nunca se atendió)
+        // No se toca BOT ("bajo control"): esas las gestiona el bot.
+        // ==========================================
+        console.log('🗂️ Iniciando auto-cierre de chats de WhatsApp inactivos...')
+        const ahoraMs = Date.now()
+        const hace48h = new Date(ahoraMs - 48 * 60 * 60 * 1000).toISOString()
+        const hace7dias = new Date(ahoraMs - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+        try {
+            const { data: cerrAtendiendo } = await admin
+                .from('whatsapp_conversaciones')
+                .update({ estado: 'CERRADO', updated_at: new Date().toISOString() })
+                .eq('estado', 'HUMANO_ATENDIENDO')
+                .lt('ultimo_mensaje_at', hace48h)
+                .select('id')
+            results.chatsCerrados.atendiendo = cerrAtendiendo?.length || 0
+
+            const { data: cerrPendiente } = await admin
+                .from('whatsapp_conversaciones')
+                .update({ estado: 'CERRADO', updated_at: new Date().toISOString() })
+                .eq('estado', 'HUMANO_PENDIENTE')
+                .lt('ultimo_mensaje_at', hace7dias)
+                .select('id')
+            results.chatsCerrados.pendiente = cerrPendiente?.length || 0
+
+            console.log(`🗂️ Chats auto-cerrados → atendiendo(48h): ${results.chatsCerrados.atendiendo}, pendiente(7d): ${results.chatsCerrados.pendiente}`)
+        } catch (cerrErr: any) {
+            console.error('❌ Error en auto-cierre de chats:', cerrErr?.message)
         }
 
         return NextResponse.json({ success: true, results })

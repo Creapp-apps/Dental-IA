@@ -163,6 +163,32 @@ const AFIRMACIONES_CONFIRMA = new Set([
     'voy', 'si voy', 'cuenten conmigo', 'ahi estaremos', 'ahi nos vemos', 'nos vemos', 'buenisimo gracias',
 ])
 
+// Emojis que, como respuesta a un recordatorio de turno, cuentan como confirmación:
+// 👍 pulgar, 👌 ok, ✅ / ✔️ check, 🆗, 🙆 persona OK. Los modificadores de tono de
+// piel siguen al emoji base, así que basta con detectar el codepoint base.
+const EMOJI_CONFIRMA = /[\u{1F44D}\u{1F44C}\u{2705}\u{2714}\u{1F197}\u{1F646}]/u
+
+// Preguntas por copago / coseguro: el bot no conoce el monto (depende de la obra
+// social y el plan), así que no las responde: las acusa y deriva a administración.
+const REGEX_COPAGO = /\bcopago|\bco-?pago|\bcoseguro|\bco-?seguro|\bco seguro|\bco pago\b/i
+
+// Preguntas de ubicación / dirección (solo-lectura, suelen ser urgentes: el paciente
+// va al turno). Deliberadamente SIN "horario" para no pisar "cambiar el horario".
+const REGEX_UBICACION = /\bdireccion\b|\bubicacion\b|donde (estan|queda|quedan|esta|es el consultorio)|como (llego|llegar|se llega)|en que lugar|\bmapa\b|pasarias la direccion|ir hoy al turno/i
+
+/** Link wa.me directo a la administración (teléfono del consultorio). */
+async function linkWaAdministracion(admin: any, tenantId: string): Promise<string> {
+    try {
+        const { data: tnt } = await admin.from('tenants').select('telefono').eq('id', tenantId).maybeSingle()
+        if (tnt?.telefono) {
+            const norm = normalizarTelefonoArgentino(tnt.telefono)
+            const waPhone = norm.startsWith('54') ? `549${norm.substring(2)}` : norm
+            if (waPhone) return `https://wa.me/${waPhone}`
+        }
+    } catch {}
+    return ''
+}
+
 // POST: Recepción de Eventos de Mensajes de Meta
 export async function POST(request: NextRequest) {
     try {
@@ -266,6 +292,7 @@ export async function POST(request: NextRequest) {
         let estadoConversacion = 'BOT'
         let prioridadActual: Prioridad | null = null
         let motivoActual: string | null = null
+        let reabrirConversacion = false
 
         try {
             const { data: conv } = await admin
@@ -280,6 +307,13 @@ export async function POST(request: NextRequest) {
                 estadoConversacion = conv.estado
                 prioridadActual = (conv as any).prioridad ?? null
                 motivoActual = (conv as any).motivo ?? null
+                // Reapertura: si el chat se había auto-cerrado por inactividad y el
+                // paciente vuelve a escribir, lo reactivamos (vuelve a la bandeja y el
+                // bot lo gestiona). Se persiste en el UPDATE de abajo.
+                if (conv.estado === 'CERRADO') {
+                    estadoConversacion = 'BOT'
+                    reabrirConversacion = true
+                }
             } else {
                 const { data: paciente } = await admin
                     .from('pacientes')
@@ -345,7 +379,9 @@ export async function POST(request: NextRequest) {
                 await admin.from('whatsapp_conversaciones').update({
                     ultimo_mensaje_at: new Date().toISOString(),
                     ultimo_mensaje_texto: textBody || buttonTextFallback || buttonPayload || 'Mensaje recibido',
-                    no_leidos_operador: (conv?.no_leidos_operador || 0) + 1
+                    no_leidos_operador: (conv?.no_leidos_operador || 0) + 1,
+                    // Reapertura de un chat auto-cerrado: vuelve a BOT y se limpia el triage.
+                    ...(reabrirConversacion ? { estado: 'BOT', prioridad: null, motivo: null } : {})
                 }).eq('id', conversacionId)
             }
         } catch (persistErr) {
@@ -430,6 +466,7 @@ export async function POST(request: NextRequest) {
                     const matchesConfirm =
                         AFIRMACIONES_CONFIRMA.has(normalized) ||
                         normalized.includes('confirm') ||
+                        EMOJI_CONFIRMA.test(textToAnalyze) ||
                         (normalized.startsWith('si ') && normalized.length <= 15);
 
                     const matchesReprogram =
@@ -466,8 +503,26 @@ export async function POST(request: NextRequest) {
                         turnoIdToUpdate = objetivo.turnoId
                         respuestaPaciente = 'REPROGRAMAR'
                     } else if (matchesCancel) {
-                        turnoIdToUpdate = objetivo.turnoId
-                        respuestaPaciente = 'CANCELAR'
+                        // NUNCA cancelamos un turno desde texto libre: puede ser una
+                        // condicional o pregunta (ej. "¿si pago copago? cancelo turno").
+                        // Ofrecemos los botones para que el paciente elija explícitamente.
+                        const creds = await getWhatsAppCredentialsForTenant(tenantId)
+                        if (creds) {
+                            const fechaTurno = new Date(objetivo.fechaInicio).toLocaleString('es-AR', {
+                                weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit',
+                                timeZone: 'America/Argentina/Buenos_Aires'
+                            })
+                            await enviarBotonesWhatsApp(creds, cleanPhone,
+                                `Sobre tu turno del *${fechaTurno} hs* 👇\n¿Qué querés hacer?`,
+                                [
+                                    { id: `CONFIRMAR_TURNO_${objetivo.turnoId}`, title: '✅ Mantenerlo' },
+                                    { id: `REPROGRAMAR_TURNO_${objetivo.turnoId}`, title: '🔄 Reprogramar' },
+                                    { id: `CANCELAR_TURNO_${objetivo.turnoId}`, title: '❌ Cancelar' },
+                                ],
+                                conversacionId ? { tenantId, conversacionId, accion: 'cancelar_ofrece_botones' } : undefined
+                            )
+                            return NextResponse.json({ success: true })
+                        }
                     }
                 }
             }
@@ -1003,6 +1058,30 @@ export async function POST(request: NextRequest) {
             //    avisamos (push) cuando el paciente vuelve a escribir, para que no se pierda
             //    el ida y vuelta. Debounce: a lo sumo 1 aviso cada 5 min por conversación.
             if (estadoConversacion === 'HUMANO_PENDIENTE') {
+                // Excepción al silencio: una FAQ de ubicación/dirección es solo-lectura y
+                // suele ser urgente (el paciente va al turno). La respondemos aunque el
+                // chat esté esperando a recepción, sin cambiar el estado. (HUMANO_ATENDIENDO
+                // ya retornó antes, así que acá nadie está atendiendo activamente.)
+                const textoPend = normalizeTextForMatch(textBody || buttonTextFallback || '')
+                if (waCreds && REGEX_UBICACION.test(textoPend)) {
+                    const { data: tnt } = await admin
+                        .from('tenants').select('nombre, direccion, ciudad').eq('id', tenantId).maybeSingle()
+                    const direccionClinica = tnt?.direccion
+                        ? `${tnt.direccion}${tnt.ciudad ? `, ${tnt.ciudad}` : ''}`
+                        : null
+                    if (direccionClinica) {
+                        const msgUbic = `📍 *Ubicación de ${tnt?.nombre || 'nuestro consultorio'}*\n\n` +
+                            `Estamos en: *${direccionClinica}*.\n\n` +
+                            `🕐 *Horarios de atención:*\n` +
+                            `• Lunes a Viernes de 09:00 a 20:00 hs.\n` +
+                            `• Sábados de 09:00 a 13:00 hs.`
+                        console.log(`[WA WEBHOOK] FAQ de ubicación respondida en estado pending (sin tapar al humano).`)
+                        await enviarTextoWhatsApp(waCreds, cleanPhone, msgUbic,
+                            conversacionId ? { tenantId, conversacionId, accion: 'faq_ubicacion_en_pending' } : undefined)
+                        return NextResponse.json({ success: true })
+                    }
+                }
+
                 console.log(`[WA WEBHOOK] Conversación ${conversacionId} en espera de operador. Bot en silencio.`)
                 if (conversacionId) {
                     try {
@@ -1054,6 +1133,39 @@ export async function POST(request: NextRequest) {
                 // debe terminar en el menú genérico: se deriva a un humano con acuse.
                 console.log(`[WA WEBHOOK] Urgencia de ${from} sin triage disponible. Derivando a humano.`)
                 await derivarUrgenciaAHumano(textToAnalyze)
+                return NextResponse.json({ success: true })
+            }
+
+            // 7b. Consulta por copago / coseguro: el bot NO conoce el monto (varía por
+            // obra social y plan). La acusa, deriva a administración con el link directo
+            // y deja el chat en la bandeja para que recepción responda.
+            if (REGEX_COPAGO.test(textToAnalyze) && waCreds) {
+                console.log(`[WA WEBHOOK] Consulta de copago/coseguro de ${from}. Derivando a administración.`)
+                if (conversacionId) {
+                    await admin.from('whatsapp_conversaciones')
+                        .update({ estado: 'HUMANO_PENDIENTE', ...camposTriageNoDegradante('amarillo', 'pide_recepcion'), updated_at: new Date().toISOString() })
+                        .eq('id', conversacionId)
+                    await admin.from('notificaciones').insert({
+                        tenant_id: tenantId,
+                        titulo: '💬 Consulta de copago — responder',
+                        mensaje: `Paciente (+${cleanPhone}) pregunta por copago/coseguro: "${(textToAnalyze || '').slice(0, 120)}"`,
+                        tipo: 'turno_reprogramado',
+                        referencia_id: conversacionId || '',
+                        prioridad: 'amarillo',
+                        motivo: 'pide_recepcion',
+                        leida: false
+                    })
+                    try {
+                        const { sendPushToRole } = await import('@/lib/push-notifications/send-push')
+                        await sendPushToRole('admin', tenantId, '💬 Consulta de copago', `Paciente (+${cleanPhone}) pregunta por copago.`, '/mensajes')
+                    } catch {}
+                }
+                const linkAdmin = await linkWaAdministracion(admin, tenantId)
+                const msgCopago = linkAdmin
+                    ? `El copago depende de tu obra social y plan 💳\n\nPara darte el monto exacto, comunicate con administración por este link y te lo confirman:\n${linkAdmin}`
+                    : `El copago depende de tu obra social y plan 💳 Una persona de administración te va a confirmar el monto a la brevedad por este chat.`
+                await enviarTextoWhatsApp(waCreds, cleanPhone, msgCopago,
+                    conversacionId ? { tenantId, conversacionId, accion: 'consulta_copago_derivada' } : undefined)
                 return NextResponse.json({ success: true })
             }
 

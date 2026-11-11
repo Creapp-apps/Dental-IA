@@ -17,6 +17,9 @@ interface EstadoReservaConversacional {
     // Profesional elegido por el paciente (el cliente exige elegirlo antes de ver horarios).
     profesionalId?: string | null
     profesionalNombre?: string
+    // Fecha explícita que pidió el paciente ("hay turno el 10/11?"), en YYYY-MM-DD.
+    // Si está, al elegir profesional se muestran los slots de ESE día (o el más cercano).
+    fechaSolicitada?: string
     // Slots que se le ofrecieron (para mapear respuestas numéricas "1/2/3").
     slots?: { payload: string }[]
     expiresAt: number
@@ -318,7 +321,9 @@ export async function enviarListaWhatsApp(
 export async function obtenerProximosTresSlots(
     tenantSlug: string,
     profesionalId?: string | null,
-    limite: number = 3
+    limite: number = 3,
+    // Si viene una fecha YYYY-MM-DD, sólo se devuelven slots de ESE día.
+    fechaFiltro?: string | null
 ): Promise<Array<{
     fecha: string
     hora: string
@@ -349,6 +354,7 @@ export async function obtenerProximosTresSlots(
 
     for (const d of disponibilidad) {
         if (!d.slots || d.slots.length === 0) continue
+        if (fechaFiltro && d.date !== fechaFiltro) continue
 
         const [y, m, diaNum] = d.date.split('-').map(Number)
         const dateObj = new Date(y, m - 1, diaNum)
@@ -380,6 +386,57 @@ export async function obtenerProximosTresSlots(
     }
 
     return slotsResult
+}
+
+const MESES_ES: Record<string, number> = {
+    enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6,
+    julio: 7, agosto: 8, septiembre: 9, setiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
+}
+
+/**
+ * Extrae una fecha EXPLÍCITA e inequívoca del texto del paciente, devuelta como
+ * YYYY-MM-DD. Sólo matchea formatos claros para no arriesgar malinterpretar:
+ *   - "10/11", "10-11", "10/11/2026"  (día/mes[/año])
+ *   - "10 de noviembre"
+ * Lo relativo/ambiguo ("el jueves", "la semana que viene", "el 10") devuelve null.
+ * El año, si no viene, es el actual; si la fecha ya pasó, se asume el próximo año.
+ */
+function parsearFechaExplicita(normText: string): string | null {
+    const hoyStr = new Date().toLocaleString('sv-SE', { timeZone: 'America/Argentina/Buenos_Aires' }).split(' ')[0]
+    const [hoyY] = hoyStr.split('-').map(Number)
+
+    const armar = (dia: number, mes: number, anio?: number): string | null => {
+        if (mes < 1 || mes > 12 || dia < 1 || dia > 31) return null
+        let y = anio ?? hoyY
+        if (anio === undefined) {
+            const tentativa = `${y}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
+            if (tentativa < hoyStr) y = hoyY + 1 // la fecha ya pasó este año → próximo
+        } else if (y < 100) {
+            y = 2000 + y
+        }
+        const fecha = `${y}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`
+        // Validar que la fecha exista (ej. 31/02 no)
+        const [yy, mm, dd] = fecha.split('-').map(Number)
+        const d = new Date(yy, mm - 1, dd)
+        if (d.getFullYear() !== yy || d.getMonth() !== mm - 1 || d.getDate() !== dd) return null
+        return fecha
+    }
+
+    // "10 de noviembre" (con o sin año)
+    const mDeMes = normText.match(/\b(\d{1,2})\s+de\s+([a-z]+)(?:\s+(?:de\s+)?(\d{4}))?/)
+    if (mDeMes) {
+        const mes = MESES_ES[mDeMes[2]]
+        if (mes) return armar(Number(mDeMes[1]), mes, mDeMes[3] ? Number(mDeMes[3]) : undefined)
+    }
+
+    // "10/11", "10-11", "10/11/26", "10/11/2026" (día/mes[/año]). El separador evita
+    // confundir con horas ("11:00") porque exige / o -.
+    const mNum = normText.match(/\b(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?\b/)
+    if (mNum) {
+        return armar(Number(mNum[1]), Number(mNum[2]), mNum[3] ? Number(mNum[3]) : undefined)
+    }
+
+    return null
 }
 
 /**
@@ -843,6 +900,55 @@ export async function procesarMensajeAutonomo({
             ? `${profElegido.nombre} ${profElegido.apellido}`.trim()
             : 'el profesional'
 
+        // Si el paciente había pedido una fecha puntual, mostramos los turnos de ESE
+        // día con el profesional elegido (o el más cercano si ese día no hay).
+        const ctxFecha = await getReservaCtx(admin, conversacionId)
+        const fechaSolicitada = ctxFecha?.fechaSolicitada
+        if (fechaSolicitada) {
+            const fechaLabel = `${fechaSolicitada.split('-')[2]}/${fechaSolicitada.split('-')[1]}`
+            const slotsDia = await obtenerProximosTresSlots(tenant?.slug || '', profId, 3, fechaSolicitada)
+
+            if (slotsDia.length > 0) {
+                const botones = slotsDia.slice(0, 2).map(s => ({ id: s.payload, title: `✅ ${s.hora} hs`.slice(0, 20) }))
+                botones.push({ id: 'MENU_TURNOS', title: '🔄 Otro profesional' })
+                const listado = slotsDia.slice(0, 3).map(s => `• ${s.hora} hs`).join('\n')
+                const texto = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+                    `Para el *${fechaLabel}* con *Dr/a. ${profNombre}* hay estos turnos libres:\n\n${listado}\n\n` +
+                    `👇 Tocá un horario para reservarlo:`
+                await enviarBotonesWhatsApp(creds, cleanPhone, texto, botones, { ...trackingBase, accion: 'ofrecido_slots_fecha' })
+                await setReservaCtx(admin, conversacionId, {
+                    paso: 'SLOTS_OFRECIDOS', fecha: '', hora: '', fechaLegible: '',
+                    profesionalId: profId, profesionalNombre: profNombre,
+                    slots: slotsDia.slice(0, 2).map(s => ({ payload: s.payload })),
+                    expiresAt: Date.now() + 30 * 60 * 1000
+                })
+                return { handled: true, action: 'ofrecido_slots_fecha' }
+            }
+
+            // Ese día no hay turnos con ese profesional: ofrecemos el más cercano.
+            const cercano = await obtenerProximosTresSlots(tenant?.slug || '', profId, 1)
+            if (cercano.length > 0) {
+                const s = cercano[0]
+                const texto = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
+                    `Para el *${fechaLabel}* no hay turnos libres con *Dr/a. ${profNombre}* 😕\n\n` +
+                    `El más cercano es:\n📅 *${s.fechaLegible}*\n\n` +
+                    `👇 Tocá *Confirmar* para reservarlo, o elegí otro profesional:`
+                await enviarBotonesWhatsApp(creds, cleanPhone, texto, [
+                    { id: s.payload, title: '✅ Confirmar' },
+                    { id: 'MENU_TURNOS', title: '🔄 Otro profesional' },
+                    { id: 'MENU_PRINCIPAL', title: '⬅️ Menú Principal' }
+                ], { ...trackingBase, accion: 'fecha_sin_slots_ofrece_cercano' })
+                await setReservaCtx(admin, conversacionId, {
+                    paso: 'SLOTS_OFRECIDOS', fecha: '', hora: '', fechaLegible: '',
+                    profesionalId: profId, profesionalNombre: profNombre,
+                    slots: [{ payload: s.payload }],
+                    expiresAt: Date.now() + 30 * 60 * 1000
+                })
+                return { handled: true, action: 'fecha_sin_slots_ofrece_cercano' }
+            }
+            // Ni ese día ni cercano: cae al flujo de "sin turnos" de abajo.
+        }
+
         // Solo el turno MÁS PRÓXIMO de ese profesional (limite = 1).
         const slotsCandidatos = await obtenerProximosTresSlots(tenant?.slug || '', profId, 1)
 
@@ -1022,6 +1128,10 @@ export async function procesarMensajeAutonomo({
         return { handled: true, action: 'reaccion_emoji_silenciada' }
     }
 
+    // Ojo: un SALUDO ("buen día", "buenas") NO es un agradecimiento. Antes caían
+    // acá y recibían "¡De nada! Que tengas un excelente día…", que cierra la charla
+    // y desalienta al paciente que recién venía a decir algo (ej. que está demorado).
+    // Los saludos se rutean al saludo/menú más abajo.
     const esAgradecimiento =
         soloTexto === 'gracias' ||
         soloTexto.startsWith('gracias') ||
@@ -1030,9 +1140,7 @@ export async function procesarMensajeAutonomo({
         soloTexto.includes('muchas gracias') ||
         soloTexto === 'perfecto gracias' ||
         soloTexto === 'muy bien gracias' ||
-        soloTexto.includes('excelente estado') ||
-        soloTexto === 'buen dia' ||
-        soloTexto === 'buenas tardes'
+        soloTexto.includes('excelente estado')
 
     // Cierre conforme / aviso de que asiste: "ok", "dale", "perfecto",
     // "allí estaré", "estoy yendo", etc. No es una consulta: no va al menú.
@@ -1060,7 +1168,17 @@ export async function procesarMensajeAutonomo({
         soloTexto.includes('ahi voy') ||
         soloTexto.includes('estoy llegando') ||
         soloTexto.includes('ya estoy aca') ||
-        soloTexto.includes('ya llegue')
+        soloTexto.includes('ya llegue') ||
+        // Avisos de demora: el paciente avisa que va a llegar tarde. Lo acusamos
+        // con cortesía en vez de mandarlo al menú o derivarlo como "no entendí".
+        soloTexto.includes('demorado') ||
+        soloTexto.includes('demorada') ||
+        soloTexto.includes('estoy demorado') ||
+        soloTexto.includes('voy demorado') ||
+        soloTexto.includes('llego tarde') ||
+        soloTexto.includes('voy a llegar tarde') ||
+        soloTexto.includes('llegando tarde') ||
+        soloTexto.includes('unos minutos tarde')
 
     if ((esAgradecimiento || esCierreConforme) && !soloTexto.includes('turno') && !soloTexto.includes('dolor')) {
         const msgAgradecimiento = esAgradecimiento
@@ -1532,7 +1650,10 @@ export async function procesarMensajeAutonomo({
         buttonPayload === 'MENU_TURNOS'
 
     if (pideTurno) {
-        console.log(`[WA AUTO-FLOW] Petición de turno conversacional por ${cleanPhone}. Pidiendo elegir profesional...`)
+        // Si el paciente pidió una fecha explícita ("hay turno el 10/11?"), la
+        // recordamos para mostrar los slots de ESE día una vez elija profesional.
+        const fechaSolicitada = parsearFechaExplicita(normText)
+        console.log(`[WA AUTO-FLOW] Petición de turno conversacional por ${cleanPhone}. Fecha pedida: ${fechaSolicitada || 'ninguna'}. Pidiendo elegir profesional...`)
 
         // El cliente exige elegir profesional ANTES de ver horarios.
         const profs = await getProfesionalesPublicos(tenant?.slug || '') as any[]
@@ -1550,8 +1671,13 @@ export async function procesarMensajeAutonomo({
             return { handled: true, action: 'sin_profesionales_link_portal' }
         }
 
+        const fechaPedidaLabel = fechaSolicitada
+            ? `${fechaSolicitada.split('-')[2]}/${fechaSolicitada.split('-')[1]}`
+            : ''
         const textoElegirProf = `🗓️ *Reserva de Turnos — ${nombreClinica}*\n\n` +
-            `Para darte el primer turno libre, elegí con qué profesional querés atenderte:`
+            (fechaSolicitada
+                ? `Para ver la disponibilidad del *${fechaPedidaLabel}*, elegí con qué profesional querés atenderte:`
+                : `Para darte el primer turno libre, elegí con qué profesional querés atenderte:`)
 
         // ≤3 profesionales → botones (Consultorio Alvarez). 4+ → lista (Curadent Moreno).
         if (profs.length <= 3) {
@@ -1576,6 +1702,7 @@ export async function procesarMensajeAutonomo({
         await setReservaCtx(admin, conversacionId, {
             paso: 'PIDIENDO_PROFESIONAL',
             fecha: '', hora: '', fechaLegible: '',
+            fechaSolicitada: fechaSolicitada || undefined,
             expiresAt: Date.now() + 30 * 60 * 1000
         })
         return { handled: true, action: 'pidiendo_profesional' }
@@ -1726,7 +1853,16 @@ export async function procesarMensajeAutonomo({
     // ─────────────────────────────────────────────────────────────
     // 9. MENÚ PRINCIPAL POR DEFECTO
     // ─────────────────────────────────────────────────────────────
-    if (buttonPayload === 'MENU_PRINCIPAL' || normText.includes('menu') || normText.includes('hola')) {
+    // Saludo suelto ("hola", "buen día", "buenas", etc.): lo tratamos como apertura
+    // y mostramos el menú (invita al paciente a decir qué necesita), NUNCA como
+    // agradecimiento/cierre.
+    const esSaludoSolo =
+        ['hola', 'holis', 'holaa', 'buenas', 'buen dia', 'buenos dias', 'buena tarde',
+         'buenas tardes', 'buenas noches', 'que tal', 'como estan', 'como andan', 'hola buenas'
+        ].includes(soloTexto) ||
+        /^(hola|buenas|buen dia|buenos dias|buenas tardes|buenas noches)\b/.test(soloTexto)
+
+    if (buttonPayload === 'MENU_PRINCIPAL' || normText.includes('menu') || esSaludoSolo) {
         await enviarMenuPrincipalAutonomo(creds, cleanPhone, nombreClinica, { ...trackingBase, accion: 'menu_principal' })
         return { handled: true, action: 'menu_principal' }
     }
