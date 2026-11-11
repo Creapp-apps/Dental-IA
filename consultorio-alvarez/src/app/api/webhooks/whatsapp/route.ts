@@ -656,45 +656,63 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            // --- Enviar mensaje de respuesta automática (Plantilla de WhatsApp) al paciente ---
+            // --- Enviar mensaje de respuesta automática al paciente ---
             try {
-                let templateName: 'turno_confirmado' | 'turno_cancelado' | 'turno_reprogramado' = 'turno_confirmado'
-                if (respuestaPaciente === 'CONFIRMAR') {
-                    templateName = 'turno_confirmado'
-                } else if (respuestaPaciente === 'CANCELAR') {
-                    templateName = 'turno_cancelado'
-                } else if (respuestaPaciente === 'REPROGRAMAR') {
-                    templateName = 'turno_reprogramado'
-                }
-
-                console.log(`[WA WEBHOOK] Despachando plantilla automática "${templateName}" para turno ${turnoIdToUpdate}`)
-                await notificarTurnoPorWhatsApp(turnoIdToUpdate, templateName)
-
-                // ACK anti-silencio: si la plantilla falló (p. ej. #132001 plantilla en
-                // revisión, o #131047 fuera de ventana), el paciente se queda sin acuse y
-                // parece que "el bot no respondió". Como su propio mensaje abre la ventana
-                // de 24hs, reintentamos con TEXTO LIBRE para que SIEMPRE reciba confirmación.
-                const { data: ultimoRecEnvio } = await admin
-                    .from('recordatorios')
-                    .select('estado_envio')
-                    .eq('turno_id', turnoIdToUpdate)
-                    .eq('tenant_id', tenantId)
-                    .order('created_at', { ascending: false })
-                    .limit(1)
-                    .maybeSingle()
-
-                if (ultimoRecEnvio?.estado_envio === 'FALLIDO') {
+                if (respuestaPaciente === 'REPROGRAMAR') {
+                    // Un pedido de reprogramación NO es un cambio ya realizado. NO usamos la
+                    // plantilla "turno_reprogramado": Meta la renderiza como "reprogramado con
+                    // éxito" y la rellena con la MISMA fecha/hora del turno original (todavía sin
+                    // cambiar), generando un falso éxito que confunde al paciente. Como su propio
+                    // mensaje abre la ventana de 24hs, acusamos por TEXTO LIBRE y derivamos a
+                    // recepción para que coordine la nueva fecha de verdad.
                     const creds = await getWhatsAppCredentialsForTenant(tenantId)
                     if (creds) {
-                        const ackTexto =
-                            respuestaPaciente === 'CONFIRMAR'
-                                ? '✅ ¡Listo! Tu turno quedó *confirmado*. ¡Te esperamos! 🦷'
-                                : respuestaPaciente === 'CANCELAR'
-                                    ? 'Tu turno fue *cancelado*. Si querés reprogramar, escribinos por acá cuando quieras. 🦷'
-                                    : 'Recibimos tu pedido de *reprogramación* 🙏 Un asesor de recepción te va a contactar a la brevedad por este chat.'
-                        console.log(`[WA WEBHOOK] Plantilla "${templateName}" falló. Enviando ACK por texto libre.`)
-                        await enviarTextoWhatsApp(creds, cleanPhone, ackTexto,
-                            conversacionId ? { tenantId, conversacionId, accion: 'ack_texto_fallback' } : undefined)
+                        console.log(`[WA WEBHOOK] Pedido de reprogramación en turno ${turnoIdToUpdate}. Acuse por texto libre (sin plantilla de éxito).`)
+                        await enviarTextoWhatsApp(creds, cleanPhone,
+                            'Recibimos tu pedido de *reprogramación* 🙏 Un asesor de recepción te va a contactar a la brevedad por este chat para coordinar la nueva fecha y horario.',
+                            conversacionId ? { tenantId, conversacionId, accion: 'ack_reprogramacion' } : undefined)
+                    }
+
+                    // La conversación NO debe quedar "resuelta / bajo control": un pedido de
+                    // reprogramación requiere que un humano reprograme. La pasamos a pendiente
+                    // humano (amarillo) para que aparezca en "Requiere atención", salvo que ya
+                    // la esté atendiendo un operador.
+                    if (conversacionId && estadoConversacion !== 'HUMANO_ATENDIENDO') {
+                        await admin.from('whatsapp_conversaciones')
+                            .update({ estado: 'HUMANO_PENDIENTE', prioridad: 'amarillo', motivo: 'reprogramar' })
+                            .eq('id', conversacionId)
+                    }
+                } else {
+                    const templateName: 'turno_confirmado' | 'turno_cancelado' =
+                        respuestaPaciente === 'CONFIRMAR' ? 'turno_confirmado' : 'turno_cancelado'
+
+                    console.log(`[WA WEBHOOK] Despachando plantilla automática "${templateName}" para turno ${turnoIdToUpdate}`)
+                    await notificarTurnoPorWhatsApp(turnoIdToUpdate, templateName)
+
+                    // ACK anti-silencio: si la plantilla falló (p. ej. #132001 plantilla en
+                    // revisión, o #131047 fuera de ventana), el paciente se queda sin acuse y
+                    // parece que "el bot no respondió". Como su propio mensaje abre la ventana
+                    // de 24hs, reintentamos con TEXTO LIBRE para que SIEMPRE reciba confirmación.
+                    const { data: ultimoRecEnvio } = await admin
+                        .from('recordatorios')
+                        .select('estado_envio')
+                        .eq('turno_id', turnoIdToUpdate)
+                        .eq('tenant_id', tenantId)
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle()
+
+                    if (ultimoRecEnvio?.estado_envio === 'FALLIDO') {
+                        const creds = await getWhatsAppCredentialsForTenant(tenantId)
+                        if (creds) {
+                            const ackTexto =
+                                respuestaPaciente === 'CONFIRMAR'
+                                    ? '✅ ¡Listo! Tu turno quedó *confirmado*. ¡Te esperamos! 🦷'
+                                    : 'Tu turno fue *cancelado*. Si querés reprogramar, escribinos por acá cuando quieras. 🦷'
+                            console.log(`[WA WEBHOOK] Plantilla "${templateName}" falló. Enviando ACK por texto libre.`)
+                            await enviarTextoWhatsApp(creds, cleanPhone, ackTexto,
+                                conversacionId ? { tenantId, conversacionId, accion: 'ack_texto_fallback' } : undefined)
+                        }
                     }
                 }
             } catch (waErr) {
