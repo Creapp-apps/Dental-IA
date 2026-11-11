@@ -100,6 +100,45 @@ function labelDiaTurno(iso: string): string {
     return format(new Date(iso), "EEEE dd/MM/yyyy", { locale: es }).toUpperCase()
 }
 
+/** Conteo de estados de un día, para el semáforo del encabezado. */
+interface EstadosDia {
+    cancelados: number
+    sinConfirmar: number
+    confirmados: number
+}
+
+/**
+ * Semáforo de estados del día: luces parpadeantes con conteo.
+ * Rojo = cancelados, amarillo = sin confirmar (PENDIENTE), verde = confirmados.
+ * Solo se muestra la luz del estado con al menos un turno.
+ */
+function SemaforoDia({ stats, compact = false }: { stats: EstadosDia; compact?: boolean }) {
+    const luces = [
+        { n: stats.cancelados, dot: 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.85)]', text: 'text-red-600 dark:text-red-400', one: 'cancelado', many: 'cancelados' },
+        { n: stats.sinConfirmar, dot: 'bg-amber-400 shadow-[0_0_6px_rgba(245,158,11,0.85)]', text: 'text-amber-600 dark:text-amber-400', one: 'sin confirmar', many: 'sin confirmar' },
+        { n: stats.confirmados, dot: 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.85)]', text: 'text-emerald-600 dark:text-emerald-400', one: 'confirmado', many: 'confirmados' },
+    ].filter(l => l.n > 0)
+
+    if (luces.length === 0) return null
+
+    return (
+        <span className={cn('inline-flex items-center normal-case', compact ? 'gap-2' : 'gap-3')}>
+            {luces.map((l, i) => {
+                const label = l.n === 1 ? l.one : l.many
+                return (
+                    <span key={i} className="inline-flex items-center gap-1.5" title={`${l.n} ${label}`}>
+                        <span className={cn('rounded-full animate-pulse shrink-0', compact ? 'h-2 w-2' : 'h-2.5 w-2.5', l.dot)} />
+                        <span className={cn('font-bold tabular-nums', compact ? 'text-[10px]' : 'text-xs', l.text)}>
+                            {l.n}
+                            {!compact && <span className="font-semibold"> {label}</span>}
+                        </span>
+                    </span>
+                )
+            })}
+        </span>
+    )
+}
+
 export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarSectionProps) {
     const router = useRouter()
     const [isPending, startTransition] = useTransition()
@@ -123,6 +162,16 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
     const conteoPorDia = initialTurnos.reduce<Record<string, number>>((acc, t) => {
         const k = claveDiaTurno(t.fecha_inicio)
         acc[k] = (acc[k] || 0) + 1
+        return acc
+    }, {})
+
+    // Conteo de estados por día (para el semáforo del encabezado colapsable).
+    const estadosPorDia = initialTurnos.reduce<Record<string, EstadosDia>>((acc, t) => {
+        const k = claveDiaTurno(t.fecha_inicio)
+        const dia = acc[k] ?? (acc[k] = { cancelados: 0, sinConfirmar: 0, confirmados: 0 })
+        if (t.estado === 'CANCELADO') dia.cancelados++
+        else if (t.estado === 'CONFIRMADO') dia.confirmados++
+        else if (t.estado === 'PENDIENTE') dia.sinConfirmar++
         return acc
     }, {})
 
@@ -323,6 +372,7 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                                 className="w-full flex items-center gap-2 px-4 py-2.5 bg-muted/60 dark:bg-muted/25 hover:bg-muted/80 rounded-lg text-sm font-extrabold text-foreground uppercase tracking-wide border border-border/50 mt-1 transition-colors cursor-pointer"
                                             >
                                                 <span className="flex-1 text-left">{labelDiaTurno(turno.fecha_inicio)}</span>
+                                                <SemaforoDia stats={estadosPorDia[diaKey]} />
                                                 <span className="font-mono opacity-70 normal-case">{conteoPorDia[diaKey]} turno{conteoPorDia[diaKey] !== 1 ? 's' : ''}</span>
                                                 <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', colapsado && '-rotate-90')} />
                                             </button>
@@ -574,7 +624,8 @@ export function TurnosSinConfirmarSection({ initialTurnos }: TurnosSinConfirmarS
                                             aria-expanded={!colapsado}
                                             className="w-full flex items-center gap-2 px-3 py-2 bg-muted/60 dark:bg-muted/25 hover:bg-muted/80 rounded-lg text-[13px] font-extrabold text-foreground uppercase tracking-wide border border-border/50 transition-colors cursor-pointer"
                                         >
-                                            <span className="flex-1 text-left">{labelDiaTurno(turno.fecha_inicio)}</span>
+                                            <span className="flex-1 text-left truncate">{labelDiaTurno(turno.fecha_inicio)}</span>
+                                            <SemaforoDia stats={estadosPorDia[diaKey]} compact />
                                             <span className="font-mono opacity-70 normal-case">{conteoPorDia[diaKey]}</span>
                                             <ChevronDown className={cn('h-3.5 w-3.5 shrink-0 transition-transform', colapsado && '-rotate-90')} />
                                         </button>
