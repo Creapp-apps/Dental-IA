@@ -311,6 +311,9 @@ export async function enviarMensajeAgente(conversacionId: string, texto: string)
             })
             .eq('id', conversacionId)
 
+        // Responder = atender: limpia la alerta del dashboard
+        await marcarAlertasDeConversacionLeidas(admin, tenantId, conversacionId)
+
         revalidatePath('/mensajes')
 
         return { success: true, mensaje: nuevoMensaje as any }
@@ -476,12 +479,43 @@ export async function enviarAdjuntoAgente(conversacionId: string, formData: Form
             })
             .eq('id', conversacionId)
 
+        // Responder con adjunto = atender: limpia la alerta del dashboard
+        await marcarAlertasDeConversacionLeidas(admin, tenantId, conversacionId)
+
         revalidatePath('/mensajes')
 
         return { success: true, mensaje: nuevoMensaje as any }
     } catch (err: any) {
         console.error('[WA CHAT] Excepción en enviarAdjuntoAgente:', err)
         return { success: false, error: err.message || 'Error inesperado al enviar el adjunto' }
+    }
+}
+
+/**
+ * Marca como leídas las notificaciones del Centro de Alertas (tabla `notificaciones`)
+ * asociadas a una conversación. Las alertas de WhatsApp guardan el id de la
+ * conversación en `referencia_id`, así que al atender/cerrar/reactivar el chat
+ * limpiamos también su alerta en el dashboard (fuentes de datos separadas).
+ *
+ * Es best-effort: un fallo acá no debe romper la acción principal sobre el chat.
+ */
+async function marcarAlertasDeConversacionLeidas(
+    admin: ReturnType<typeof createAdminClient>,
+    tenantId: string,
+    conversacionId: string
+): Promise<void> {
+    try {
+        const { error } = await admin
+            .from('notificaciones')
+            .update({ leida: true })
+            .eq('tenant_id', tenantId)
+            .eq('referencia_id', conversacionId)
+            .eq('leida', false)
+        if (error) {
+            console.error('[WA CHAT] No se pudieron marcar alertas leídas:', error.message)
+        }
+    } catch (err: any) {
+        console.error('[WA CHAT] Excepción al marcar alertas leídas:', err?.message || err)
     }
 }
 
@@ -523,6 +557,9 @@ export async function cambiarEstadoConversacion(
         if (error) {
             return { success: false, error: error.message }
         }
+
+        // Atender/cerrar/reactivar el chat también limpia su alerta del dashboard
+        await marcarAlertasDeConversacionLeidas(admin, tenantId, conversacionId)
 
         revalidatePath('/mensajes')
         return { success: true }
@@ -571,6 +608,11 @@ export async function asignarConversacion(
             .eq('tenant_id', tenantId)
 
         if (error) return { success: false, error: error.message }
+
+        // Tomar la conversación limpia su alerta del dashboard (desasignar no)
+        if (usuarioId) {
+            await marcarAlertasDeConversacionLeidas(admin, tenantId, conversacionId)
+        }
 
         revalidatePath('/mensajes')
         return { success: true }
