@@ -168,6 +168,13 @@ const AFIRMACIONES_CONFIRMA = new Set([
 // piel siguen al emoji base, así que basta con detectar el codepoint base.
 const EMOJI_CONFIRMA = /[\u{1F44D}\u{1F44C}\u{2705}\u{2714}\u{1F197}\u{1F646}]/u
 
+// Emojis que, cuando el paciente REACCIONA (👍/❤️) al recordatorio, cuentan como
+// confirmación de asistencia. Más amplio que EMOJI_CONFIRMA porque reaccionar con
+// un corazón o aplausos es, en WhatsApp, un "sí, dale" natural. Solo emojis
+// inequívocamente positivos: un 👎 o 😡 NO confirma (queda registrado sin accionar).
+// 👍 👌 ✅ ✔️ 🆗 🙆 ❤️ 🙌 👏 💖 💕 😊 😁 😄 🙏 💪 🫡 💯 🤝
+const EMOJI_REACCION_CONFIRMA = /[\u{1F44D}\u{1F44C}\u{2705}\u{2714}\u{1F197}\u{1F646}\u{2764}\u{1F64C}\u{1F44F}\u{1F496}\u{1F495}\u{1F60A}\u{1F601}\u{1F604}\u{1F64F}\u{1F4AA}\u{1FAE1}\u{1F4AF}\u{1F91D}]/u
+
 // Preguntas por copago / coseguro: el bot no conoce el monto (depende de la obra
 // social y el plan), así que no las responde: las acusa y deriva a administración.
 const REGEX_COPAGO = /\bcopago|\bco-?pago|\bcoseguro|\bco-?seguro|\bco seguro|\bco pago\b/i
@@ -254,6 +261,16 @@ export async function POST(request: NextRequest) {
             textBody = '📄 [Documento adjunto]'
         }
 
+        // Resumen legible para reacciones y stickers: así el operador ve en la bandeja
+        // "Reaccionó: 👍" en vez del placeholder genérico "Mensaje recibido".
+        let resumenEntrante = ''
+        if (type === 'reaction') {
+            const emoji = message.reaction?.emoji || ''
+            resumenEntrante = emoji ? `Reaccionó: ${emoji}` : 'Quitó su reacción'
+        } else if (type === 'sticker') {
+            resumenEntrante = '[Sticker]'
+        }
+
         console.log(`📱 Mensaje recibido de ${from}. Tipo: ${type}. Payload: "${buttonPayload}". Texto: "${textBody}". Fallback de botón: "${buttonTextFallback}"`)
 
         // Instanciar cliente administrador para eludir RLS y operar en base de datos
@@ -331,7 +348,7 @@ export async function POST(request: NextRequest) {
                         nombre_contacto: paciente ? `${paciente.nombre} ${paciente.apellido}` : null,
                         estado: 'BOT',
                         ultimo_mensaje_at: new Date().toISOString(),
-                        ultimo_mensaje_texto: textBody || buttonTextFallback || buttonPayload || 'Mensaje interactivo',
+                        ultimo_mensaje_texto: textBody || buttonTextFallback || buttonPayload || resumenEntrante || 'Mensaje interactivo',
                         no_leidos_operador: 1
                     })
                     .select('id, estado')
@@ -371,14 +388,14 @@ export async function POST(request: NextRequest) {
                     conversacion_id: conversacionId,
                     tipo: tipoFinal,
                     remitente: 'paciente',
-                    contenido: textBody || buttonTextFallback || buttonPayload || 'Mensaje recibido',
+                    contenido: textBody || buttonTextFallback || buttonPayload || resumenEntrante || 'Mensaje recibido',
                     wa_message_id: messageId,
                     metadata: { raw: message, media_url: mediaUrl, doc_filename: type === 'document' ? (message.document?.filename || null) : null }
                 })
 
                 await admin.from('whatsapp_conversaciones').update({
                     ultimo_mensaje_at: new Date().toISOString(),
-                    ultimo_mensaje_texto: textBody || buttonTextFallback || buttonPayload || 'Mensaje recibido',
+                    ultimo_mensaje_texto: textBody || buttonTextFallback || buttonPayload || resumenEntrante || 'Mensaje recibido',
                     no_leidos_operador: (conv?.no_leidos_operador || 0) + 1,
                     // Reapertura de un chat auto-cerrado: vuelve a BOT y se limpia el triage.
                     ...(reabrirConversacion ? { estado: 'BOT', prioridad: null, motivo: null } : {})
@@ -389,9 +406,10 @@ export async function POST(request: NextRequest) {
         }
 
         // ── RC2: Eventos NO accionables no disparan respuesta del bot ──
-        // Reacciones (👍/❤️), stickers y eventos de sistema/errores quedan
-        // registrados en el inbox pero NO generan ninguna respuesta automática.
-        if (type === 'reaction' || type === 'sticker' || type === 'system' || type === 'unsupported' || message.errors) {
+        // Stickers y eventos de sistema/errores quedan registrados en el inbox pero
+        // NO generan ninguna respuesta automática. Las reacciones se tratan aparte
+        // (abajo): un 👍/❤️ sobre el recordatorio SÍ confirma el turno.
+        if (type === 'sticker' || type === 'system' || type === 'unsupported' || message.errors) {
             console.log(`[WA WEBHOOK] Evento no accionable (tipo "${type}"). Persistido sin responder.`)
             return NextResponse.json({ success: true, message: 'Non-actionable event, no reply' })
         }
@@ -431,6 +449,28 @@ export async function POST(request: NextRequest) {
             const t = turnos?.[0]
             _objetivoCache = t ? { turnoId: t.id, fechaInicio: t.fecha_inicio } : null
             return _objetivoCache
+        }
+
+        // 0. Reacción (👍/❤️) sobre el recordatorio = confirmación de asistencia.
+        // Un emoji positivo cuenta como "sí, voy", igual que escribir "confirmo". Solo
+        // confirma si hay un turno PENDIENTE próximo con recordatorio enviado (reusa la
+        // misma lógica que el texto). Reacción negativa o sin turno objetivo: queda
+        // registrada sin que el bot responda.
+        if (type === 'reaction') {
+            const emoji = message.reaction?.emoji || ''
+            if (emoji && EMOJI_REACCION_CONFIRMA.test(emoji)) {
+                const objetivo = await getRecordatorioObjetivo()
+                if (objetivo?.turnoId) {
+                    turnoIdToUpdate = objetivo.turnoId
+                    respuestaPaciente = 'CONFIRMAR'
+                    console.log(`[WA WEBHOOK] Reacción "${emoji}" interpretada como CONFIRMAR del turno ${objetivo.turnoId}.`)
+                }
+            }
+            if (!turnoIdToUpdate || !respuestaPaciente) {
+                console.log(`[WA WEBHOOK] Reacción "${emoji || '(removida)'}" sin acción (emoji no afirmativo o sin turno pendiente). Persistida sin responder.`)
+                return NextResponse.json({ success: true, message: 'Reaction, no actionable intent' })
+            }
+            // Con la acción ya resuelta, saltamos el parseo de texto/botón y vamos al paso 3.
         }
 
         // 1. Analizar respuesta de botón rápido
