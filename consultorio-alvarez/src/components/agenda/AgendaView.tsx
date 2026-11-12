@@ -647,8 +647,13 @@ export function AgendaView({
         if (!turno?.fecha_inicio) return
 
         const fechaTurno = parseISO(turno.fecha_inicio)
-        
-        // Navegar a la fecha del turno en la agenda
+
+        // Abrir directamente el modal de detalle del turno: el buscador existe
+        // para encontrar y editar un turno sin recorrer toda la agenda.
+        setSelectedTurnoDetail(turno)
+
+        // Navegar a la fecha del turno en la agenda (deja la grilla ubicada y
+        // resaltada para cuando se cierre el modal).
         setBaseDate(fechaTurno)
         setDiaSeleccionado(fechaTurno)
 

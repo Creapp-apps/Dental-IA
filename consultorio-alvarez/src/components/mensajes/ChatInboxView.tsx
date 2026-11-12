@@ -985,7 +985,10 @@ export function ChatInboxView({
                                     if (items.length === 0) return null
                                     // Si el filtro activo ES este carril, lo mostramos siempre expandido
                                     // (no tiene sentido ver un único grupo colapsado al filtrar por él).
-                                    const abierto = filtro === k ? true : !colapsados[k]
+                                    // Al buscar, también expandimos: el resultado tiene que verse
+                                    // directo, no colapsado dentro de su solapa.
+                                    const hayBusqueda = searchQuery.trim().length > 0
+                                    const abierto = filtro === k || hayBusqueda ? true : !colapsados[k]
                                     return (
                                         <div key={k}>
                                             <button
