@@ -8,6 +8,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { AdminBackground } from '@/components/ui/admin-background'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
 import { NotificationProvider } from '@/components/providers/NotificationProvider'
+import { ChatAtencionAlert } from '@/components/providers/ChatAtencionAlert'
 import { getCurrentTenant, getCurrentUsuario, getTodayOperationalSummary } from '@/lib/supabase/queries'
 import { getBillingConfig } from '@/lib/actions/billing'
 import { BillingGuard } from '@/components/providers/BillingGuard'
@@ -129,6 +130,7 @@ export default async function AdminLayout({
                 <div className="relative z-10 flex w-full h-full flex-col lg:flex-row">
                     <NotificationProvider tenantId={usuario.tenant_id}>
                         <SessionResumeHandler themeColor={primaryStr} />
+                        <ChatAtencionAlert tenantId={usuario.tenant_id} />
                         {avisosVencimientoActivos && (
                             <BillingDueModalToast
                                 tenantId={usuario.tenant_id}

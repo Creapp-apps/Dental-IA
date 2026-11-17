@@ -150,6 +150,7 @@ export function NuevoTurnoModal({
     const [nuevoApellido, setNuevoApellido] = useState('')
     const [nuevoDni, setNuevoDni] = useState('')
     const [nuevoTelefono, setNuevoTelefono] = useState('')
+    const [nuevoObraSocial, setNuevoObraSocial] = useState('')
 
     // Cerrar resultados al hacer click fuera del contenedor de búsqueda (sin usar backdrop fixed inset-0 que rompe clics)
     useEffect(() => {
@@ -285,6 +286,7 @@ export function NuevoTurnoModal({
         setNuevoApellido('')
         setNuevoDni('')
         setNuevoTelefono('')
+        setNuevoObraSocial('')
         setSearchedPacientes([])
         setPacienteSeleccionado(null)
         setShowResults(false)
@@ -526,6 +528,7 @@ export function NuevoTurnoModal({
                     apellido: nuevoApellido.trim(),
                     dni: nuevoDni.trim(),
                     telefono: nuevoTelefono.trim(),
+                    obra_social_id: nuevoObraSocial.trim() || undefined,
                     registro_completo: false,
                 })
 
@@ -637,6 +640,7 @@ export function NuevoTurnoModal({
                                         setNuevoApellido('')
                                         setNuevoDni('')
                                         setNuevoTelefono('')
+                                        setNuevoObraSocial('')
                                     }}
                                     className="text-[11px] font-semibold text-primary hover:text-primary-foreground border border-primary/30 hover:border-primary bg-primary/5 hover:bg-primary/90 rounded-lg px-2.5 py-1.5 transition-all duration-200 flex items-center gap-1.5 shadow-sm hover:shadow-primary/20 active:scale-95 cursor-pointer"
                                 >
@@ -701,6 +705,15 @@ export function NuevoTurnoModal({
                                             onChange={(e) => setNuevoTelefono(e.target.value)}
                                         />
                                     </div>
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-[10px]">Obra social / Prepaga</Label>
+                                    <Input
+                                        className="h-8 text-xs"
+                                        placeholder="Ej: OSDE, Swiss Medical, Particular…"
+                                        value={nuevoObraSocial}
+                                        onChange={(e) => setNuevoObraSocial(e.target.value)}
+                                    />
                                 </div>
                             </div>
                         ) : (
