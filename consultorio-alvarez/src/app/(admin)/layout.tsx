@@ -9,6 +9,7 @@ import { AdminBackground } from '@/components/ui/admin-background'
 import { getLandingConfigAdmin } from '@/lib/actions/landing'
 import { NotificationProvider } from '@/components/providers/NotificationProvider'
 import { ChatAtencionAlert } from '@/components/providers/ChatAtencionAlert'
+import { TurnoWebAlert } from '@/components/providers/TurnoWebAlert'
 import { getCurrentTenant, getCurrentUsuario, getTodayOperationalSummary } from '@/lib/supabase/queries'
 import { getBillingConfig } from '@/lib/actions/billing'
 import { BillingGuard } from '@/components/providers/BillingGuard'
@@ -131,6 +132,7 @@ export default async function AdminLayout({
                     <NotificationProvider tenantId={usuario.tenant_id}>
                         <SessionResumeHandler themeColor={primaryStr} />
                         <ChatAtencionAlert tenantId={usuario.tenant_id} />
+                        <TurnoWebAlert tenantId={usuario.tenant_id} />
                         {avisosVencimientoActivos && (
                             <BillingDueModalToast
                                 tenantId={usuario.tenant_id}
