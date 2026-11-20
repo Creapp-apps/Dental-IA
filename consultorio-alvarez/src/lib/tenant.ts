@@ -37,6 +37,7 @@ export function normalizeHost(rawHost: string): string {
  */
 const STATIC_DOMAIN_MAP: Record<string, string> = {
     'dentalva.ar': 'alvarez',
+    'curadent.com.ar': 'curadent',
 }
 
 /**
