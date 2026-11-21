@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 import { AlertCircle, Eye, EyeOff, ArrowRight, Loader2 } from 'lucide-react'
 import { AnimatePresence } from 'framer-motion'
@@ -26,6 +26,22 @@ export default function LoginClient({
     const [showPassword, setShowPassword] = useState(false)
     const [status, setStatus] = useState<'idle' | 'verificando' | 'ingresando'>('idle')
     const [localError, setLocalError] = useState<string | null>(null)
+    const [email, setEmail] = useState('')
+    const [rememberEmail, setRememberEmail] = useState(false)
+
+    // Precarga el email recordado (solo email, nunca la contraseña).
+    // La contraseña queda a cargo del gestor cifrado del navegador.
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('rememberEmail')
+            if (saved) {
+                setEmail(saved)
+                setRememberEmail(true)
+            }
+        } catch {
+            // localStorage inaccesible (modo privado / bloqueado): ignorar.
+        }
+    }, [])
     // Marca del consultorio del usuario, que se conoce recién al autenticar:
     // en dentalia.com.ar el formulario no sabe de qué clínica es quien entra.
     const [marcaUsuario, setMarcaUsuario] = useState<{
@@ -195,6 +211,12 @@ export default function LoginClient({
                                 if (status !== 'idle') return
                                 setStatus('verificando')
                                 setLocalError(null)
+                                try {
+                                    if (rememberEmail) localStorage.setItem('rememberEmail', email)
+                                    else localStorage.removeItem('rememberEmail')
+                                } catch {
+                                    // localStorage inaccesible: no bloquear el login.
+                                }
                                 const formData = new FormData(e.currentTarget)
                                 try {
                                     const result = await loginAction(formData)
@@ -253,6 +275,8 @@ export default function LoginClient({
                     id="email"
                     name="email"
                     type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     disabled={status !== 'idle'}
                     placeholder="admin@consultorio.com"
                     autoComplete="email"
@@ -331,6 +355,29 @@ export default function LoginClient({
                     </button>
                 </div>
                             </div>
+
+                            {/* Recordar email (solo el email, nunca la contraseña) */}
+                            <label
+                                htmlFor="rememberEmail"
+                                className="flex items-center gap-2.5 cursor-pointer select-none pt-0.5"
+                            >
+                                <input
+                                    id="rememberEmail"
+                                    name="rememberEmail"
+                                    type="checkbox"
+                                    checked={rememberEmail}
+                                    disabled={status !== 'idle'}
+                                    onChange={(e) => setRememberEmail(e.target.checked)}
+                                    className="h-4 w-4 rounded border-white/20 bg-white/[0.04] cursor-pointer disabled:cursor-not-allowed"
+                                    style={{ accentColor: colorPrimary }}
+                                />
+                                <span
+                                    className="text-sm"
+                                    style={{ color: `hsl(${h}, 30%, 80%, 0.7)` }}
+                                >
+                                    Recordar mi email
+                                </span>
+                            </label>
 
                             {/* Submit */}
                             <div className="pt-2">
